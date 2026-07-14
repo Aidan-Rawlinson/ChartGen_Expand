@@ -1,0 +1,18 @@
+data_shape,chart_type_ref,description
+NumericSeries,ranked_column,Ranked descending column chart with reference lines
+NumericSeries,dot_strip,Strip / dot plot — one dot per organisation
+NumericSeries,box_whisker,Box and whisker — full distribution with outliers
+NumericSeries,frequency_histogram,Frequency histogram — distribution shape
+NumericSeries,violin_plot,Violin plot — KDE distribution
+NumericSeries,bead_string_dot_plot,Bead-string dot plot — three-tier distribution with peer group and selected unit
+NumericCompositional,ugly_bar,Horizontal bar — component breakdown
+NumericCompositional,radar_chart,Radar / spider chart — component values on radial axes
+NumericCompositional,donut_component,Donut chart — component proportions
+NumericCompositional,lollipop_chart,Lollipop chart — elegant component breakdown
+NumericCompositional,waffle_chart,Waffle chart — grid of squares per component
+CategoricalCompositional,yn_bar,Horizontal stacked bar — Yes/No per question
+CategoricalCompositional,list_pie,Pie chart — category proportions
+CategoricalCompositional,diverging_bar,Diverging bar — Yes right / No left from centre
+CategoricalCompositional,dot_matrix,Dot matrix — filled dots per category per question
+CategoricalCompositional,donut_pie,Donut chart — ring variant of pie
+CategoricalCompositional,treemap,Treemap — area-proportional category rectangles

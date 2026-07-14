@@ -1,0 +1,10 @@
+requests
+streamlit
+matplotlib
+seaborn
+python-pptx
+Pillow
+openpyxl
+pandas
+comtypes
+pywin32

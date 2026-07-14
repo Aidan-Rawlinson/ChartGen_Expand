@@ -1,0 +1,304 @@
+# ChartGen — Functional Specification
+
+*TBN Internal · Input document for refactoring — describes current behaviour only*
+
+---
+
+## 1. Purpose
+
+Describes what ChartGen does and how it behaves — distinct from the Architecture document, which covers how it is built.
+
+Covers the core report generation pipeline: data acquisition, chart construction, PowerPoint assembly, and batch processing. Features not yet built are noted where relevant; full scope is in the Feature List.
+
+---
+
+## 2. Design Principles
+
+- **Package architecture** — packages interact through defined interfaces; swapping one package requires changes only within that package and its config.
+- **Stable data contracts** — the Running Order passes canonical data structures to the Chart Engine regardless of charting library; chart type refs and tweaks are the Chart Engine's concern only.
+- **Normalisation of chart data** — raw API data is normalised into one of three canonical shapes before any chart, table, or text function touches it. Chart type validity is enforced at authoring time.
+- **PowerPoint is just the output format** — the system produces `.pptx`/`.pdf`; it does not distinguish use cases at output time.
+- **Data is pre-fetched** — all data is fetched prior to output processing.
+- **Outputs created only by Running Order functions** — each output is created by the functions specified on the Running Order. This is a complete set of instructions and not supported by any function not listed on the Running Order.
+- **Function scope rule** — each Running Order function does only what its name describes — its internal sub-functions exist for that one purpose alone.
+
+---
+
+## 3. User Interface
+
+The system is a desktop application launched via a `.bat` file. Double-clicking the launcher opens the Streamlit UI in the user's browser.
+
+On first launch, a login page is presented before the main interface. The user enters their API credentials (email pre-populated; password entered manually, with a show/hide toggle). Submission is validated against the API before the user proceeds. On success, the username is written to `credentials.csv` for reuse on next launch; the password and session token are never persisted to disk.
+
+The Streamlit UI provides access to all workflow stages. Tab names follow a dual-naming convention: a short label displayed on the tab, and a full descriptive title as the page heading.
+
+### 3.1 Sidebar File Operations
+
+File operations sit in the sidebar, independent of the active tab; with no workfile open, tabs remain visible but empty. New Workfile, Open Workfile, Save, Save As, Save and Close, and Close Without Saving cover the full lifecycle. New Workfile triggers the New Workfile flow (Section 4); Save As prompts for a save location; Open Workfile and Close prompt to save first if the current workfile is dirty. Open Workfile leads to the concurrency decision step (Section 5) before a workfile loads.
+
+### 3.2 Tab Structure
+
+| Tab (short) | Tab (full) | Purpose |
+|-------------|------------|---------|
+| **Details** | Project Details | Read-only view of project identity, time period, and file paths, including the workfile folder ChartGen uses to create the outputs subfolder. |
+| **Config** | User Controlled Configuration Files | Empty shell — intended for management of reference CSVs and other runtime configuration files; not yet implemented. |
+| **Imports** | Import Project Data | Template upload and processing (Template Reader); toolkit API fetch. |
+| **Select** | Selection & Populations | Select an individual reporting unit and inspect its details, hierarchies, and peer group assignments. |
+| **Text** | Text — Text Tags | Lists available text tags with a live preview of each tag's value for the currently selected reporting unit. |
+| **Running Order** | Running Order (Output Script) | The master output script. Generated automatically from template processing. |
+| **Charts** | Chart Preview | Preview any chart from fetched data; test chart types and data shape pairings. |
+| **Outputs** | Create Outputs | Run and monitor report generation. Preflight checks for template, Running Order, and unassigned chart types. Execution log per row. |
+
+Tabs in scope for the final tool but not yet implemented are included as empty shells.
+
+---
+
+## 4. New Workfile Flow
+
+Creating a new workfile is one step: year and project selection, a native folder picker for the save location, and the initial submissions fetch — producing a saved `.cgw` ready for further work.
+
+---
+
+## 5. Concurrency
+
+Locking is advisory only. Opening a workfile always leads to a decision step before it loads, naming one of three lock states and offering Open or Open Read-Only:
+
+- not marked open by anyone;
+- marked open by the current user — the prior session either did not close cleanly, or is still open elsewhere under the same account, indistinguishable from the lock alone;
+- marked open by a different user, with their name and the time last marked open.
+
+Choosing Open writes the lock and proceeds as a normal editable session — last-write-wins if two users both save. Choosing Open Read-Only opens the workfile without claiming the lock.
+
+A Read-Only session disables Save only; every other action behaves as normal, so edits made are lost unless rescued via Save As. Save As from a Read-Only session must target a folder different from the original workfile's, to avoid two workfiles sharing an outputs folder, and converts the session to a normal editable one, writing the lock at the new location.
+
+A crash or an uncleanly closed browser tab leaves the lock as last written; the next person to open the file sees this as the same decision step.
+
+---
+
+## 6. PowerPoint Templates
+
+### 6.1 Template Files as Designed Artefacts
+
+PowerPoint template files are produced separately from the ChartGen codebase — they are not generated by ChartGen. A template is a fully designed `.pptx` file with placeholders on each slide.
+
+### 6.2 Placeholders as Element Slots
+
+Each slide contains PowerPoint placeholders positioned and sized by the template designer. ChartGen recognises a placeholder by its native PowerPoint type — Content, Picture, Chart, Clip Art, Table, SmartArt, Media, or Text — not by its name; no naming convention is required. ChartGen reads each placeholder's name, position, and size directly from the `.pptx` file via the Template Reader. No separate coordinate config file is required — the template is entirely self-contained.
+
+The Running Order references placeholders by name for display only; the system resolves coordinates from the template at generation time. A designer can reposition or resize a placeholder in the normal PowerPoint UI and the change is picked up automatically on next upload.
+
+For charts, pictures, and tables, ChartGen uses the placeholder's coordinates as the insertion target. The placeholder itself is not used as a PowerPoint content container — ChartGen inserts content at those coordinates via python-pptx.
+
+### 6.3 Yellow Textbox Convention
+
+To associate content with a placeholder without editing any config file, the template designer places a yellow textbox fully inside the target placeholder. The Template Reader detects these textboxes and classifies each by its content.
+
+Detection criteria — both must be true:
+
+- **Yellow fill** — detected by colour, distinguishing human-placed yellow from cream, off-white, or pale gold.
+- **Fully contained** — the textbox bounds lie entirely within a placeholder on the same slide.
+
+Classification by content — one of three types:
+
+- **Chart** — the text includes an NHS Benchmarking toolkit URL (or any HTTP URL as fallback). Any surrounding notes or labels are ignored.
+- **Picture** — the text is a path to a supported image file; the path may contain `[code]`/`[id]` tokens.
+- **Excel** — the text is an Excel file path plus driver and export range names.
+
+Unrecognised content: the box is stripped with the others but otherwise ignored. One content source per placeholder is the contract. If multiple qualifying textboxes fall inside the same placeholder, the first is used and a warning is raised.
+
+URLs extracted from chart-type boxes are merged into `urls.csv` (new ones added; existing ones preserved) — this file ships blank and is populated entirely by the Template Reader. Immediately after URL extraction, all URLs in `urls.csv` are fetched automatically (full refresh, not just new ones), and the Running Order is generated against the populated cache. No manual fetch step is required.
+
+### 6.4 Cleaned Template
+
+After reading, the Template Reader strips all detected yellow textboxes from the template and saves a cleaned copy. The Assembly Engine works exclusively from the cleaned copy; the original is preserved. Yellow annotation boxes must never appear in output.
+
+### 6.5 Template Validation
+
+At run time, ChartGen compares the ordered list of slide layout names between the `.cgw`'s reference copy of the cleaned template and the live copy alongside the workfile. Matching lists proceed silently. A mismatch raises a warning naming which slides changed and how — soft, not blocking; the user can proceed or reprocess the template. Layout names are compared rather than slide count, since this catches slides added, removed, reordered, or reassigned to a different layout — all of which shift placeholder positions in the Running Order — while staying silent on cosmetic in-slide edits.
+
+---
+
+## 7. Data Acquisition
+
+### 7.1 API Route (Primary)
+
+Toolkit URLs are extracted from the template's yellow textboxes (Section 6.3) and written to `urls.csv`. Immediately after extraction, all URLs are fetched — a full refresh, not just new ones — and the Running Order is generated against the resulting cache.
+
+Data is fetched once and held in memory; no API calls occur during a batch run. The user can trigger a refresh at any point.
+
+### 7.2 Reporting Units
+
+The reporting units CSV (`units.csv`) is the manifest the system iterates over during a batch run. It provides:
+
+- **Name** — display name (e.g. trust name), used for labels and report titles
+- **ID** — unique numeric identifier, used internally
+- **Code** — outward-facing identifier; used for labels only, not relied on for logic
+
+Additional columns define peer group membership. Every peer group — however many named values it has, including a simple yes/no group — is a `Name()` column: the unit belongs to the named group its value states. A unit with no group for that column is marked `x` (or left blank) rather than assigned one; both are treated identically and excluded from the Running Order populations multi-select.
+
+`Region()` is the first peer group column, resolved from `GET /organisations?year={year}` during the New Workfile flow (Section 4) and written permanently into `units.csv` at save time. Additional `Name()` columns can be added to `units.csv` and will be picked up automatically by `build_population_layers` and the Running Order dialog without code changes.
+
+The CSV is human-readable, editable in Excel, and uploadable via the Streamlit UI.
+
+*Multi-level hierarchy model is not built. The prototype uses a single flat population.*
+
+### 7.3 Data Cache
+
+The data cache is a folder containing one JSON file per fetched chart, plus a manifest indexing them by tier ID, group, option, label, shape type, source URL, and last-fetched timestamp. It is written exclusively by Data Acquisition; the Chart Engine, tables, and text replacement all read from it.
+
+---
+
+## 8. Data Shapes
+
+### 8.1 Purpose
+
+Chart data is normalised into a small set of canonical data shapes. All downstream consumers — the Chart Engine, tables, text replacement — work exclusively against these normalised shapes.
+
+**Immutability.** A data shape instance is never modified in place. Filtering, narrowing, or recalculating against one — including `build_population_layers` producing a population-filtered copy — always creates a new copy, leaving the original untouched. This avoids two risks: incompatible edits building up on a shared instance, and edits being silently forgotten because nothing marks that a change happened.
+
+### 8.2 Canonical Data Shapes
+
+Three shapes are implemented, matching the stored procedure groups present in the TBN API:
+
+| Shape | Description |
+|-------|-------------|
+| **NumericSeries** | One or more independent numeric Metric-Series. One value per unit per metric. |
+| **NumericCompositional** | One or more Metric-Series whose Component-Series sum to a whole (e.g. radar/spider chart data). |
+| **CategoricalCompositional** | One or more Metric-Series (questions) with categorical Component-Series summing to a whole (e.g. yes/no, ethnicity breakdown). |
+
+Every shape carries flags indicating where its data is incomplete, so consumers know upfront which operations aren't possible rather than discovering it at build time.
+
+### 8.3 Data Shapes and Chart Type Validity
+
+Each chart type reference in the Chart Engine declares the data shape(s) it accepts. The Running Order editor uses this to constrain chart type options to valid combinations for the selected data. Invalid pairings — a bar chart against compositional data, a radar chart against a single-metric dataset — are prevented at authoring time rather than discovered at batch runtime.
+
+---
+
+## 9. Report Assembly
+
+### 9.1 Running Order
+
+The Running Order is the master script that drives report assembly — a sequential list of rows, each specifying:
+
+- **Function** — the name of the function to call
+- **Parameters** — placeholder name, chart type reference, cache file, EMU position/size, etc.
+- **Enabled column** — enables rows to be switched on/off without deletion
+
+Each row name maps in a strict 1:1 relationship to a single callable function. A row can never invoke multiple functions, and a given row name can never resolve to different functions. There is no conditional dispatch, no indirection. This is not a constraint — it is what makes the Running Order legible: any colleague can read it and know exactly what will happen, line by line.
+
+Outputs are generated by processing the functions on the Running Order.
+
+Generated Running Orders follow a standard structure: any `open_excel` rows (scope `batch_open`) first; then `create_ppt`, `set_default_populations` (defaulting to `All^Selected`), and `update_text`; one row per placeholder, resolved by yellow-box classification (`insert_chart`, `insert_picture`, `insert_from_excel`, or `empty_placeholder`); then `save_ppt` and `save_pdf` (disabled); and finally any `close_excel` rows (scope `batch_close`).
+
+An `.xlsx` version can be generated by the system as a human-editing format for the Running Order — created on demand for download and parsed back in on upload. It is never written to disk on its own and never persisted inside the `.cgw` itself. Dropdown validation constrains `function`, `enabled`, and `chart_type_ref` (per-row, filtered to valid chart types for the assigned cache file's data shape) on each export. It is editable directly in Excel and uploadable/downloadable via the Streamlit Running Order tab.
+
+### 9.2 Running Order Functions (Current Scope)
+
+| Function | Description |
+|----------|-------------|
+| `create_ppt` | Opens the cleaned template; sets the output path. Always the first per-report row. |
+| `set_default_populations` | Sets the workfile-default populations string, applied to any `insert_chart` row without a per-row override. |
+| `insert_chart` | Renders a Base Chart from cached data; inserts at the named placeholder position. Position and size come from the Running Order row, populated automatically from the template. |
+| `empty_placeholder` | No-op. Placeholder has no content assigned. Explicit so every placeholder is accounted for. |
+| `save_ppt` | Saves the completed output as `.pptx`. |
+| `save_pdf` | Saves the completed output as `.pdf` via COM automation (requires PowerPoint on the user's machine). Disabled by default in generated Running Orders. |
+| `insert_picture` | Inserts an image at the named placeholder, with `[code]`/`[id]` token substitution in the source path and aspect ratio preserved. |
+| `update_text` | Replaces text tags in template text with per-unit values, presentation-wide, single-pass. Partial — table cells (`shape.table`) are not yet covered. |
+| `open_excel` / `insert_from_excel` / `close_excel` | Excel COM capture: writes `unit_id` to the driver range, recalculates, and captures the export range as an image. Requires `pywin32`. |
+
+*`insert_slide`, `insert_section`, `delete_slide`, `submission_list`, and `table_data_lift` are not built.*
+
+---
+
+## 10. Chart Construction
+
+### 10.1 Chart Type References
+
+Each chart is identified in the Running Order by a **chart type reference** (e.g. `ranked_column`). This reference resolves via `chart_type_map.csv` to a specific Base Chart function. Chart type references are reusable across projects.
+
+The system supports three canonical data shapes — NumericSeries, NumericCompositional, and CategoricalCompositional — with 17 Base Chart functions across them.
+
+### 10.2 Base Chart Library
+
+| Shape | chart_type_ref | Description |
+|-------|---------------|-------------|
+| NumericSeries | `ranked_column` | Ranked descending column with mean/median/quartile lines |
+| NumericSeries | `dot_strip` | Strip plot — one dot per organisation |
+| NumericSeries | `box_whisker` | Box and whisker with outliers |
+| NumericSeries | `frequency_histogram` | Frequency histogram |
+| NumericSeries | `violin_plot` | Violin / KDE distribution |
+| NumericSeries | `bead_string_dot_plot` | Multi-tier bead string — one tier per population layer |
+| NumericCompositional | `ugly_bar` | Horizontal bar — component breakdown |
+| NumericCompositional | `radar_chart` | Radar / spider chart |
+| NumericCompositional | `donut_component` | Donut chart — component proportions |
+| NumericCompositional | `lollipop_chart` | Lollipop — stem and dot per component |
+| NumericCompositional | `waffle_chart` | Waffle — 10×10 grid, each cell ≈ 1% |
+| CategoricalCompositional | `yn_bar` | Horizontal stacked Yes/No bar |
+| CategoricalCompositional | `list_pie` | Pie chart with leader line labels |
+| CategoricalCompositional | `diverging_bar` | Diverging bar — Yes right / No left from centre |
+| CategoricalCompositional | `dot_matrix` | Dot matrix — filled dots per category per question |
+| CategoricalCompositional | `donut_pie` | Donut ring chart |
+| CategoricalCompositional | `treemap` | Area-proportional category rectangles |
+
+### 10.3 Tweaks
+
+*All tweaks are not built.*
+
+### 10.4 Population Layers and Chart Data Flow
+
+Charts do not receive a single data shape. They receive an ordered list of filtered copies of the data shape, one per population token in the populations string, each carrying a `population_label` field naming its layer (e.g. `"All"`, `"Selected"`, or a resolved peer-group value).
+
+**The populations string** (e.g. `All^Region()^Selected`) is specified on the Running Order — either as a workfile default via `set_default_populations`, or overridden per chart row in the `populations` column. It is authored as a `^`-delimited ordered list of tokens and edited via a multi-select in the Running Order dialog.
+
+**Resolution — scope-plus-independent-layers model:** `build_population_layers` in the Assembly Engine treats the first token as the scope — the full set of units the chart compares. Every subsequent token resolves independently against that scope, not against each other:
+
+1. Resolve the first token against all units in the data shape; this becomes the scope. An unresolvable or empty first token produces no population layers.
+2. Resolve each remaining token against the scope only; unresolvable tokens are skipped.
+3. Filter the data shape to each result; recalculate stats against that population.
+4. Set `population_label` to the resolved label and append, in token order.
+
+`Selected` is a layer like any other — the current organisation's units within the scope. Peer tokens support both empty-bracket form (`Name()`, the selected unit's own group) and explicit-value form (`Name(Value)`, a named group, which need not contain the selected unit).
+
+**Token position determines scope vs. layer.** The first token is always the scope; everything after it is an independent layer within that scope. `Region()^Selected` scopes to the selected unit's own region — the wider population never appears. `All^Region()^Selected` scopes to everyone, with region and Selected as layers inside it.
+
+**Example:** `Region(Wales)^Hospital_Size()^Selected` produces three shapes: (1) all Welsh units — the scope; (2) the selected unit's hospital-size group, resolved within Wales; (3) the selected unit, resolved within Wales. Layers 2 and 3 are independent of each other, not cumulative.
+
+The canonical data shapes are designed to hold any comparative analysis dataset; the Chart Engine's contract with the Running Order means any chart type Python's libraries can render can be added without changes elsewhere in the system.
+
+### 10.5 Autotables
+
+Autotable statistics are computed by the shape modules and merely collected at chart time — counts, distribution statistics, and component values with their percentages, independent of which chart renders the data. Each `insert_chart` stores the scope shape's statistics on `AssemblyContext`. This data flow is in place; the functions to populate a table from these statistics are not yet implemented — partial.
+
+### 10.6 Chart Sizing
+
+Charts are sized to their placeholder dimensions. The Running Order stores placeholder width and height in EMU (captured from the template by the Template Reader). The Assembly Engine scales the rendered chart to those dimensions and inserts it at the exact EMU coordinates.
+
+---
+
+## 11. Tables
+
+### 11.1 Text-Tag-Based Tables
+
+Tables built in the PowerPoint template are populated via text tag replacement at generation time.
+
+### 11.2 Autotables
+
+See 10.5.
+
+*Multi-unit table expansion is not built.*
+
+---
+
+## 12. Text and Variable Content
+
+Variable text is managed via text tags embedded in the template (e.g. `[org]`, `[region]`). At generation time, tags are replaced with the correct value for the current reporting unit.
+
+The presentation is walked per report at generation time: every text frame is checked and tags replaced with the current reporting unit's values. Replacement operates at paragraph level, so tags split across text runs by PowerPoint's XML are still caught.
+
+*Conditional text (formula-driven tag values) is not built.*
+
+---
+
+## 13. Batch Processing
+
+**Run Selected** executes the Running Order once, against the currently selected reporting unit. **Run Batch** executes the Running Order once for each of the next N reporting units in the queue, starting from the batch cursor. **Run All** executes the Running Order once for every reporting unit in the population. The batch loop's role is limited to iteration; report construction itself is the Assembly Engine's responsibility (Section 9).
