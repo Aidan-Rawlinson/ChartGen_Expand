@@ -60,7 +60,7 @@ class PlaceholderInfo:
     content_type: str = ""
     # chart: toolkit URL
     url: str = ""
-    label: str = ""           # user text from the yellow textbox (for urls.csv)
+    label: str = ""           # user text from the yellow textbox (Running Order notes)
     # picture: image file path (may contain [code] or [id] tokens)
     image_path: str = ""
     # excel: workbook path, export range name, driver range name (optional)

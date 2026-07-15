@@ -105,9 +105,15 @@ MyWorkfile.cgw  (ZIP)
 
 - **`.cgw`** — ChartGen Workfile file. A ZIP archive containing all of one workfile's saved state. See the Architecture document, Section 4, for full internal structure.
 
-- **Data Cache** — the physical, on-disk store of fetched chart data: `data_cache/manifest.json` and one JSON file per chart shape dataset, inside the `.cgw`. Constitutes the data side of the Workfile domain when the file is closed. Mirrored in memory by `WorkfileState.cache`/`.manifest` while the workfile is open.
+- **Chart ref (`chart_ref`)** — the human-facing display index for a chart in the manifest table (`Chart_0001` style). Renumbered across non-deleted rows whenever the table changes; never used as a storage key. See Hex id.
+
+- **Data Cache** — the physical, on-disk store of fetched chart data: the manifest table (`manifest.csv`) and one JSON file per chart, named by `hex_id`, inside the `.cgw`. Constitutes the data side of the Workfile domain when the file is closed. Mirrored in memory by `WorkfileState.cache`/`.manifest_rows` while the workfile is open.
 
 - **File version id** — the version identifier for the `.cgw`'s internal structure, stamped into `workfile_info.json` at Save. Independent of the software id — a structure change needs a new file version id regardless of the software id. See Functional Spec, Section 5.1.
+
+- **Hex id (`hex_id`)** — a chart's stable internal identity in the manifest table: five uppercase hexadecimal digits, unique within the workfile, never reused and never renumbered. Names the chart's cache file and is the round-trip identity for Excel edits. See Architecture, Section 5.
+
+- **Manifest table (`manifest.csv`)** — the chart URL table: the canonical index of every chart in a workfile, one row per URL, held at `data_cache/manifest.csv` inside the `.cgw`. Populated by template extraction and direct user entry. See Architecture, Section 5, for the column schema.
 
 - **Read-Only** — a workfile session opened without claiming the advisory lock. Only Save is disabled; every other action behaves as in a normal session. See Functional Spec, Section 5.
 

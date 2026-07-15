@@ -1,16 +1,16 @@
 """
 url_parser.py
 Parses toolkit URLs into their component parts.
-Each URL yields: project_id, tier_id, group, option, and label.
+Each URL yields: project_id, tier_id, group, and option.
 """
 
 from urllib.parse import urlparse, parse_qs
 
 
-def parse_url(url: str, label: str = "") -> dict:
+def parse_url(url: str) -> dict:
     """
     Parse a single toolkit URL into its components.
-    Returns {"url", "label", "project_id", "tier_id", "group", "option"}.
+    Returns {"url", "project_id", "tier_id", "group", "option"}.
     """
     parsed = urlparse(url)
 
@@ -26,7 +26,6 @@ def parse_url(url: str, label: str = "") -> dict:
 
     return {
         "url": url,
-        "label": label.strip(),
         "project_id": project_id,
         "tier_id": tier_id,
         "group": group,

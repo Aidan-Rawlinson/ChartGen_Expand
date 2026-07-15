@@ -74,7 +74,9 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| API route (toolkit URL → data fetch → store) | Complete | Primary data source. |
+| API route (toolkit URL → data fetch → store) | Complete | Primary data source. Single explicit fetch — a full refresh of the chart URL table — decoupled from template processing. |
+| Chart URL table (`manifest.csv`) | Complete | Canonical index of every chart in the workfile, keyed by stable hex id. Populated by template extraction and direct entry; read-only in the UI. See Architecture Section 5 for the schema. |
+| Direct URL entry (Excel round-trip) | Complete | Download formatted `.xlsx`, add rows with just a URL, upload. Row deletion removes the chart from the table; cached data and identity are retained. |
 | Manual data entry / in-system analysis | Not built | Supplementary route; not currently used. |
 
 ---

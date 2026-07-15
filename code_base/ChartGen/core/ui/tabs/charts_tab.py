@@ -24,8 +24,11 @@ def render_charts_tab():
 
     def file_label(f):
         entry = the_manifest.get(f, {})
-        label = entry.get("label", "")
-        return f"{f}  —  {label}" if label else f
+        title = str(entry.get("chart_title", "")).strip()
+        ref = str(entry.get("chart_ref", "")).strip()
+        if title and title != "...":
+            return f"{ref or f}  —  {title}"
+        return ref or f
 
     file_options = {file_label(f): f for f in the_cached_files}
     selected_label = st.selectbox("Select a cached dataset", options=list(file_options.keys()), index=0)

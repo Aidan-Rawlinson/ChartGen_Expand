@@ -1,6 +1,8 @@
 """
 cache_writer.py
-Serialises canonical data shapes and saves them into WorkfileState's cache and manifest.
+Serialises canonical data shapes into WorkfileState's cache, keyed by the
+manifest row's hex_id, and updates that row's fetch-populated columns
+(chart_title, project_id, service_id, year, shape_type, data_updated_at).
 """
 
 import json
@@ -17,29 +19,29 @@ def _serialise(obj):
     return obj
 
 
-def save_chart(tier_id: int, group: int, option: int, label: str, shape, shape_type: str,
-               url: str = "", *, workfile_state) -> str:
-    """Serialise a canonical data shape and save it into WorkfileState.cache and manifest, returning the cache filename."""
-    filename = f"{tier_id}_{group}_{option}.json"
+def save_chart(manifest_row: dict, shape, shape_type: str, *,
+               chart_title: str = "", project_id="", service_id="", year="",
+               workfile_state) -> str:
+    """
+    Serialise a canonical data shape into WorkfileState.cache as
+    {hex_id}.json and update the given manifest row's fetch-populated
+    columns. Returns the cache filename.
+    """
+    hex_id = manifest_row["hex_id"]
+    filename = f"{hex_id}.json"
     payload = {
         "shape_type": shape_type,
         "data": _serialise(shape),
     }
-    json_str = json.dumps(payload, indent=2)
+    workfile_state.cache[filename] = json.dumps(payload, indent=2)
 
-    key = f"{tier_id}_{group}_{option}"
-    manifest_entry = {
-        "tier_id":      tier_id,
-        "group":        group,
-        "option":       option,
-        "label":        label,
-        "filename":     filename,
-        "shape_type":   shape_type,
-        "url":          url,
-        "last_fetched": datetime.now(timezone.utc).isoformat(),
-    }
+    if chart_title:
+        manifest_row["chart_title"] = chart_title
+    manifest_row["project_id"]      = str(project_id)
+    manifest_row["service_id"]      = str(service_id)
+    manifest_row["year"]            = str(year)
+    manifest_row["shape_type"]      = shape_type
+    manifest_row["data_updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    workfile_state.cache[filename] = json_str
-    workfile_state.manifest[key] = manifest_entry
     workfile_state.dirty = True
     return filename

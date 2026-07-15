@@ -114,10 +114,18 @@ def load_shape(filename, workfile_state):
 
 
 def list_cached_files(workfile_state):
-    """Return sorted list of cache filenames (excluding manifest), from WorkfileState.cache."""
+    """Return sorted list of cache filenames from WorkfileState.cache."""
     return sorted(workfile_state.cache.keys())
 
 
 def load_manifest(workfile_state):
-    """Return manifest dict keyed by filename, from WorkfileState.manifest."""
-    return {v["filename"]: v for v in workfile_state.manifest.values()}
+    """
+    Return a dict keyed by cache filename ({hex_id}.json) -> manifest row,
+    built from the non-deleted rows of WorkfileState.manifest_rows. Keeps
+    the {filename: entry} contract consumers already rely on.
+    """
+    return {
+        f"{row['hex_id']}.json": row
+        for row in workfile_state.manifest_rows
+        if str(row.get("deleted", "0")) != "1" and row.get("hex_id")
+    }

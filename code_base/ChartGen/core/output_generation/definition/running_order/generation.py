@@ -10,7 +10,7 @@ import os
 
 def generate_from_template(
     template_result,          # TemplateReadResult from the Template Reader module
-    manifest: dict,           # filename -> {label, shape_type, ...} from cache
+    manifest: dict,           # filename -> {url, shape_type, ...} manifest table rows
 ) -> list[dict]:
     """
     Build a list of Running Order row dicts from a TemplateReadResult.

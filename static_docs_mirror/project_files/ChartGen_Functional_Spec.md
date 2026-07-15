@@ -42,7 +42,7 @@ File operations sit in the sidebar, independent of the active tab; with no workf
 |-------------|------------|---------|
 | **Details** | Project Details | Read-only view of project identity, time period, and file paths, including the workfile folder ChartGen uses to create the outputs subfolder. |
 | **Config** | User Controlled Configuration Files | Empty shell — intended for management of reference CSVs and other runtime configuration files; not yet implemented. |
-| **Imports** | Import Project Data | Template upload and processing (Template Reader); toolkit API fetch. |
+| **Imports** | Import Project Data | Template upload and processing (Template Reader); the chart URL table (read-only view, edited via Excel download/upload); toolkit API fetch. |
 | **Select** | Selection & Populations | Select an individual reporting unit and inspect its details, hierarchies, and peer group assignments. |
 | **Text** | Text — Text Tags | Lists available text tags with a live preview of each tag's value for the currently selected reporting unit. |
 | **Running Order** | Running Order (Output Script) | The master output script. Generated automatically from template processing. |
@@ -116,7 +116,7 @@ Classification by content — one of three types:
 
 Unrecognised content: the box is stripped with the others but otherwise ignored. One content source per placeholder is the contract. If multiple qualifying textboxes fall inside the same placeholder, the first is used and a warning is raised.
 
-URLs extracted from chart-type boxes are merged into `urls.csv` (new ones added; existing ones preserved) — this file ships blank and is populated entirely by the Template Reader. Immediately after URL extraction, all URLs in `urls.csv` are fetched automatically (full refresh, not just new ones), and the Running Order is generated against the populated cache. No manual fetch step is required.
+URLs extracted from chart-type boxes are merged into the chart URL table (`manifest.csv`) — new URLs added, existing ones preserved, and a URL matching a previously deleted row restores that row under its original identity. Template extraction never removes rows. No data is fetched at this point: the Running Order is generated immediately against the table, with each chart row's cache reference assigned; chart-type options are constrained once the data has been fetched and its shape is known.
 
 ### 6.4 Cleaned Template
 
@@ -132,9 +132,9 @@ At run time, ChartGen compares the ordered list of slide layout names between th
 
 ### 7.1 API Route (Primary)
 
-Toolkit URLs are extracted from the template's yellow textboxes (Section 6.3) and written to `urls.csv`. Immediately after extraction, all URLs are fetched — a full refresh, not just new ones — and the Running Order is generated against the resulting cache.
+Chart URLs enter the chart URL table (`manifest.csv`) by two routes: extraction from the template's yellow textboxes (Section 6.3), or direct entry by the user via the table's Excel download/upload round-trip — download the formatted `.xlsx`, add a row containing just a URL, and upload. Deleting a row in the Excel removes the chart from the table; its cached data and identity are retained, and re-adding the URL restores it.
 
-Data is fetched once and held in memory; no API calls occur during a batch run. The user can trigger a refresh at any point.
+Fetching is a single, explicit action on the Imports tab: a full refresh of every chart in the table, populating each row's title, project, service, year, and data shape as it goes. Data is fetched once and held in memory; no API calls occur during a batch run. The user can trigger a refresh at any point.
 
 ### 7.2 Reporting Units
 
@@ -154,7 +154,7 @@ The CSV is human-readable, editable in Excel, and uploadable via the Streamlit U
 
 ### 7.3 Data Cache
 
-The data cache is a folder containing one JSON file per fetched chart, plus a manifest indexing them by tier ID, group, option, label, shape type, source URL, and last-fetched timestamp. It is written exclusively by Data Acquisition; the Chart Engine, tables, and text replacement all read from it.
+The data cache is a folder containing one JSON file per fetched chart, named by the chart's `hex_id`, plus the manifest table (`manifest.csv`) indexing every chart in the workfile — URL, title, database, project, service, year, data shape, source, and fetch timestamps. It is written exclusively by Data Acquisition; the Chart Engine, tables, and text replacement all read from it. A chart removed from the table keeps its cached data under its reserved identity.
 
 ---
 

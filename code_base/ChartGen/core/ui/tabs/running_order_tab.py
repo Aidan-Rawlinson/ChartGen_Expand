@@ -33,7 +33,12 @@ def render_running_order_tab():
         import pandas as pd
 
         the_manifest = manifest()
-        cache_to_label = {fname: entry.get("label", fname) for fname, entry in the_manifest.items()}
+        cache_to_label = {}
+        for fname, entry in the_manifest.items():
+            _title = str(entry.get("chart_title", "")).strip()
+            _ref   = str(entry.get("chart_ref", "")).strip()
+            cache_to_label[fname] = (f"{_ref}: {_title}" if (_title and _title != "...")
+                                     else (_ref or fname))
 
         rows = ws_ro.running_order_rows
 

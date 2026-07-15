@@ -73,6 +73,9 @@ chartgen/
     │       └── session_state.py
     ├── acquisition/
     │   ├── import_flow.py
+    │   ├── manifest_table/
+    │   │   ├── xlsx_writer.py
+    │   │   └── xlsx_reader.py
     │   ├── toolkit_nhs/
     │   │   ├── api_client.py
     │   │   ├── fetch.py
@@ -141,7 +144,8 @@ chartgen/
 | `core/workfile/setup/save_as.py` | Save Workfile As — cleaned-template copy, lock transfer/release, and the read-only-session-must-choose-a-different-folder rule |
 | `core/workfile/state/workfile_file.py` | Owns the `.cgw` format — see Section 5. The only module that reads/writes the ZIP directly. Also owns `UNITS_FIELDNAMES`, the units.csv column schema |
 | `core/workfile/state/session_state.py` | Streamlit-side `WorkfileState` accessors — Streamlit-rerun plumbing only |
-| `core/acquisition/import_flow.py` | Coordinator: sequences template read → URL merge → fetch → Running Order generation. The only module that imports both `acquisition` and `output_generation.definition` |
+| `core/acquisition/import_flow.py` | Coordinator: sequences template read → URL merge into the manifest table → Running Order generation. Data fetching is not part of this sequence — the single fetch process is the Imports tab's Fetch action. The only module that imports both `acquisition` and `output_generation.definition` |
+| `core/acquisition/manifest_table/` | Excel export/import round-trip for the manifest table (`data_cache/manifest.csv`) — the acquisition-side equivalent of the Running Order's xlsx pair. Schema ownership stays with `workfile_file` |
 | `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, cache writer, peer-group menu-building) |
 | `core/acquisition/template/` | Reads `.pptx` placeholders; detects/strips yellow boxes; parses toolkit URLs |
 | `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
@@ -168,12 +172,11 @@ A single workfile's complete, portable, shareable state. Internally a ZIP archiv
 MyWorkfile.cgw  (ZIP)
 ├── workfile_config/
 │   ├── settings.csv
-│   ├── urls.csv
 │   ├── units.csv
 │   └── running_order.csv
 ├── data_cache/
-│   ├── manifest.json
-│   └── {tier_id}_{group}_{option}.json
+│   ├── manifest.csv
+│   └── {hex_id}.json
 ├── template/
 │   └── MyWorkfile.pptx
 └── workfile_info.json
@@ -182,11 +185,10 @@ MyWorkfile.cgw  (ZIP)
 | Path | Notes |
 |---|---|
 | `workfile_config/settings.csv` | key,value — paths, year, project_id, batch_cursor, etc. |
-| `workfile_config/urls.csv` | Toolkit URLs (populated by yellow-box extraction) |
 | `workfile_config/units.csv` | Population table — one row per reporting unit, `Region()` column |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
-| `data_cache/manifest.json` | Index: tier_id, group, option, label, shape_type, url, last_fetched — per cached chart |
-| `data_cache/{tier_id}_{group}_{option}.json` | One file per fetched chart — serialised data shape |
+| `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
+| `data_cache/{hex_id}.json` | One file per fetched chart — serialised data shape, named by the owning manifest row's `hex_id` |
 | `template/MyWorkfile.pptx` | Reference copy of the cleaned template — validation only. Never run from. Compared against the live sibling `.pptx` (below) to warn on structural drift |
 | `workfile_info.json` | Stored uncompressed (`ZIP_STORED`) — cheap to read alone, before the rest of the archive loads. Contains `workfile_name`, `last_saved_by`, `last_saved_at`, `chartgen_version`, `locked_by` (advisory concurrency), `locked_at` (see Decision 4) |
 
@@ -213,6 +215,26 @@ MyWorkfile.cgw  (ZIP)
 | `height_emu` | Height in EMU — populated from template |
 | `notes` | Free text; user reference only, ignored at runtime |
 
+**Manifest table column schema** (`data_cache/manifest.csv`):
+
+| Column | Description |
+|--------|-------------|
+| `chart_ref` | Display index (`Chart_0001` style) — renumbered across non-deleted rows on every add, delete, or reimport; blank on deleted rows |
+| `hex_id` | 5-digit uppercase hexadecimal internal identity — stable for the row's lifetime, never reused, never renumbered; names the row's cache file |
+| `url` | The toolkit URL |
+| `chart_title` | Chart title, taken from the fetched data shape |
+| `database` | Source database — currently always `nhs` |
+| `project_id` | Populated at fetch |
+| `service_id` | Populated at fetch |
+| `year` | Populated at fetch |
+| `shape_type` | Canonical data shape name, populated at fetch |
+| `source` | `Template` (yellow-box extraction) or `Direct Input` (user-entered via Excel) |
+| `deleted` | 1 / 0 — deleted rows stay in the table with `hex_id` reserved and cached data kept, but are hidden from the UI table, excluded from the Excel export, and skipped by fetch. A template re-upload containing a deleted row's URL restores it under the same `hex_id` |
+| `added_at` | ISO datetime the row was created |
+| `data_updated_at` | ISO datetime the row's data was last fetched |
+
+Fetch-populated cells hold the placeholder `...` until the first fetch.
+
 **Sitting alongside the `.cgw`, not inside it** — these are the only other artefacts a colleague sees on a shared drive:
 
 ```
@@ -228,7 +250,7 @@ outputs/
 | `outputs/pptx/` | Generated `.pptx` reports, one per batch run output. Recreated fresh wherever the `.cgw` currently lives, including after a Save As — not carried across |
 | `outputs/pdf/` | Generated `.pdf` reports. Recreated fresh wherever the `.cgw` currently lives, including after a Save As — not carried across |
 
-**CSV vs JSON.** `running_order.csv`, `units.csv`: flat, fixed-column, one-row-per-entity — CSV's natural shape, and legible to a non-technical colleague who renames `.cgw` to `.zip`. `data_cache/*.json`: nested (serialised dataclasses), never hand-edited. Intentional split, not an inconsistency.
+**CSV vs JSON.** `running_order.csv`, `units.csv`, `manifest.csv`: flat, fixed-column, one-row-per-entity — CSV's natural shape, and legible to a non-technical colleague who renames `.cgw` to `.zip`. `data_cache/{hex_id}.json`: nested (serialised dataclasses), never hand-edited. Intentional split, not an inconsistency.
 
 ---
 
@@ -241,10 +263,9 @@ Streamlit process (st.session_state)
 ├── st.session_state["ws"] → WorkfileState
 │     workfile_path, workfile_name
 │     settings: dict
-│     urls: list[dict]
 │     units: list[dict]
 │     running_order_rows: list[dict]
-│     manifest: dict
+│     manifest_rows: list[dict]
 │     cache: dict — {filename: json_string}
 │     template_pptx_bytes: bytes | None
 │     last_saved_by
@@ -284,8 +305,8 @@ Streamlit process (st.session_state)
 | `st.session_state["ws"]` → `WorkfileState` | ★ The working copy of the open `.cgw` |
 | `WorkfileState.settings: dict` | Mirrors `workfile_config/settings.csv` |
 | `WorkfileState.running_order_rows: list[dict]` | ★ Sole live copy — see Section 5 note |
-| `WorkfileState.manifest: dict` | Mirrors `data_cache/manifest.json` |
-| `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/*.json` |
+| `WorkfileState.manifest_rows: list[dict]` | Mirrors `data_cache/manifest.csv` — the manifest table |
+| `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
 | `WorkfileState.dirty: bool` | Not persisted — session-only flag |
 | `WorkfileState.read_only: bool` | Not persisted — session-only. True only for a session opened via Open Read-Only; such a session never writes or clears the lock. |
 | `st.session_state["token"]` | API session token (Decision 7) — never the password |
@@ -382,7 +403,3 @@ ChartGen is designed for a SharePoint-hosted team environment accessed via OneDr
 Charts render entirely in memory as bytes; the only disk writes during a batch run are the final `save_ppt`/`save_pdf` calls, one per report. The `.cgw` is read once at the start of a run and not written again until Save. This avoids the small, rapid file writes that trigger OneDrive sync issues, and leaves the sync client nothing to lock mid-run.
 
 Files accessed via OneDrive sync appear as ordinary local filesystem paths to Python — `zipfile`, `open()`, `shutil` all work unmodified. This avoids the filesystem-API incompatibilities that affect COM/VBA approaches against SharePoint's virtual file system.
-
-### Decision 9 — Application Location (Interim)
-
-For the current phase, ChartGen lives in a folder on the C: drive under direct developer control. No installer, no registered file associations yet. File association for `.cgw` and a proper installer (e.g. Inno Setup) are deferred until the application is stable enough to warrant a more professional distribution approach.

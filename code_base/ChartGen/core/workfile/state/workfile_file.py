@@ -8,6 +8,7 @@ import json
 import zipfile
 import csv
 import os
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -38,6 +39,80 @@ UNITS_FIELDNAMES = [
     "Region()",
 ]
 
+# data_cache/manifest.csv column schema — the URL/chart table. One row per
+# chart URL, keyed permanently by hex_id. Replaces the former
+# workfile_config/urls.csv and data_cache/manifest.json (single source of
+# truth; the manifest is the index to the data_cache it sits inside).
+# Unfetched cells hold the PLACEHOLDER value rather than sitting empty.
+MANIFEST_FIELDNAMES = [
+    "chart_ref",        # display index, Chart_0001 style — renumbers across non-deleted rows
+    "hex_id",           # 5-digit hexadecimal, stable internal key — never reused, never renumbered
+    "url",
+    "chart_title",      # populated at fetch
+    "database",         # currently always "nhs"
+    "project_id",       # populated at fetch
+    "service_id",       # populated at fetch
+    "year",             # populated at fetch
+    "shape_type",       # populated at fetch
+    "source",           # "Template" / "Direct Input"
+    "deleted",          # 1/0 — deleted rows are hidden, skipped by fetch/export, hex_id stays reserved
+    "added_at",         # ISO datetime the row was created
+    "data_updated_at",  # ISO datetime data was last fetched
+]
+
+PLACEHOLDER = "..."
+
+
+def generate_hex_id(existing_rows: list) -> str:
+    """
+    Generate a 5-digit uppercase hexadecimal id unique across all manifest
+    rows, including deleted ones (deleted rows keep their hex_id reserved).
+    """
+    taken = {r.get("hex_id", "") for r in existing_rows}
+    while True:
+        hex_id = secrets.token_hex(3)[:5].upper()
+        if hex_id not in taken:
+            return hex_id
+
+
+def new_manifest_row(url: str, source: str, existing_rows: list) -> dict:
+    """
+    Build a new manifest row for a URL, with a fresh hex_id and added_at,
+    fetch-populated columns set to PLACEHOLDER, and database defaulted to
+    "nhs" (the only database currently supported). chart_ref is left blank —
+    call renumber_chart_refs after appending.
+    """
+    return {
+        "chart_ref":       "",
+        "hex_id":          generate_hex_id(existing_rows),
+        "url":             url.strip(),
+        "chart_title":     PLACEHOLDER,
+        "database":        "nhs",
+        "project_id":      PLACEHOLDER,
+        "service_id":      PLACEHOLDER,
+        "year":            PLACEHOLDER,
+        "shape_type":      PLACEHOLDER,
+        "source":          source,
+        "deleted":         "0",
+        "added_at":        datetime.now(timezone.utc).isoformat(),
+        "data_updated_at": PLACEHOLDER,
+    }
+
+
+def renumber_chart_refs(manifest_rows: list):
+    """
+    Reassign chart_ref (Chart_0001 style) across non-deleted rows in table
+    order. Deleted rows have chart_ref cleared. Call after any add, delete,
+    or reimport.
+    """
+    n = 0
+    for row in manifest_rows:
+        if str(row.get("deleted", "0")) == "1":
+            row["chart_ref"] = ""
+        else:
+            n += 1
+            row["chart_ref"] = f"Chart_{n:04d}"
+
 
 @dataclass
 class WorkfileState:
@@ -51,13 +126,12 @@ class WorkfileState:
 
     # workfile_config/
     settings: dict = field(default_factory=dict)
-    urls: list = field(default_factory=list)          # list of {url, label}
     units: list = field(default_factory=list)         # list of dicts
     running_order_rows: list = field(default_factory=list)  # list of dicts (CSV rows)
 
     # data_cache/
-    manifest: dict = field(default_factory=dict)      # keyed by tier_group_option key
-    cache: dict = field(default_factory=dict)         # keyed by filename -> json string
+    manifest_rows: list = field(default_factory=list)  # the URL/chart table (manifest.csv), MANIFEST_FIELDNAMES
+    cache: dict = field(default_factory=dict)         # keyed by filename ({hex_id}.json) -> json string
 
     # template/
     template_pptx_bytes: Optional[bytes] = None       # reference copy bytes
@@ -112,23 +186,6 @@ def _dict_to_key_value_csv(d: dict) -> str:
     return out.getvalue()
 
 
-def _url_csv_to_list(text: str) -> list:
-    """Parse urls.csv (url,label, no header) into list of dicts."""
-    rows = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split(",", 1)
-        rows.append({"url": parts[0].strip(), "label": parts[1].strip() if len(parts) > 1 else ""})
-    return rows
-
-
-def _url_list_to_csv(urls: list) -> str:
-    """Serialise url list back to urls.csv format (no header)."""
-    return "\n".join(f"{u['url']},{u.get('label','')}" for u in urls)
-
-
 # ---------------------------------------------------------------------------
 # Read workfile_info.json from ZIP without full extraction
 # ---------------------------------------------------------------------------
@@ -169,7 +226,6 @@ def open_workfile(workfile_path: str) -> WorkfileState:
 
         # workfile_config/
         state.settings         = _key_value_csv_to_dict(_read("workfile_config/settings.csv"))
-        state.urls             = _url_csv_to_list(_read("workfile_config/urls.csv"))
         state.units            = _csv_to_rows(_read("workfile_config/units.csv"))
         state.running_order_rows = _csv_to_rows(_read("workfile_config/running_order.csv"))
         for _row in state.running_order_rows:
@@ -177,10 +233,9 @@ def open_workfile(workfile_path: str) -> WorkfileState:
             coerce_row(_row)
 
         # data_cache/
-        if "data_cache/manifest.json" in names:
-            state.manifest = json.loads(zf.read("data_cache/manifest.json").decode("utf-8"))
+        state.manifest_rows = _csv_to_rows(_read("data_cache/manifest.csv"))
         for name in names:
-            if name.startswith("data_cache/") and name.endswith(".json") and name != "data_cache/manifest.json":
+            if name.startswith("data_cache/") and name.endswith(".json"):
                 fname = name.split("/")[-1]
                 state.cache[fname] = zf.read(name).decode("utf-8")
 
@@ -279,7 +334,6 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
 
         # workfile_config/
         _write("workfile_config/settings.csv",      _dict_to_key_value_csv(state.settings))
-        _write("workfile_config/urls.csv",           _url_list_to_csv(state.urls))
         _write("workfile_config/units.csv",
                _rows_to_csv(state.units, UNITS_FIELDNAMES) if state.units else "")
 
@@ -292,7 +346,8 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
             _write("workfile_config/running_order.csv", "")
 
         # data_cache/
-        _write("data_cache/manifest.json", json.dumps(state.manifest, indent=2))
+        _write("data_cache/manifest.csv",
+               _rows_to_csv(state.manifest_rows, MANIFEST_FIELDNAMES))
         for fname, json_str in state.cache.items():
             zf.writestr(f"data_cache/{fname}", json_str.encode("utf-8"))
 
@@ -348,13 +403,13 @@ def _write_empty_cgw(workfile_path: str, workfile_name: str):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name in [
             "workfile_config/settings.csv",
-            "workfile_config/urls.csv",
             "workfile_config/units.csv",
             "workfile_config/running_order.csv",
         ]:
             zf.writestr(name, b"")
-        # empty manifest
-        zf.writestr("data_cache/manifest.json", json.dumps({}).encode("utf-8"))
+        # empty manifest table (header only)
+        zf.writestr("data_cache/manifest.csv",
+                    _rows_to_csv([], MANIFEST_FIELDNAMES).encode("utf-8"))
         # workfile_info
         info = {
             "workfile_name":    workfile_name,
