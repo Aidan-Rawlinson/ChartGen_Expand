@@ -1,1 +1,15 @@
 <!-- Purpose: Significant decisions and the reasoning behind them. Kept separate so rationale does not get buried in the Progression_Log. -->
+
+## Session: Installer, update mechanism, and versioning
+
+- Install location: %LOCALAPPDATA%, no admin rights required. Chosen given this is a purely local, internal tool and no admin access was assumed for this phase.
+- Two independent version identifiers adopted: software id (this build) and file version id (a .cgw's internal structure), rather than one shared version number. An incompatible file version id is a hard refuse at Open, with no migration attempted for now - expanding compatibility later is an explicit non-goal for this phase.
+- The local side of the Check for Update comparison uses the existing software_id from version_compatibility.csv, not PE metadata of a local executable, since ChartGen itself runs from Python source rather than a compiled binary. Only the SharePoint-side release copy is a real Windows executable, so PE metadata reading applies only to that side.
+- Version comparison is normalised (parsed into numeric tuples, padded with zeros) rather than exact string matching, so short forms like "0.0.1" correctly match the four-part "0.0.1.0" that Windows PE metadata always produces.
+- Check for Update is a manual sidebar button only, gated to no-workfile-open, not automatic and not a background poll. Chosen for simplicity given updates are expected to be rare, and to keep failure handling simple (no silent background-check failure states to design for).
+- OneDrive-for-Business path resolution is dynamic, via the OneDriveCommercial environment variable with a folder-scan fallback, never stored and never asked of the user. Chosen over authenticated direct SharePoint URL access (Graph API / MSAL), which would need an Azure AD app registration and token handling for no real benefit over the simpler filesystem-path approach already used elsewhere in the codebase for workfiles.
+- The update flow copies the installer to a temp folder, launches it via subprocess, then hard-exits ChartGen's own process (os._exit), since a running process can lock its own files on Windows and a normal Streamlit shutdown isn't designed to be triggered from within a callback.
+- AppId in the Inno Setup script is fixed forever, never to be changed across releases - this is what makes re-running the installer register as an upgrade rather than a fresh install.
+- __pycache__ and .pyc files are explicitly excluded from the installer's file list - stale bytecode, not source, regenerated on first run.
+- The version-control behaviour (file version compatibility) was documented in Functional Spec only, not split with Architecture, per explicit user instruction to pick a single home rather than spread the same fact across two documents.
+- CHARTGEN_VERSION (a separate hardcoded constant in workfile_file.py) was consolidated into version_compatibility.csv's software_id, removing a second, redundant source of truth for the same concept.

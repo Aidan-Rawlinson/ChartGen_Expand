@@ -26,6 +26,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `.bat` launcher | Complete | |
 | Workfile file format (`.cgw`) | Complete | See Architecture document. |
 | Concurrency via `workfile_info.json` lock fields | Partial | See Architecture Decisions 4–6. The lock itself remains advisory and is not re-checked after Open. |
+| File version compatibility check | Complete | See Functional Spec Section 5.1. Hard refuse on an incompatible file version id; no migration attempted. |
 | Read-Only workfile access | Complete | See Architecture Decision 6. Offered on every Open regardless of lock state; enforcement is shallow (Save disabled only). |
 | Sidebar file operations (New, Open, Save, Save As, Save and Close, Close Without Saving) | Complete | See Architecture Decision 6. |
 | Outputs folder structure (`outputs/pptx/`, `outputs/pdf/`) | Complete | Auto-created alongside the workfile on first run. |
@@ -39,8 +40,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 |---|---|---|
 | Single open workfile (`.cgw`) at a time | Complete | |
 | `.cgw` file type | Complete | ChartGen creates, reads, and writes `.cgw` files correctly. |
-| File association (double-click a `.cgw` file to open ChartGen) | Not built | Requires an installer; no installer exists. |
-| Custom icon for `.cgw` files | Not built | Requires an installer; no installer exists. |
+| File association (double-click a `.cgw` file to open ChartGen) | Complete | Optional, not required — ChartGen opens with no workfile the same as launching normally. Reuses the same file version compatibility check and concurrency decision step as Open Workfile. |
+| Custom icon for `.cgw` files | Complete | |
 
 ---
 

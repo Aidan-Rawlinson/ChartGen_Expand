@@ -34,7 +34,7 @@ The Streamlit UI provides access to all workflow stages. Tab names follow a dual
 
 ### 3.1 Sidebar File Operations
 
-File operations sit in the sidebar, independent of the active tab; with no workfile open, tabs remain visible but empty. New Workfile, Open Workfile, Save, Save As, Save and Close, and Close Without Saving cover the full lifecycle. New Workfile triggers the New Workfile flow (Section 4); Save As prompts for a save location; Open Workfile and Close prompt to save first if the current workfile is dirty. Open Workfile leads to the concurrency decision step (Section 5) before a workfile loads.
+File operations sit in the sidebar, independent of the active tab; with no workfile open, tabs remain visible but empty. New Workfile, Open Workfile, Save, Save As, Save and Close, and Close Without Saving cover the full lifecycle. New Workfile triggers the New Workfile flow (Section 4); Save As prompts for a save location; Open Workfile and Close prompt to save first if the current workfile is dirty. Open Workfile leads to the file version compatibility check and concurrency decision step (Section 5) before a workfile loads.
 
 ### 3.2 Tab Structure
 
@@ -59,7 +59,17 @@ Creating a new workfile is one step: year and project selection, a native folder
 
 ---
 
-## 5. Concurrency
+## 5. Opening a Workfile
+
+### 5.1 File Version Compatibility
+
+ChartGen tracks two independent version identifiers: the software id (this installed build of ChartGen) and the file version id (the `.cgw`'s internal structure, stamped into `workfile_info.json` at Save). A software update that changes no internal `.cgw` structure needs no file version change; a change to the `.cgw`'s internal structure needs a file version bump regardless of whether the software id changes.
+
+Each build ships with a fixed list of file version ids it can read. Before the concurrency decision step (Section 5.2), the workfile's file version id is checked against that list. An incompatible file version id is a hard refuse — the workfile does not open, and no partial read or migration is attempted.
+
+*Expanding compatibility (e.g. a build that can read and migrate an older file version) is not built.*
+
+### 5.2 Concurrency
 
 Locking is advisory only. Opening a workfile always leads to a decision step before it loads, naming one of three lock states and offering Open or Open Read-Only:
 

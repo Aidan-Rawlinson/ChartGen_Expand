@@ -19,6 +19,7 @@ from core.ui.auth.login_form import require_authentication
 from core.ui.workfile.sidebar import render_sidebar
 from core.ui.workfile.workfile_dialogs import render_workfile_dialogs
 from core.workfile.state.session_state import ws, has_workfile
+from core.session_shell.lifecycle.startup_file import apply_startup_workfile
 from core.ui.tabs import (
     details_tab, config_tab, imports_tab, select_tab,
     text_tab, running_order_tab, charts_tab, outputs_tab,
@@ -26,8 +27,12 @@ from core.ui.tabs import (
 
 
 require_authentication()
+apply_startup_workfile()
 
 st.set_page_config(page_title="ChartGen", layout="wide")
+
+if st.session_state.get("startup_file_error"):
+    st.error(st.session_state.pop("startup_file_error"))
 
 render_sidebar()
 render_workfile_dialogs()

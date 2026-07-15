@@ -13,8 +13,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core.shared.infrastructure.constants import coerce_row
-
-CHARTGEN_VERSION = "0.1-prototype"
+from core.shared.infrastructure.version_compatibility import (
+    get_file_version_written, get_software_id,
+)
 
 # units.csv column schema. Moved here from constants_temp.py during the
 # restructure (Restructure_Plan.md Open Item 2 audit) — this is workfile
@@ -66,6 +67,7 @@ class WorkfileState:
     last_saved_at: str = ""
     locked_by: str = ""
     locked_at: str = ""
+    file_version_id: str = ""  # .cgw internal structure version - separate from the software id
 
     # Session state — not persisted
     dirty: bool = False
@@ -196,6 +198,7 @@ def open_workfile(workfile_path: str) -> WorkfileState:
             state.last_saved_at  = info.get("last_saved_at", "")
             state.locked_by      = info.get("locked_by", "")
             state.locked_at      = info.get("locked_at", "")
+            state.file_version_id = info.get("file_version_id", "")
 
     state.dirty = False
     return state
@@ -303,9 +306,10 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
             "workfile_name":     state.workfile_name,
             "last_saved_by":     state.last_saved_by,
             "last_saved_at":     state.last_saved_at,
-            "chartgen_version":  CHARTGEN_VERSION,
+            "chartgen_version":  get_software_id(),
             "locked_by":         state.locked_by,
             "locked_at":         state.locked_at,
+            "file_version_id":   get_file_version_written(),
         }
         zi = zipfile.ZipInfo("workfile_info.json")
         zi.compress_type = zipfile.ZIP_STORED
@@ -356,9 +360,10 @@ def _write_empty_cgw(workfile_path: str, workfile_name: str):
             "workfile_name":    workfile_name,
             "last_saved_by":    "",
             "last_saved_at":    "",
-            "chartgen_version": CHARTGEN_VERSION,
+            "chartgen_version": get_software_id(),
             "locked_by":        "",
             "locked_at":        "",
+            "file_version_id":  get_file_version_written(),
         }
         zi = zipfile.ZipInfo("workfile_info.json")
         zi.compress_type = zipfile.ZIP_STORED

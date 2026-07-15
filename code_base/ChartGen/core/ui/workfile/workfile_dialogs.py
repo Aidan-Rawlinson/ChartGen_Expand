@@ -10,6 +10,7 @@ import streamlit as st
 from core.ui.workfile.new_workfile_form import render_new_workfile_form
 from core.ui.workfile.open_workfile_form import render_open_workfile_form
 from core.ui.workfile.save_as_form import render_save_as_form
+from core.ui.workfile.update_form import render_update_form
 from core.workfile.state.session_state import ws, clear_workfile_session_state
 from core.workfile.state.workfile_file import close_workfile
 
@@ -43,4 +44,9 @@ def render_workfile_dialogs():
     if st.session_state.get("show_save_as_form"):
         st.title("Save Workfile As")
         render_save_as_form()
+        st.stop()
+
+    if st.session_state.get("show_update_form"):
+        st.title("Check for Update")
+        render_update_form()
         st.stop()

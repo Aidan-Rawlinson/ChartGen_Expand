@@ -15,6 +15,9 @@ from core.ui.common.formatting import format_uk_time
 from core.ui.common.pickers import pick_workfile_file
 from core.workfile.state.session_state import clear_workfile_session_state
 from core.workfile.state.workfile_file import read_workfile_info
+from core.shared.infrastructure.version_compatibility import (
+    is_file_version_compatible, get_software_id,
+)
 from core.session_shell.lifecycle.concurrency import (
     classify_lock_state, open_normal, open_read_only,
 )
@@ -109,8 +112,19 @@ def render_open_workfile_form():
             if not path.endswith(".cgw"):
                 st.error("Please select a .cgw file.")
                 return
+            info = read_workfile_info(path)
+            file_version_id = info.get("file_version_id", "")
+            if not is_file_version_compatible(file_version_id):
+                st.error(
+                    f"This workfile can't be opened by this version of ChartGen "
+                    f"({get_software_id()}). Its internal file version "
+                    f"(\"{file_version_id or 'unknown'}\") isn't supported by this build. "
+                    "Check you're running the version of ChartGen this workfile was "
+                    "last saved with."
+                )
+                return
             st.session_state["op_pending_path"] = path
-            st.session_state["op_pending_info"] = read_workfile_info(path)
+            st.session_state["op_pending_info"] = info
             st.rerun()
 
     _render_open_decision()

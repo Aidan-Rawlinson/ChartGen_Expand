@@ -79,6 +79,14 @@ def render_sidebar():
 
         st.divider()
         st.caption(f"Signed in as {st.session_state.get('username', '')}")
+
+        # Check for Update — available only with no workfile open (Decisions.md),
+        # sidesteps mid-session file-lock issues entirely rather than handling them.
+        if st.button("Check for update", use_container_width=True, disabled=has_workfile):
+            st.session_state["show_update_form"] = True
+            st.session_state.pop("update_check_result", None)
+            st.rerun()
+
         if st.button("Sign out", use_container_width=True):
             if w:
                 close_workfile(w)

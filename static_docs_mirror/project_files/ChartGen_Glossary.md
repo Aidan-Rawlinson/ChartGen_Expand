@@ -107,7 +107,11 @@ MyWorkfile.cgw  (ZIP)
 
 - **Data Cache** — the physical, on-disk store of fetched chart data: `data_cache/manifest.json` and one JSON file per chart shape dataset, inside the `.cgw`. Constitutes the data side of the Workfile domain when the file is closed. Mirrored in memory by `WorkfileState.cache`/`.manifest` while the workfile is open.
 
+- **File version id** — the version identifier for the `.cgw`'s internal structure, stamped into `workfile_info.json` at Save. Independent of the software id — a structure change needs a new file version id regardless of the software id. See Functional Spec, Section 5.1.
+
 - **Read-Only** — a workfile session opened without claiming the advisory lock. Only Save is disabled; every other action behaves as in a normal session. See Functional Spec, Section 5.
+
+- **Software id** — the version identifier for an installed build of ChartGen itself, distinct from the file version id. See Functional Spec, Section 5.1.
 
 - **WorkfileState** — the in-memory Python object holding the complete working state of an open `.cgw`. The sole interface other packages use to read or write workfile data during a session. See the Architecture document, Section 5.
 

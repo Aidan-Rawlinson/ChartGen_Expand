@@ -13,4 +13,4 @@ if not exist "venv\Scripts\activate.bat" (
     call venv\Scripts\activate.bat
 )
 
-streamlit run app.py
+streamlit run app.py -- %*
