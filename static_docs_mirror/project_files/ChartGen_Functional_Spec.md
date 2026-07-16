@@ -16,7 +16,7 @@ Covers the core report generation pipeline: data acquisition, chart construction
 
 - **Package architecture** — packages interact through defined interfaces; swapping one package requires changes only within that package and its config.
 - **Stable data contracts** — the Running Order passes canonical data structures to the Chart Engine regardless of charting library; chart type refs and tweaks are the Chart Engine's concern only.
-- **Normalisation of chart data** — raw API data is normalised into one of three canonical shapes before any chart, table, or text function touches it. Chart type validity is enforced at authoring time.
+- **Normalisation of chart data** — raw API data is normalised into one of four canonical shapes before any chart, table, or text function touches it. Chart type validity is enforced at authoring time.
 - **PowerPoint is just the output format** — the system produces `.pptx`/`.pdf`; it does not distinguish use cases at output time.
 - **Data is pre-fetched** — all data is fetched prior to output processing.
 - **Outputs created only by Running Order functions** — each output is created by the functions specified on the Running Order. This is a complete set of instructions and not supported by any function not listed on the Running Order.
@@ -28,7 +28,7 @@ Covers the core report generation pipeline: data acquisition, chart construction
 
 The system is a desktop application launched via a `.bat` file. Double-clicking the launcher opens the Streamlit UI in the user's browser.
 
-On first launch, a login page is presented before the main interface. The user enters their API credentials (email pre-populated; password entered manually, with a show/hide toggle). Submission is validated against the API before the user proceeds. On success, the username is written to `credentials.csv` for reuse on next launch; the password and session token are never persisted to disk.
+No login is required to launch the app or to create, open, edit, or save a workfile. Credentials are validated on demand from the Config tab (Section 3.2), via a single box: email (pre-populated once previously validated), password (entered manually, with a show/hide toggle), and a Validate button. Validation calls the API immediately and shows a confirmation message on success. On success, the username is written to `credentials.csv` for reuse next time; the password and session token are never persisted to disk — the token is held only for the session's duration. With no credentials validated, the only consequence is that Fetch (Section 7.1) fails until they are.
 
 The Streamlit UI provides access to all workflow stages. Tab names follow a dual-naming convention: a short label displayed on the tab, and a full descriptive title as the page heading.
 
@@ -41,7 +41,7 @@ File operations sit in the sidebar, independent of the active tab; with no workf
 | Tab (short) | Tab (full) | Purpose |
 |-------------|------------|---------|
 | **Details** | Project Details | Read-only view of file identity and save history (file path, last saved by/at). No project identity shown — year/project/organisation are not workfile-level concepts once a workfile can hold more than one project's data (Section 7.2). |
-| **Config** | User Controlled Configuration Files | Empty shell — intended for management of reference CSVs and other runtime configuration files; not yet implemented. |
+| **Config** | User Controlled Configuration Files | Houses the single credentials box (Section 3). Management of reference CSVs and other runtime configuration files not yet implemented. |
 | **Imports** | Import Project Data | Template upload and processing (Template Reader); the chart URL table (read-only view, edited via Excel download/upload); toolkit API fetch. |
 | **Populations** | Populations | Every population table currently in the workfile, collapsible and reorderable. Whichever table sits on top (position 0) is the master table, driving the reporting unit picker and the batch loop — see Section 7.2. |
 | **Select** | Reporting unit selection | Select an individual reporting unit from the master table, and see its Full Unit(s) — its own row plus every row related to it one hop out, across every population table. |
@@ -139,6 +139,10 @@ Chart URLs enter the chart URL table (`manifest.csv`) by two routes: extraction 
 
 Fetching is a single, explicit action on the Imports tab: a full refresh of every chart in the table, populating each row's title, project, service, year, and data shape as it goes. Data is fetched once and held in memory; no API calls occur during a batch run. The user can trigger a refresh at any point.
 
+Every URL entering the chart URL table — whether extracted from a template or entered directly — is also classified by database ("nhs" or "indicators") at that point, decided from the URL's own path shape alone (`/outputs/{id}` vs `/project/{id}/toolkit`). This determines which toolkit's fetch pipeline processes the row at Fetch. See Section 7.4 for the Indicators toolkit's own pipeline.
+
+Fetch requires a valid session token (Section 3); with none, it fails immediately with a message directing the user to the Config tab, rather than attempting per-row calls.
+
 ### 7.2 Population Tables
 
 Population tables — `nhs_organisations` and any number of `submissions_{year}_{project_id}` tables — are the tables the system selects reporting units from and iterates over during a batch run. Every population table shares the same columns:
@@ -169,6 +173,18 @@ Each population table is human-readable, editable in Excel, and uploadable via t
 
 The data cache is a folder containing one JSON file per fetched chart, named by the chart's `hex_id`, plus the manifest table (`manifest.csv`) indexing every chart in the workfile — URL, title, database, project, service, year, data shape, source, and fetch timestamps. It is written exclusively by Data Acquisition; the Chart Engine, tables, and text replacement all read from it. A chart removed from the table keeps its cached data under its reserved identity.
 
+### 7.4 Indicators Toolkit Data Acquisition
+
+Chart URLs classified as "indicators" (Section 7.1) are fetched via a separate API (`icsapi.nhsbenchmarking.nhs.uk`), sharing the same credential/token as the NHS toolkit (Architecture Decision 7) — no separate login or credential set is needed.
+
+Each fetch makes two report-level calls (report details, for title and format hint; report data, for the full per-period, per-organisation dataset) plus one project-level visible-dates call. The visible-dates call is cached once per project for the duration of a single Fetch run, rather than repeated once per row.
+
+Only periods the project's visible-dates list marks as available (`outputAvailability <= today`) are kept. The API's own period ordering is trusted as chronological and is not re-sorted.
+
+Data transforms into a TimeSeries shape (Section 8.2). The API's own per-period averages, medians, and national-average figures are discarded entirely at this step — stats are recomputed locally per period instead, the same way every other shape computes stats against a resolved population layer, just applied once per period rather than once for the whole shape.
+
+The population table (`submissions_timeseries_{project_id}`) is merged on every fetch, not built once and skipped thereafter (contrast Section 7.2's NHS model) — a single response already spans a project's full period history, and submissions genuinely drop in and out of the population over time. Each submission's organisation link assumes organisation ids match the NHS toolkit's own identity space (an assumption, not a verified fact). `Region()` is inherited from the matching `nhs_organisations` row at merge time, left blank only if that organisation is itself new to `nhs_organisations` this same fetch.
+
 ---
 
 ## 8. Data Shapes
@@ -183,19 +199,22 @@ Chart data is normalised into a small set of canonical data shapes. All downstre
 
 ### 8.2 Canonical Data Shapes
 
-Three shapes are implemented, matching the stored procedure groups present in the TBN API:
+Four shapes are implemented — three matching the stored procedure groups present in the TBN NHS API, plus TimeSeries, which comes from the separate Indicators toolkit API (Section 7.4) instead:
 
 | Shape | Description |
 |-------|-------------|
 | **NumericSeries** | One or more independent numeric Metric-Series. One value per unit per metric. |
 | **NumericCompositional** | One or more Metric-Series whose Component-Series sum to a whole (e.g. radar/spider chart data). |
 | **CategoricalCompositional** | One or more Metric-Series (questions) with categorical Component-Series summing to a whole (e.g. yes/no, ethnicity breakdown). |
+| **TimeSeries** | One or more independent numeric Metric-Series, one value per unit per metric per period, across a period axis shared by every Metric-Series in the shape. |
 
 Every shape carries flags indicating where its data is incomplete, so consumers know upfront which operations aren't possible rather than discovering it at build time.
 
 ### 8.3 Data Shapes and Chart Type Validity
 
 Each chart type reference in the Chart Engine declares the data shape(s) it accepts. The Running Order editor uses this to constrain chart type options to valid combinations for the selected data. Invalid pairings — a bar chart against compositional data, a radar chart against a single-metric dataset — are prevented at authoring time rather than discovered at batch runtime.
+
+TimeSeries currently has no valid chart type references (`chart_type_map.csv` has no entries for it) — it fetches and caches correctly but nothing renders it yet; see Feature List.
 
 ---
 
@@ -241,7 +260,7 @@ An `.xlsx` version can be generated by the system as a human-editing format for 
 
 Each chart is identified in the Running Order by a **chart type reference** (e.g. `ranked_column`). This reference resolves via `chart_type_map.csv` to a specific Base Chart function. Chart type references are reusable across projects.
 
-The system supports three canonical data shapes — NumericSeries, NumericCompositional, and CategoricalCompositional — with 17 Base Chart functions across them.
+The system supports three of the four canonical data shapes — NumericSeries, NumericCompositional, and CategoricalCompositional — with 17 Base Chart functions across them. TimeSeries has none yet (Section 8.3).
 
 ### 10.2 Base Chart Library
 

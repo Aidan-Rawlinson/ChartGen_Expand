@@ -3,6 +3,13 @@ cache_writer.py
 Serialises canonical data shapes into WorkfileState's cache, keyed by the
 manifest row's hex_id, and updates that row's fetch-populated columns
 (chart_title, project_id, service_id, year, shape_type, data_updated_at).
+
+Moved here from acquisition/toolkit_nhs/ — audited and confirmed to have no
+NHS-specific logic at all (it just serialises whatever dataclass shape it's
+given), so it belongs in shared/infrastructure alongside the other
+genuinely generic helpers, not duplicated per toolkit package. Both
+toolkit_nhs/fetch.py and toolkit_indicators/fetch.py import save_chart from
+here.
 """
 
 import json

@@ -14,8 +14,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Login validates against API before proceeding | Complete | |
-| Multiple database support | Not built | Different TBN databases require different credentials. Not every TBN project is on a different database, so this is a database-level gap, not a workfile-level one. |
+| Credential validation (Config tab) | Complete | Single box — email, password, Validate button — session-only token; username persisted, password never saved. Not a launch gate; a workfile can be created, opened, and saved with none validated. |
 
 ---
 
@@ -75,6 +74,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Feature | Readiness | Notes |
 |---|---|---|
 | API route (toolkit URL → data fetch → store) | Complete | Primary data source. Single explicit fetch — a full refresh of the chart URL table — decoupled from template processing. |
+| URL-to-database triage | Complete | Every URL is classified `nhs` or `indicators` at manifest-row creation, by path shape alone. See Architecture Decision 10. |
 | Chart URL table (`manifest.csv`) | Complete | Canonical index of every chart in the workfile, keyed by stable hex id. Populated by template extraction and direct entry; read-only in the UI. See Architecture Section 5 for the schema. |
 | Direct URL entry (Excel round-trip) | Complete | Download formatted `.xlsx`, add rows with just a URL, upload. Row deletion removes the chart from the table; cached data and identity are retained. |
 | Manual data entry / in-system analysis | Not built | Supplementary route; not currently used. |
@@ -92,6 +92,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Peer group assignments — `Region()` | Complete | Resolved per organisation from the API at population-table build time, written into whichever population table it belongs to. |
 | Additional peer group columns (`Name()`) | Complete | Both empty-bracket (`Region()`, the selected unit's own group) and explicit-value (`Region(Wales)`, a named group) tokens are supported end-to-end: column discovery, Running Order multi-select (auto-populated with every distinct value per column), and resolution against the population scope. Blank and `x` values are excluded from discovery and treated as no group. |
 | Multi-level hierarchy model | Not built | `soft_parents` covers one-hop relationships between any number of tables (built, see above); a genuinely deep chain — walking from one table to a related table's own further relationships — is not built. |
+| Population table — `submissions_timeseries_{project_id}` (Indicators) | Complete | Own naming convention (no year component), own shared spine including `Region()` sourced from `nhs_organisations` at merge time. See Architecture Decision 10. |
+| Automatic population-table creation/merge (Indicators) | Complete | Merges on every fetch, not build-once — contrast the NHS row above. A single fetch response already spans a project's full period history, and submissions genuinely drop in and out over time. See Architecture Decision 10. |
 
 ---
 
@@ -143,6 +145,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Feature | Readiness | Notes |
 |---|---|---|
 | Base Chart library (17 charts across 3 data shapes) | Complete | No chart type renders a title. |
+| TimeSeries chart rendering | Not built | Data shape, acquisition, and population table are complete (see Part 3); no Base Chart accepts TimeSeries yet — `chart_type_map.csv` has no entries for it. Deliberately deferred to a following session. |
 | Populations string — Running Order control | Complete | |
 | Reporting unit highlighting — NumericSeries (6 charts) | Complete | Selected can resolve to more than one unit, when the chart's own population table (`population_table` on the data shape) has a one-to-many relationship to the reporting unit — e.g. an organisation with several submissions. See Functional Spec Section 10.4. |
 | Peer group as data filter (peer token leading the populations string) | Complete | Chart data scope narrows to the peer group; e.g. `Region(Wales)^Selected` shows Welsh units only. |

@@ -2,10 +2,11 @@
 app.py
 ChartGen Python Prototype — Streamlit entry point.
 
-This module only sequences the page: authenticate, render the sidebar,
-render whichever modal dialog is active, then render the tabs. All UI
-construction, form logic, and business logic live in their owning modules
-under core/.
+This module only sequences the page: apply any startup workfile, render
+the sidebar, render whichever modal dialog is active, then render the
+tabs. All UI construction, form logic, and business logic live in their
+owning modules under core/. No authentication gate exists here —
+credentials are validated inline within the Config tab, not at launch.
 """
 
 import os
@@ -16,7 +17,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 
-from core.ui.auth.login_form import require_authentication
 from core.ui.workfile.sidebar import render_sidebar
 from core.ui.workfile.workfile_dialogs import render_workfile_dialogs
 from core.workfile.state.session_state import ws, has_workfile
@@ -27,7 +27,6 @@ from core.ui.tabs import (
 )
 
 
-require_authentication()
 apply_startup_workfile()
 
 st.set_page_config(page_title="ChartGen", layout="wide")

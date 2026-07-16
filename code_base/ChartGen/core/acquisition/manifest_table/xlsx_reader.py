@@ -15,6 +15,7 @@ Unknown hex_ids in the file are rejected rather than guessed at.
 from core.workfile.state.workfile_file import (
     MANIFEST_FIELDNAMES, new_manifest_row, renumber_chart_refs,
 )
+from core.acquisition.url_triage import url_to_database
 from core.acquisition.manifest_table.xlsx_writer import EXPORT_COLUMNS
 
 try:
@@ -77,7 +78,7 @@ def apply_manifest_import(imported: list[dict], *, workfile_state) -> dict:
                 existing["deleted"] = "0"  # present in the file = wanted
                 updated += 1
         elif url:
-            row = new_manifest_row(url, "Direct Input", workfile_state.manifest_rows)
+            row = new_manifest_row(url, "Direct Input", workfile_state.manifest_rows, url_to_database(url))
             workfile_state.manifest_rows.append(row)
             by_hex[row["hex_id"]] = row
             seen_hex_ids.add(row["hex_id"])

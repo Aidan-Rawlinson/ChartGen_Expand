@@ -17,7 +17,7 @@ import tempfile
 import streamlit as st
 
 from core.acquisition.import_flow import process_template
-from core.acquisition.toolkit_nhs.fetch import fetch_all
+from core.acquisition.fetch_dispatch import fetch_all
 from core.acquisition.manifest_table import (
     write_manifest_xlsx, read_manifest_xlsx, apply_manifest_import,
 )
@@ -230,6 +230,14 @@ def _render_fetch_section():
                 st.error(f"✗ [{r['hex_id']}] {r['label']} — {r['message']}")
 
     if st.button("Fetch All Chart Data"):
+        token = st.session_state.get("token")
+        if not token:
+            st.error(
+                "No valid credentials — validate credentials in the Config "
+                "tab before fetching."
+            )
+            st.stop()
+
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -239,7 +247,7 @@ def _render_fetch_section():
 
         with st.spinner("Fetching data…"):
             fetch_results = fetch_all(
-                st.session_state["token"],
+                token,
                 on_progress=on_progress,
                 workfile_state=ws(),
             )

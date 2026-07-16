@@ -54,3 +54,30 @@ Built Step 2 (multi-project, same database) and Step 6 (streamlined New Workfile
 **Other fixes and additions along the way:** chart titles removed from all 17 Base Charts; the bead-string plot's tiers de-duplicate visually (a unit already shown in a more specific tier is suppressed from broader ones — statistics unaffected); a real bug found and fixed where the Populations tab showed stale data after Fetch (fixed by adding the missing `st.rerun()`, matching the existing flash-message pattern used elsewhere); Charts tab wired to read the Running Order's live `set_default_populations` value (flagged throughout as a stopgap).
 
 **Documentation.** Scrubbed the "Refactoring Issues" concept from the Docs Maintenance Guide entirely, at the user's explicit instruction — this phase is new functionality, not refactoring, and the framing shouldn't imply otherwise. The Guide now governs five documents, not six; deferred/known gaps route to Feature List Notes instead. All five governed documents (Guide, Feature List, Architecture, Functional Spec, Glossary) brought current against the actual code; Primer untouched throughout (edit-locked, no request made to change it). Mirror copies written mid-session throughout, per Section 8 of the Guide.
+
+
+## Session — Second Toolkit (Indicators) and Credentials Relocation
+
+**Credentials moved to Config tab.** Removed the app-level login gate entirely (`require_authentication`/`_render_login` in `login_form.py` replaced with `render_credentials_box`, called from `config_tab.py`). No login required to launch, create, open, or save a workfile — Fetch fails soft with none validated. Confirmed via real VBA (`GetToken`) that one shared credential set/token authorises both the NHS and Indicators APIs, so this is a single box, not per-database. Save-attribution call sites (`new_workfile_form.py`, `open_workfile_form.py`, `save_as_form.py`, `sidebar.py`) changed from `st.session_state["username"]` to `.get("username", "")` per user decision (blank, not OS-username fallback).
+
+**New canonical shape — TimeSeries.** Built from a real Indicators toolkit VBA export (`GetInfo`/`GetReportInfo`/`GetDataInfo`/`GetVisibleDates` against `icsapi.nhsbenchmarking.nhs.uk`). Period axis lives once on the shape, not per metric, per explicit user correction ("a data shape relates to a single dataset"). API-supplied period stats (`dateAverages`/`dateMedians`/`calculatedNationalAverages`) dropped entirely — stats recomputed locally per period, matching every other shape's convention. Visible-dates filtering (`outputAvailability <= today`) and the VBA's own untrusted-but-relied-on period ordering both mirrored exactly, per user instruction not to second-guess it.
+
+**New package — `core/acquisition/toolkit_indicators/`**, mirroring `toolkit_nhs/`'s shape: `api_client.py`, `url_parser.py`, `table_naming.py`, `population_tables.py`, `transformers.py`, `fetch.py`. URL shape confirmed against real examples (`members.nhsbenchmarking.nhs.uk/project/{id}/toolkit`); tier-id extraction cascade (`o`→`d`→`c`→`b`) and the "no `date=`" graceful fallback both mirror the source VBA exactly, including a discrepancy in the real URLs supplied (missing `=` after `date` in several examples) — not corrected, matched to existing VBA fallback behaviour instead.
+
+**New population-table trigger model.** `submissions_timeseries_{project_id}` merges on every fetch (not build-once like NHS's `ensure_population_tables`) — a single report response spans a project's full period history, and submissions genuinely drop in/out over time (confirmed by user). `Region()` is carried on these rows too, sourced from `nhs_organisations` at merge time rather than left blank — corrected mid-session after the user pointed out Region() was never chart-data-derived on the NHS side either.
+
+**Deliberate deviation from VBA, flagged and accepted:** `GetVisibleDates`'s hardcoded project `42` not replicated — the parsed `project_id` is used instead, consistent with the naming convention already being project-generic.
+
+**Deliberately skipped:** the VBA's `GetInfo`/tiers endpoint — its only extracted value (`TierName`) is unused elsewhere in the source code.
+
+**`cache_writer.py` moved** from `toolkit_nhs/` to `shared/infrastructure/` — audited as having no NHS-specific logic, now shared rather than duplicated per toolkit package.
+
+**`core/acquisition/url_triage.py` and `core/acquisition/fetch_dispatch.py`** — new, sit outside both toolkit packages. Triage by path shape (`/outputs/{id}` vs `/project/{id}/toolkit`), confirmed against real URL examples from both sources. Fetch dispatch originally shipped with two separate progress-bar phases (NHS then Indicators); corrected on request to report one continuous total across both.
+
+**Organisation ID collision** — resolved by explicit user decision to assume shared identity space between the two APIs "for the moment," revisit if it breaks.
+
+**Correction, own error:** initially told the user `format_modifier` was unpopulated across all three existing shapes. Checked against actual code before documentation: NumericSeries and NumericCompositional already populate it correctly; only CategoricalCompositional lacks it. Corrected in Current_State/Next_Session and in the TimeSeries module's own docstring.
+
+**Chart rendering for TimeSeries explicitly deferred** to next session, per user instruction — this session's scope ends at data landing in cache, confirmed via the Charts tab (identifies the shape, shows "no charts defined", doesn't crash).
+
+**Docs:** All five governed documents updated to match (see Current_State for the full breakdown). Two prior sessions' documentation debt (credentials-tab wording, "three" vs "four" canonical shapes) closed out in the same pass as this session's own changes.

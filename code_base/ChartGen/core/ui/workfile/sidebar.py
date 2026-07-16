@@ -54,7 +54,7 @@ def render_sidebar():
         # Save / Save and Close are unavailable in a read-only session; Save As
         # remains available so a read-only session can become a normal one.
         if st.button("Save", use_container_width=True, disabled=not has_workfile or read_only):
-            save_workfile(w, st.session_state["username"])
+            save_workfile(w, st.session_state.get("username", ""))
             st.rerun()
 
         if st.button("Save as", use_container_width=True, disabled=not has_workfile):
@@ -62,7 +62,7 @@ def render_sidebar():
             st.rerun()
 
         if st.button("Save and close", use_container_width=True, disabled=not has_workfile or read_only):
-            save_workfile(w, st.session_state["username"])
+            save_workfile(w, st.session_state.get("username", ""))
             close_workfile(w)
             st.session_state.pop("workfile_state", None)
             clear_workfile_session_state()
@@ -78,7 +78,8 @@ def render_sidebar():
             st.rerun()
 
         st.divider()
-        st.caption(f"Signed in as {st.session_state.get('username', '')}")
+        _username = st.session_state.get("username", "")
+        st.caption(f"Signed in as {_username}" if _username else "Not signed in")
 
         # Check for Update — available only with no workfile open (Decisions.md),
         # sidesteps mid-session file-lock issues entirely rather than handling them.

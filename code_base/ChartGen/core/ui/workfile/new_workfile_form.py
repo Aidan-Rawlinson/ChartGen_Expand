@@ -60,7 +60,7 @@ def render_new_workfile_form():
                 workfile_path=save_path,
                 workfile_name=workfile_name,
                 description=description.strip(),
-                username=st.session_state["username"],
+                username=st.session_state.get("username", ""),
             )
         except Exception as e:
             st.error(f"Could not create workfile: {e}")

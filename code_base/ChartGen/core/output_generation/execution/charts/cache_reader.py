@@ -11,6 +11,8 @@ from core.shared.normalisation_containers.shapes import (
     NumericCompositionalMetricStats,
     CategoricalCompositional, CategoricalCompositionalMetric,
     CategoricalCompositionalUnit, CategoricalCompositionalMetricStats,
+    TimeSeries, TimeSeriesPeriod, TimeSeriesMetric, TimeSeriesUnit,
+    TimeSeriesMetricPeriodStats,
 )
 
 
@@ -95,10 +97,43 @@ def _from_dict_categorical_compositional(d):
     )
 
 
+def _from_dict_time_series(d):
+    periods = [TimeSeriesPeriod(**p) for p in d.get("periods", [])]
+    metrics = []
+    for m in d.get("metrics", []):
+        units = [
+            TimeSeriesUnit(
+                unit_code=u["unit_code"],
+                unit_id=u["unit_id"],
+                values=u["values"],
+            )
+            for u in m.get("units", [])
+        ]
+        period_stats = [
+            TimeSeriesMetricPeriodStats(**ps)
+            for ps in m.get("period_stats", [])
+        ]
+        metrics.append(TimeSeriesMetric(
+            name=m.get("name"),
+            units=units,
+            period_stats=period_stats,
+        ))
+    return TimeSeries(
+        title=d.get("title"),
+        format_modifier=d.get("format_modifier"),
+        population_table=d.get("population_table"),
+        periods=periods,
+        has_valid_unit_data=d.get("has_valid_unit_data", True),
+        metrics=metrics,
+        shape_stats=ShapeStats(**d.get("shape_stats", {})),
+    )
+
+
 DESERIALISE_MAP = {
     "NumericSeries":            _from_dict_numeric_series,
     "NumericCompositional":     _from_dict_numeric_compositional,
     "CategoricalCompositional": _from_dict_categorical_compositional,
+    "TimeSeries":               _from_dict_time_series,
 }
 
 

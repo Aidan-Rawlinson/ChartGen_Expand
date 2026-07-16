@@ -12,15 +12,18 @@ from .api_client import get_tier_info, get_chart_data
 from .table_naming import submissions_table_name
 from .population_tables import ensure_population_tables
 from .transformers import transform
-from .cache_writer import save_chart
+from core.shared.infrastructure.cache_writer import save_chart
 
 
 def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
     """
     Fetch, transform, and cache data for every non-deleted manifest row with
-    a URL — a full refresh. Updates each row's fetch-populated columns
-    (chart_title, project_id, service_id, year, shape_type, data_updated_at)
-    as it goes.
+    a URL whose database is "nhs" — a full refresh of this toolkit's own
+    rows only. Rows for other databases (e.g. "indicators") are left alone;
+    core.acquisition.fetch_dispatch is what combines every toolkit's
+    fetch_all into a single Fetch action. Updates each row's
+    fetch-populated columns (chart_title, project_id, service_id, year,
+    shape_type, data_updated_at) as it goes.
 
     Returns a list of result dicts, one per row:
     {
@@ -29,7 +32,8 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
     }
     """
     rows = [r for r in workfile_state.manifest_rows
-            if str(r.get("deleted", "0")) != "1" and r.get("url", "").strip()]
+            if str(r.get("deleted", "0")) != "1" and r.get("url", "").strip()
+            and str(r.get("database", "nhs")).strip() == "nhs"]
     results = []
     total = len(rows)
 

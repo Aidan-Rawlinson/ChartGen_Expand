@@ -36,7 +36,7 @@ def _render_open_decision():
         return
 
     info = st.session_state.get("op_pending_info") or {}
-    current_user = st.session_state["username"]
+    current_user = st.session_state.get("username", "")
     lock_state = classify_lock_state(info, current_user)
     locked_by = (info.get("locked_by") or "").strip()
     locked_at = info.get("locked_at", "")

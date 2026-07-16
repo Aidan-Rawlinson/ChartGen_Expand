@@ -58,7 +58,7 @@ def render_save_as_form():
                 st.error(e)
         else:
             new_name = os.path.splitext(os.path.basename(save_path))[0]
-            save_as(ws_cur, save_path, new_name, st.session_state["username"])
+            save_as(ws_cur, save_path, new_name, st.session_state.get("username", ""))
             st.session_state.pop("show_save_as_form", None)
             st.session_state.pop("sa_save_path_val", None)
             st.rerun()

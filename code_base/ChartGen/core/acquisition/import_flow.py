@@ -7,7 +7,7 @@ its own; each step is delegated to the concern that owns it.
 
 Data fetching is deliberately not part of this sequence — template
 processing populates the manifest table only, and the single fetch process
-(the Imports tab's Fetch button, core.acquisition.toolkit_nhs.fetch) is the
+(the Imports tab's Fetch button, core.acquisition.fetch_dispatch) is the
 one place data is pulled.
 
 Also the target for the second trigger described in Architecture Decision 2
@@ -21,6 +21,7 @@ concerns, so there is no two-way dependency between them.
 """
 
 from core.acquisition.template.template_reader import read_template
+from core.acquisition.url_triage import url_to_database
 from core.workfile.state.workfile_file import new_manifest_row, renumber_chart_refs
 from core.output_generation.execution.charts.cache_reader import load_manifest
 from core.output_generation.definition.running_order import generate_from_template
@@ -46,7 +47,7 @@ def merge_urls_into_manifest(urls: list[str], source: str, *, workfile_state) ->
             continue
         existing = by_url.get(url)
         if existing is None:
-            row = new_manifest_row(url, source, workfile_state.manifest_rows)
+            row = new_manifest_row(url, source, workfile_state.manifest_rows, url_to_database(url))
             workfile_state.manifest_rows.append(row)
             by_url[url] = row
             added += 1

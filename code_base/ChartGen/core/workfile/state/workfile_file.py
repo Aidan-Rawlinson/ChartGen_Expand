@@ -36,7 +36,7 @@ MANIFEST_FIELDNAMES = [
     "hex_id",           # 5-digit hexadecimal, stable internal key — never reused, never renumbered
     "url",
     "chart_title",      # populated at fetch
-    "database",         # currently always "nhs"
+    "database",         # "nhs" or "indicators" — resolved at URL entry by core.acquisition.url_triage
     "project_id",       # populated at fetch
     "service_id",       # populated at fetch
     "year",             # populated at fetch
@@ -62,19 +62,21 @@ def generate_hex_id(existing_rows: list) -> str:
             return hex_id
 
 
-def new_manifest_row(url: str, source: str, existing_rows: list) -> dict:
+def new_manifest_row(url: str, source: str, existing_rows: list, database: str) -> dict:
     """
     Build a new manifest row for a URL, with a fresh hex_id and added_at,
-    fetch-populated columns set to PLACEHOLDER, and database defaulted to
-    "nhs" (the only database currently supported). chart_ref is left blank —
-    call renumber_chart_refs after appending.
+    fetch-populated columns set to PLACEHOLDER. database is the caller's
+    responsibility to resolve (see core.acquisition.url_triage) — this
+    function no longer defaults it, so a database can never be silently
+    wrong just because a call site forgot to pass it. chart_ref is left
+    blank — call renumber_chart_refs after appending.
     """
     return {
         "chart_ref":       "",
         "hex_id":          generate_hex_id(existing_rows),
         "url":             url.strip(),
         "chart_title":     PLACEHOLDER,
-        "database":        "nhs",
+        "database":        database,
         "project_id":      PLACEHOLDER,
         "service_id":      PLACEHOLDER,
         "year":            PLACEHOLDER,

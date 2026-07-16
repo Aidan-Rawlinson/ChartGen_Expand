@@ -45,3 +45,19 @@
 - **Native OS Save dialogs replace the app's own folder-picker-plus-name-box UI**, for both New Workfile and Save As — including relying on the OS dialog's own overwrite confirmation rather than building a duplicate app-level step.
 - **No Base Chart renders a title** — applies uniformly to both the Charts tab preview and generated report output, since both share the same rendering pipeline.
 - **The Docs Maintenance Guide no longer has a "Refactoring Issues" document or concept.** This phase is new functionality, not a refactor; deferred/known gaps are recorded as Notes on the relevant Feature List row instead. The Guide now governs five documents.
+
+
+## Session — Second Toolkit (Indicators) and Credentials Relocation
+
+- Login gate removed entirely; credentials validated on demand from a single box in the Config tab, not required to launch or use most of the app.
+- One shared credential set/token authorises both the NHS and Indicators APIs — confirmed via source VBA. No per-database credential boxes.
+- Save attribution (`last_saved_by`) is blank, not OS-username-defaulted, when no credentials have been validated this session.
+- TimeSeries data shape's period axis lives once on the shape (shared across every Metric-Series in it), not per metric — a data shape represents one dataset.
+- API-supplied period stats (`dateAverages`/`dateMedians`/`calculatedNationalAverages`) are dropped entirely for TimeSeries; stats are always recomputed locally per period, matching every other shape's convention. `calculatedNationalAverages` specifically is never adopted at all.
+- Indicators toolkit's own period ordering (`availableDates`) is trusted as-is, not re-sorted — mirroring the source VBA rather than attempting to "fix" it.
+- Organisation ids are assumed to match between the NHS and Indicators APIs, for now — an assumption to revisit if it proves wrong, not a verified fact.
+- `submissions_timeseries_{project_id}` population table merges on every fetch (not build-once) and carries `Region()`, sourced from `nhs_organisations` at merge time, keeping the identical-headers convention across every population table.
+- `GetVisibleDates`'s hardcoded project `42` (a VBA quirk) is not replicated — the actual parsed `project_id` is used.
+- The VBA's `GetInfo`/tiers endpoint is deliberately not implemented — its only extracted value is unused elsewhere in the source.
+- Chart rendering for TimeSeries is explicitly out of scope this session — data acquisition only; the Base Chart module is next session's work.
+- Fetch progress across both toolkits reports as one continuous total, not two separate phases — corrected on request.

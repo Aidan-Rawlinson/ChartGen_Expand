@@ -42,7 +42,10 @@ chartgen/
     │   └── state/
     ├── acquisition/
     │   ├── import_flow.py
+    │   ├── url_triage.py
+    │   ├── fetch_dispatch.py
     │   ├── toolkit_nhs/
+    │   ├── toolkit_indicators/
     │   └── template/
     ├── output_generation/
     │   ├── static_config/
@@ -137,6 +140,8 @@ MyWorkfile.cgw  (ZIP)
 
 - **Tier (TBN Toolkit)** — a component of the toolkit structure which hosts charts.
 
+- **Indicators toolkit** — the second toolkit data source (timeseries data), distinct from the NHS toolkit above — a different API host and URL shape. Chart URLs are classified into it by manifest rows with `database = "indicators"`, decided by `url_triage.url_to_database` from the URL's path shape. See Architecture, Decision 10.
+
 ### Cluster 7 — Data shapes & populations
 
 - **Chart data** — a comparative dataset for a specific analysis. Called "chart data" because it typically originates from a chart fetch and ends up rendered in a chart, but the data itself is agnostic to that flow and could be, for example, used in tables.
@@ -146,6 +151,8 @@ MyWorkfile.cgw  (ZIP)
 - **Population label (`population_label`)** — a field on the data shape itself identifying which population layer a filtered copy represents (e.g. `"All"`, `"Selected"`, a resolved peer-group value), set by `build_population_layers`. See Functional Spec, Section 10.4, and the Architecture document, Section 5.
 
 - **Populations string** — the `^`-delimited ordered list of tokens (e.g. `All^Region()^Selected`) that specifies which population layers are sent to the chart engine. See Functional Spec, Section 10.4.
+
+- **Period (`period_id`, `period_label`)** — a single point on a TimeSeries shape's period axis, shared across every Metric-Series in that shape. See Functional Spec, Section 8.2.
 
 ### Cluster 8 — Running Order & execution
 
@@ -167,7 +174,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Master table** — whichever population table sits first in display order (`table_order[0]`). Drives the reporting unit picker and the batch loop. Position is the only definition of "master" — there is no separate flag, and reordering a table to position 0 makes it master with no further action. See Architecture, Section 5.
 
-- **Population table** — a table sharing the common spine (`unit_id`, `unit_code`, `unit_name`, `soft_parents`, plus any number of `Name()` peer-group columns), e.g. `nhs_organisations` or a `submissions_{year}_{project_id}` table. A workfile can hold any number of them; see Master table for how one becomes the reporting-unit source. Built automatically the first time a chart pull encounters a project/year not already represented on the workfile — see Functional Spec, Section 7.2.
+- **Population table** — a table sharing the common spine (`unit_id`, `unit_code`, `unit_name`, `soft_parents`, plus any number of `Name()` peer-group columns), e.g. `nhs_organisations`, a `submissions_{year}_{project_id}` table, or a `submissions_timeseries_{project_id}` table. A workfile can hold any number of them; see Master table for how one becomes the reporting-unit source. Built automatically the first time a chart pull encounters a project/year not already represented on the workfile — see Functional Spec, Section 7.2.
 
 - **ReportContext** — the per-report identity object (`unit_id`, `unit_code`, `unit_name`), rebuilt fresh for each unit in a batch run and passed to chart rendering and text replacement. Carries no organisation identity of its own — an organisation, where the reporting unit's table has one, is reached via the Full Unit Set, not a field on `ReportContext`.
 

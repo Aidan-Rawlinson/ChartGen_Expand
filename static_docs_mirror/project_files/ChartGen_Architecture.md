@@ -73,6 +73,8 @@ chartgen/
     │       └── session_state.py
     ├── acquisition/
     │   ├── import_flow.py
+    │   ├── url_triage.py
+    │   ├── fetch_dispatch.py
     │   ├── manifest_table/
     │   │   ├── xlsx_writer.py
     │   │   └── xlsx_reader.py
@@ -80,8 +82,14 @@ chartgen/
     │   │   ├── api_client.py
     │   │   ├── fetch.py
     │   │   ├── transformers.py
-    │   │   ├── cache_writer.py
     │   │   ├── peer_groups.py
+    │   │   ├── population_tables.py
+    │   │   └── table_naming.py
+    │   ├── toolkit_indicators/
+    │   │   ├── api_client.py
+    │   │   ├── fetch.py
+    │   │   ├── url_parser.py
+    │   │   ├── transformers.py
     │   │   ├── population_tables.py
     │   │   └── table_naming.py
     │   └── template/
@@ -114,13 +122,14 @@ chartgen/
     │   ├── normalisation_containers/
     │   │   ├── shapes/
     │   │   │   ├── common.py, numeric_series.py, numeric_compositional.py,
-    │   │   │   └── categorical_compositional.py, dispatch.py
+    │   │   │   └── categorical_compositional.py, timeseries.py, dispatch.py
     │   │   ├── population_layers.py
     │   │   └── peer_group_tokens.py
     │   └── infrastructure/
     │       ├── constants.py
     │       ├── report_context.py
-    │       └── soft_parents.py
+    │       ├── soft_parents.py
+    │       └── cache_writer.py
     └── ui/
         ├── common/
         │   ├── formatting.py
@@ -137,7 +146,7 @@ chartgen/
 
 | Path | Notes |
 |---|---|
-| `app.py` | Streamlit entry point — sequences auth, sidebar, dialogs, and tabs; holds no UI construction or business logic of its own |
+| `app.py` | Streamlit entry point — sequences the startup workfile check, sidebar, dialogs, and tabs; holds no UI construction or business logic of its own. No authentication gate — see Decision 7 |
 | `run_chartgen.bat` | Double-click launcher; creates venv on first run |
 | `requirements.txt` | Python dependencies (kept in sync with `.bat`) |
 | `user_resources/PPT_Template_Creation.md` | Guidance doc for template designers |
@@ -148,8 +157,11 @@ chartgen/
 | `core/workfile/state/workfile_file.py` | Owns the `.cgw` format — see Section 5. The only module that reads/writes the ZIP directly. Population tables have no single fixed column schema here — each is written using its own rows' keys; the shared spine (Section 5) is a convention followed by whichever module builds a table's rows, not a schema enforced here |
 | `core/workfile/state/session_state.py` | Streamlit-side `WorkfileState` accessors — Streamlit-rerun plumbing only |
 | `core/acquisition/import_flow.py` | Coordinator: sequences template read → URL merge into the manifest table → Running Order generation. Data fetching is not part of this sequence — the single fetch process is the Imports tab's Fetch action. The only module that imports both `acquisition` and `output_generation.definition` |
+| `core/acquisition/url_triage.py` | `url_to_database` — classifies a chart URL as `"nhs"` or `"indicators"` by path shape alone, called at manifest-row creation (both `import_flow.py` and `manifest_table/xlsx_reader.py`), before either toolkit's own URL parsing runs. See Decision 10 |
+| `core/acquisition/fetch_dispatch.py` | Combines every toolkit's own `fetch_all` into the single Fetch action the Imports tab calls, reporting progress as one continuous total across both. Lives outside both toolkit packages for the same reason `url_triage.py` does — something has to know about both without either depending on the other. See Decision 10 |
 | `core/acquisition/manifest_table/` | Excel export/import round-trip for the manifest table (`data_cache/manifest.csv`) — the acquisition-side equivalent of the Running Order's xlsx pair. Schema ownership stays with `workfile_file` |
-| `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, cache writer, peer-group menu-building), plus population table construction (`population_tables.py`) and table-naming convention (`table_naming.py`). Lives here, not in `workfile.setup`, because building population tables is a "pull and normalise NHS toolkit data" concern, the same kind of thing as the rest of this package — and because `fetch.py` (same package) needs to call it directly without acquisition code depending on `workfile.setup` (one-way dependency rule, Section 2) |
+| `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, peer-group menu-building), plus population table construction (`population_tables.py`) and table-naming convention (`table_naming.py`). Lives here, not in `workfile.setup`, because building population tables is a "pull and normalise NHS toolkit data" concern, the same kind of thing as the rest of this package — and because `fetch.py` (same package) needs to call it directly without acquisition code depending on `workfile.setup` (one-way dependency rule, Section 2) |
+| `core/acquisition/toolkit_indicators/` | The Indicators toolkit's own fetch pipeline — separate API, separate URL shape, separate population-table trigger model from `toolkit_nhs/` (build-once vs merge-every-fetch). Shares NHS's token (`toolkit_nhs.api_client.get_token`) and the shared `cache_writer` — see Decision 10 |
 | `core/acquisition/template/` | Reads `.pptx` placeholders; detects/strips yellow boxes; parses toolkit URLs |
 | `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
@@ -160,11 +172,12 @@ chartgen/
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
-| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule |
+| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule. TimeSeries is not wired into `dispatch.py`/`build_population_layers` yet — no chart type references it, so nothing calls those generic dispatch points with a TimeSeries instance |
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file` |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
-| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (sign-in widget), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the nine tab renderers). Business logic delegated to the owning module rather than living here |
+| `core/shared/infrastructure/cache_writer.py` | `save_chart` — serialises any canonical data shape into `WorkfileState.cache`. Moved here from `acquisition/toolkit_nhs/` this session: audited as having no NHS-specific logic at all, so it's shared by both toolkit packages rather than duplicated. See Decision 10 |
+| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (credentials box widget, rendered within the Config tab), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the nine tab renderers). Business logic delegated to the owning module rather than living here |
 
 ---
 
@@ -240,7 +253,7 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `hex_id` | 5-digit uppercase hexadecimal internal identity — stable for the row's lifetime, never reused, never renumbered; names the row's cache file |
 | `url` | The toolkit URL |
 | `chart_title` | Chart title, taken from the fetched data shape |
-| `database` | Source database — currently always `nhs` |
+| `database` | Source database — `nhs` or `indicators`, resolved at URL entry by `url_triage.url_to_database` from the URL's path shape |
 | `project_id` | Populated at fetch |
 | `service_id` | Populated at fetch |
 | `year` | Populated at fetch |
@@ -412,9 +425,13 @@ Buttons are active/inactive based on the state of the software.
 
 **Read-Only sessions.** Offered on every Open regardless of lock state. Enforcement is shallow: Save is disabled; every other action behaves as normal, so unsaved edits are lost unless rescued via Save As. A Read-Only session never writes the lock, and therefore never clears one on close.
 
-### Decision 7 — Credentials Location
+### Decision 7 — Credentials Location and Validation Timing
 
-Only the username is stored, in `core/session_shell/auth/credentials.csv` — rewritten on every successful login, saving the user from re-entering it on next launch. The password and session token are never persisted to disk; the token lives only in `st.session_state["token"]` for the session's duration.
+Only the username is stored, in `core/session_shell/auth/credentials.csv` — rewritten on every successful credential validation, saving the user from re-entering it next time. The password and session token are never persisted to disk; the token lives only in `st.session_state["token"]` for the session's duration.
+
+Validation happens on demand, from a single box in the Config tab (Functional Spec Section 3) — not as a gate before the main interface loads. A workfile can be created, opened, edited, and saved with no credentials validated in that session at all; the only consequence is that Fetch (Functional Spec Section 7.1) fails until credentials are validated.
+
+Save attribution (`last_saved_by`) reads `st.session_state["username"]` directly; with no credentials validated this session, it is blank rather than defaulted to anything else — the audit trail is simply absent, not falsely attributed.
 
 This is per-machine, per-user data, not workfile data, so it lives in `session_shell/auth/` rather than the workfile or static config.
 
@@ -437,3 +454,21 @@ Creating a workfile and populating it with a project's data are two unrelated pr
 **Merge, not overwrite.** `nhs_organisations` is shared across every project in a workfile. Adding a further project's tables appends organisations not already present (by `unit_id`) rather than rebuilding the table from scratch; existing rows are untouched. This relies on `Region()` (and any future peer-group column) being a value handed to us per-organisation by the API, not something computed from the full table — if that stopped being true, this merge would need revisiting.
 
 **Why acquisition, not workfile.setup.** Building population tables is the same kind of concern as the rest of `acquisition/toolkit_nhs/` — pulling and normalising NHS toolkit data — not a workfile-creation concern. It also has to live there for `fetch.py` to call it directly: acquisition code must never depend on `workfile.setup` (Section 2's one-way dependency rule), and this logic used to sit in `workfile.setup`, which is exactly why it had to move.
+
+### Decision 10 — Second Toolkit (Indicators) and Dual Population-Table Maintenance Models
+
+A second data source — the Indicators toolkit, timeseries data — was added this session, structured as its own package (`acquisition/toolkit_indicators/`) mirroring `toolkit_nhs/`'s shape, rather than as a variant or extension of the NHS package.
+
+**URL triage.** Every URL entering the chart URL table is classified `"nhs"` or `"indicators"` at manifest-row creation, by path shape alone (`url_triage.py`) — `/outputs/{id}` vs `/project/{id}/toolkit`. Both toolkits share the same front-end domain; path is the only reliable signal. Triage happens once, at entry, not at every fetch — the manifest row's `database` column is the single source of truth from that point on.
+
+**Two packages, not one.** `toolkit_indicators/` has its own `api_client.py` (a different API host, `icsapi.nhsbenchmarking.nhs.uk`), `url_parser.py` (a completely different URL shape — a path-embedded project id plus a drill-down breadcrumb of up to four query params, only the deepest of which identifies the actual report tier), `transformers.py`, `table_naming.py`, `population_tables.py`, and `fetch.py`. `fetch_dispatch.py` sits outside both, combining each toolkit's own `fetch_all` into the single Fetch action the Imports tab calls — the same reason `url_triage.py` sits outside both: something has to know about both without either toolkit package depending on the other (Section 2's one-way dependency rule applies between sibling packages too, not just up/down a hierarchy).
+
+**Shared token.** Confirmed: one credential set/token authorises both APIs. `toolkit_indicators` does not duplicate `get_token` — it imports it directly from `toolkit_nhs.api_client`.
+
+**`cache_writer.py` moved to `shared/infrastructure/`.** Audited and confirmed to have no NHS-specific logic — it only serialises whatever dataclass shape it's given. Duplicating it per toolkit package would have meant two copies of genuinely identical code; moved once, both toolkits import from the same place.
+
+**Two different population-table trigger models, deliberately.** `toolkit_nhs/population_tables.py`'s `ensure_population_tables` builds a project's tables once, the first time that project/year is seen, then no-ops forever after — correct for the NHS side, where one chart fetch reveals one snapshot and a stable population. Neither holds for Indicators: a single report fetch already returns a project's entire period history in one response, so even the *first* build has to union submissions across every period in that one call; and submissions genuinely drop in and out of the Indicators population over time, confirmed, so even an established table has to reconcile on every subsequent fetch, not just the first. `toolkit_indicators/population_tables.py`'s `merge_timeseries_population` therefore merges on every call — same append-by-`unit_id`, no-overwrite rule `nhs_organisations` already uses for cross-project merging, just run every time here rather than only once.
+
+**Organisation identity assumption.** Each Indicators submission's `soft_parents` links to `nhs_organisations:{organisation_id}`, on the assumption that organisation ids match across both APIs — confirmed as an assumption to revisit if it turns out to be wrong, not a verified fact. `Region()` is carried on `submissions_timeseries_{project_id}` rows too (keeping the identical-headers convention every population table follows, Section 5), sourced the same way the NHS side sources it — a lookup against the organisation row, not anything from the chart data itself — just looked up against whatever's already in `nhs_organisations` at merge time, since the Indicators API supplies no region field of its own. Left blank only when the organisation itself is new to `nhs_organisations` in that same fetch.
+
+**Naming.** `submissions_timeseries_{project_id}` — no year component, unlike the NHS side's `submissions_{year}_{project_id}`. The Indicators toolkit has periods, not years, and a single fetch response already spans every period at once; the table was never partitioned by year to begin with.
