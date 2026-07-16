@@ -17,13 +17,11 @@ class ReportContext:
     unit_id:            str
     unit_code:          str
     unit_name:          str
-    organisation_id:    str
-    organisation_name:  str
 
 
 def build_report_context(settings: dict, units: list) -> Optional[ReportContext]:
     """
-    Build a ReportContext from settings and the loaded unit list.
+    Build a ReportContext from settings and the master table's rows.
     Returns None if no unit is selected or the selected ID is not found.
     """
     selected_id = str(settings.get("selected_unit_id", "") or "").strip()
@@ -38,6 +36,4 @@ def build_report_context(settings: dict, units: list) -> Optional[ReportContext]
         unit_id=str(row["unit_id"]),
         unit_code=row["unit_code"],
         unit_name=row["unit_name"],
-        organisation_id=row["organisation_id"],
-        organisation_name=row["organisation_name"],
     )

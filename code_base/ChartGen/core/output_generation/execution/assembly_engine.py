@@ -24,12 +24,14 @@ from core.output_generation.execution.charts.cache_reader import load_shape
 from core.output_generation.execution.charts.base_charts import render_chart
 from core.output_generation.execution.text.text_engine import update_text
 from core.shared.infrastructure.report_context import build_report_context
+from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.population_layers import build_population_layers
 from core.output_generation.execution.pictures.insert_picture import insert_picture
 from core.output_generation.execution.excel.insert_from_excel import (
     open_excel, close_excel, insert_from_excel
 )
 from core.output_generation.execution.results import ok_result, err_result
+from core.workfile.state.workfile_file import master_table_rows
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +46,7 @@ class AssemblyContext:
         self.log: list[dict] = []
         self.autotable_stats: dict = {}
         self.report_context = None      # set by run_running_order
+        self.full_unit_set: dict = {}   # {table_name: [row, ...]} for the current reporting unit, set by run_running_order
         self.default_populations: str = ""  # set by set_default_populations row
 
 
@@ -132,10 +135,22 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     population_layers = []
     if render_context is not None and populations_str:
         workfile_state = settings.get("workfile_state")
-        units = workfile_state.units
+        # A chart's population lives in whichever table its data shape names
+        # (population_table) — not necessarily the current master table.
+        # Falls back to master for legacy cached data fetched before
+        # population_table existed.
+        target_table = data_shape.population_table or (
+            workfile_state.table_order[0] if workfile_state.table_order else ""
+        )
+        target_rows = workfile_state.tables.get(target_table, [])
+        # Selected can legitimately be more than one unit in this table —
+        # e.g. an organisation supporting two ICBs highlights both ICBs on
+        # an ICB-level chart. ctx.full_unit_set already resolved this per
+        # table for the current reporting unit; just look up its table.
+        selected_ids = {r["unit_id"] for r in ctx.full_unit_set.get(target_table, [])}
         try:
             population_layers = build_population_layers(
-                data_shape, populations_str, units, render_context
+                data_shape, populations_str, target_rows, selected_ids
             )
         except Exception as e:
             return err_result(row, f"insert_chart: failed to build population layers: {e}")
@@ -262,8 +277,19 @@ def run_running_order(rows: list[dict], settings: dict,
         ctx = AssemblyContext()
 
     workfile_state = settings.get("workfile_state")
-    units = workfile_state.units
+    units = master_table_rows(workfile_state)
     ctx.report_context = build_report_context(settings, units)
+
+    master_table_name = workfile_state.table_order[0] if workfile_state.table_order else ""
+    reporting_row = None
+    if ctx.report_context is not None:
+        reporting_row = next(
+            (r for r in units if str(r["unit_id"]) == ctx.report_context.unit_id), None
+        )
+    ctx.full_unit_set = (
+        resolve_full_unit_set(reporting_row, master_table_name, workfile_state.tables)
+        if reporting_row is not None else {}
+    )
 
     t_start = time.perf_counter()
 

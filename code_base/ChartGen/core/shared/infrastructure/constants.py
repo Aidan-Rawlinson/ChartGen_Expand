@@ -6,9 +6,7 @@ this restructure has landed.
 
 Audited against Restructure_Plan.md Open Item 2: only coerce_row/FIELD_TYPES
 are genuinely generic (used by api_client, running_order, and workfile_file,
-with no domain knowledge of any one of them). UNITS_FIELDNAMES was NOT moved
-here — it is the units.csv column schema, used only by workfile_file, so it
-travels with that module instead (core/workfile/state/workfile_file.py).
+with no domain knowledge of any one of them).
 """
 
 FIELD_TYPES = {

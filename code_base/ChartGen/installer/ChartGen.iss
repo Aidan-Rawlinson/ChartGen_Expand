@@ -17,8 +17,8 @@
 ; this script - see Installer_Guide.md for exactly what to place where.
 
 #define MyAppName "ChartGen"
-#define MyAppVersion "0.0.1"
-#define MyAppVersionInfo "0.0.1.0"
+#define MyAppVersion "0.0.3"
+#define MyAppVersionInfo "0.0.3.0"
 
 [Setup]
 AppId={{A9AF1BB5-9E70-4EA1-BCFC-5AB2C1613B48}

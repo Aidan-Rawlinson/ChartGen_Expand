@@ -1,6 +1,6 @@
 # ChartGen — Functional Specification
 
-*TBN Internal · Input document for refactoring — describes current behaviour only*
+*TBN Internal · Describes current behaviour only*
 
 ---
 
@@ -40,10 +40,11 @@ File operations sit in the sidebar, independent of the active tab; with no workf
 
 | Tab (short) | Tab (full) | Purpose |
 |-------------|------------|---------|
-| **Details** | Project Details | Read-only view of project identity, time period, and file paths, including the workfile folder ChartGen uses to create the outputs subfolder. |
+| **Details** | Project Details | Read-only view of file identity and save history (file path, last saved by/at). No project identity shown — year/project/organisation are not workfile-level concepts once a workfile can hold more than one project's data (Section 7.2). |
 | **Config** | User Controlled Configuration Files | Empty shell — intended for management of reference CSVs and other runtime configuration files; not yet implemented. |
 | **Imports** | Import Project Data | Template upload and processing (Template Reader); the chart URL table (read-only view, edited via Excel download/upload); toolkit API fetch. |
-| **Select** | Selection & Populations | Select an individual reporting unit and inspect its details, hierarchies, and peer group assignments. |
+| **Populations** | Populations | Every population table currently in the workfile, collapsible and reorderable. Whichever table sits on top (position 0) is the master table, driving the reporting unit picker and the batch loop — see Section 7.2. |
+| **Select** | Reporting unit selection | Select an individual reporting unit from the master table, and see its Full Unit(s) — its own row plus every row related to it one hop out, across every population table. |
 | **Text** | Text — Text Tags | Lists available text tags with a live preview of each tag's value for the currently selected reporting unit. |
 | **Running Order** | Running Order (Output Script) | The master output script. Generated automatically from template processing. |
 | **Charts** | Chart Preview | Preview any chart from fetched data; test chart types and data shape pairings. |
@@ -55,7 +56,9 @@ Tabs in scope for the final tool but not yet implemented are included as empty s
 
 ## 4. New Workfile Flow
 
-Creating a new workfile is one step: year and project selection, a native folder picker for the save location, and the initial submissions fetch — producing a saved `.cgw` ready for further work.
+Creating a new workfile collects a short description ("what is this workfile for?" — free text, for the person, not the system) and a save location/name via a single native Save dialog, then produces a genuinely blank `.cgw`: no project, no population tables, no toolkit involvement of any kind. The description is shown next to the ChartGen title in the app header for as long as the workfile stays open.
+
+Population tables are added separately and automatically — see Section 7.2.
 
 ---
 
@@ -136,21 +139,31 @@ Chart URLs enter the chart URL table (`manifest.csv`) by two routes: extraction 
 
 Fetching is a single, explicit action on the Imports tab: a full refresh of every chart in the table, populating each row's title, project, service, year, and data shape as it goes. Data is fetched once and held in memory; no API calls occur during a batch run. The user can trigger a refresh at any point.
 
-### 7.2 Reporting Units
+### 7.2 Population Tables
 
-The reporting units CSV (`units.csv`) is the manifest the system iterates over during a batch run. It provides:
+Population tables — `nhs_organisations` and any number of `submissions_{year}_{project_id}` tables — are the tables the system selects reporting units from and iterates over during a batch run. Every population table shares the same columns:
 
-- **Name** — display name (e.g. trust name), used for labels and report titles
-- **ID** — unique numeric identifier, used internally
-- **Code** — outward-facing identifier; used for labels only, not relied on for logic
+- **`unit_id`** — stable internal identifier for the row, within that table
+- **`unit_code`** — outward-facing identifier; used for labels only, not relied on for logic
+- **`unit_name`** — display name (e.g. trust name), used for labels and report titles
+- **`soft_parents`** — this row's relationship links to other population tables (see below)
+- any number of **`Name()`** peer-group columns
 
-Additional columns define peer group membership. Every peer group — however many named values it has, including a simple yes/no group — is a `Name()` column: the unit belongs to the named group its value states. A unit with no group for that column is marked `x` (or left blank) rather than assigned one; both are treated identically and excluded from the Running Order populations multi-select.
+**Creation is automatic, not a user-facing action.** Nothing prompts for a project or year. During the toolkit fetch (Section 7.1), each chart's own `year`/`project_id` is identified from its URL; the first chart pulled for a project/year combination not already represented on the workfile triggers building that project's `submissions_{year}_{project_id}` table and merging its organisations into `nhs_organisations`. Every subsequent chart for the same combination is a no-op check. `nhs_organisations` is shared across every project a workfile holds — a further project's organisations are appended by `unit_id`, not overwritten; existing rows are untouched.
 
-`Region()` is the first peer group column, resolved from `GET /organisations?year={year}` during the New Workfile flow (Section 4) and written permanently into `units.csv` at save time. Additional `Name()` columns can be added to `units.csv` and will be picked up automatically by `build_population_layers` and the Running Order dialog without code changes.
+**Master table.** Whichever population table sits first in display order is the master table — it drives the reporting unit picker (Section 3.2, Select) and the batch loop (Section 13). Position is the only definition of "master"; there is no separate flag. Display order is user-changeable (Populations tab) and takes effect immediately.
 
-The CSV is human-readable, editable in Excel, and uploadable via the Streamlit UI.
+**`soft_parents`.** A relationship between two population tables — e.g. a submission belonging to an organisation — is recorded on the child side only, as `table_name:id1^id2|table_name:id3` (`|` separates entries for different tables, `^` separates multiple ids within the same table). This is deliberately not called "parent": these relationships are not always one-parent-per-row (an organisation can support more than one ICB), so a row may hold zero, one, or several ids in a given table, and may link to any number of different tables at once.
 
-*Multi-level hierarchy model is not built. The prototype uses a single flat population.*
+**Resolving relationships.** Given a row, its related rows in other tables are resolved one hop only, in both directions: rows it links to via its own `soft_parents` (forward), and rows in other tables whose `soft_parents` link back to it (reverse, since the link is only ever recorded on the child side). The Select tab's Full Unit(s) view (Section 3.2) shows exactly this — a reporting unit's own row plus everything one hop out — and the same resolution is what a chart uses to find the correct unit(s) to treat as `Selected` in whichever population table its own data belongs to (Section 10.4). Resolution does not chain beyond one hop; a genuine multi-level hierarchy (e.g. Country→Region→ICB→Organisation→Submission→Ward) is not walked automatically — see Feature List.
+
+Every peer group — however many named values it has, including a simple yes/no group — is a `Name()` column: the unit belongs to the named group its value states. A unit with no group for that column is marked `x` (or left blank) rather than assigned one; both are treated identically and excluded from the Running Order populations multi-select.
+
+`Region()` is the first peer group column, resolved per organisation from `GET /organisations?year={year}` at the point a project's tables are built. Additional `Name()` columns can be added to any population table and will be picked up automatically by `build_population_layers` and the Running Order dialog without code changes.
+
+Each population table is human-readable, editable in Excel, and uploadable via the Streamlit UI.
+
+*Multi-level hierarchy model is not built. `soft_parents` covers one-hop relationships between any number of tables; a genuinely deep chain is not walked automatically.*
 
 ### 7.3 Data Cache
 
@@ -165,6 +178,8 @@ The data cache is a folder containing one JSON file per fetched chart, named by 
 Chart data is normalised into a small set of canonical data shapes. All downstream consumers — the Chart Engine, tables, text replacement — work exclusively against these normalised shapes.
 
 **Immutability.** A data shape instance is never modified in place. Filtering, narrowing, or recalculating against one — including `build_population_layers` producing a population-filtered copy — always creates a new copy, leaving the original untouched. This avoids two risks: incompatible edits building up on a shared instance, and edits being silently forgotten because nothing marks that a change happened.
+
+**`population_table`.** Every data shape carries the name of the population table its units belong to (e.g. `submissions_2026_123`), set once at fetch from the chart's own URL — not derived at read time, and not necessarily the workfile's current master table. This is what lets `insert_chart` (Section 10.4) resolve the correct table and correct unit(s) for `Selected` on a per-chart basis, rather than assuming every chart's population is the master table.
 
 ### 8.2 Canonical Data Shapes
 
@@ -250,6 +265,10 @@ The system supports three canonical data shapes — NumericSeries, NumericCompos
 | CategoricalCompositional | `donut_pie` | Donut ring chart |
 | CategoricalCompositional | `treemap` | Area-proportional category rectangles |
 
+No Base Chart renders a title.
+
+`bead_string_dot_plot` additionally de-duplicates visually across its tiers: a unit already shown in a more specific (later-token) tier is suppressed from every broader (earlier-token) tier's dots, so e.g. the `Selected` unit(s) appear once, in the `Selected` tier, rather than also as a dot in `Region()` and `All`. This affects only which dots are drawn — the reference statistics (mean/median/quartiles) and the value shown for `Selected` are computed independently of the suppression.
+
 ### 10.3 Tweaks
 
 *All tweaks are not built.*
@@ -260,14 +279,16 @@ Charts do not receive a single data shape. They receive an ordered list of filte
 
 **The populations string** (e.g. `All^Region()^Selected`) is specified on the Running Order — either as a workfile default via `set_default_populations`, or overridden per chart row in the `populations` column. It is authored as a `^`-delimited ordered list of tokens and edited via a multi-select in the Running Order dialog.
 
-**Resolution — scope-plus-independent-layers model:** `build_population_layers` in the Assembly Engine treats the first token as the scope — the full set of units the chart compares. Every subsequent token resolves independently against that scope, not against each other:
+**Resolution — scope-plus-independent-layers model:** `build_population_layers` treats the first token as the scope — the full set of units the chart compares. Every subsequent token resolves independently against that scope, not against each other:
 
 1. Resolve the first token against all units in the data shape; this becomes the scope. An unresolvable or empty first token produces no population layers.
 2. Resolve each remaining token against the scope only; unresolvable tokens are skipped.
 3. Filter the data shape to each result; recalculate stats against that population.
 4. Set `population_label` to the resolved label and append, in token order.
 
-`Selected` is a layer like any other — the current organisation's units within the scope. Peer tokens support both empty-bracket form (`Name()`, the selected unit's own group) and explicit-value form (`Name(Value)`, a named group, which need not contain the selected unit).
+**Which table `Selected` and the peer-group columns resolve against.** A chart's data belongs to one population table (`population_table` on the data shape, Section 8) — not necessarily the workfile's current master table. Before resolving any token, the Assembly Engine looks up that table's rows, and looks up the current reporting unit's Full Unit Set (Section 7.2) for that same table. `Selected` resolves to whichever unit(s) the Full Unit Set holds for that table — which may be none, one, or several: an organisation-level chart, for a reporting unit selected from a submissions table, resolves to that submission's one organisation; an organisation selected as the reporting unit, charted against a submissions table, resolves to every submission linked to it. More than one unit is intended behaviour where the relationship is genuinely one-to-many, not a case to collapse to a single value.
+
+`Selected` is a layer like any other. Peer tokens support both empty-bracket form (`Name()`, the selected unit's own group — where more than one unit is selected, one is used as the representative for this lookup) and explicit-value form (`Name(Value)`, a named group, which need not contain the selected unit).
 
 **Token position determines scope vs. layer.** The first token is always the scope; everything after it is an independent layer within that scope. `Region()^Selected` scopes to the selected unit's own region — the wider population never appears. `All^Region()^Selected` scopes to everyone, with region and Selected as layers inside it.
 

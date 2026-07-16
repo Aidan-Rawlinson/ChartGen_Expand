@@ -42,6 +42,7 @@ class NumericCompositional:
     year:               Optional[int]       = None
     format_modifier:    Optional[str]       = None
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
+    population_table:   Optional[str]       = None  # name of the population table this data's units belong to (e.g. "submissions_2026_123", "nhs_organisations") — a plain reference to an existing table name, not derived at read time
 
     # Data — one NumericCompositionalMetric per Metric-Series
     has_valid_unit_data: bool               = True

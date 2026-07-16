@@ -1,6 +1,6 @@
 # ChartGen — Feature List
 
-*TBN Internal · Input document for refactoring — describes current scope and readiness only*
+*TBN Internal · Describes current scope and readiness only*
 
 **Readiness** — Complete (confirmed built and working) · Partial (implemented but with a known gap, noted below) · Not built (no implementation yet)
 
@@ -51,11 +51,10 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| New Workfile flow (year → project → save location) | Complete | See Functional Spec Section 4. |
-| Year selectbox | Complete | |
-| Project dropdown (API-populated, cached per year) | Complete | |
-| Submissions fetch at workfile creation | Complete | An invalid year/project combination blocks creation. |
-| Details tab (read-only project settings) | Complete | |
+| New Workfile flow (description → single native Save dialog) | Complete | See Functional Spec Section 4. Collects no project/year — creates a genuinely blank `.cgw`; no toolkit involvement at this step at all. |
+| Workfile description field | Complete | Free text, "what is this workfile for"; shown next to the ChartGen title in the app header for as long as the workfile is open. For the person, not the system — plays no part in naming the file or resolving anything. |
+| Native Save dialog (New Workfile and Save As) | Complete | One OS dialog for filename and location together; the OS itself handles overwrite confirmation, so neither flow has its own overwrite step. |
+| Details tab (file identity, save history) | Complete | Read-only file path and last-saved-by/at. No project identity shown — year/project_id/project_name are not workfile-level concepts (see Population tables, Part 3). |
 
 ---
 
@@ -63,8 +62,9 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Select tab — reporting unit selectbox (name / code / ID) | Complete | |
-| Select tab — Populations section | Complete | |
+| Reporting unit selection tab — reporting unit selectbox (name / code / ID) | Complete | Selects from the master table only (whichever population table sits on top — see Populations, Part 3). |
+| Reporting unit selection tab — Full Unit(s) | Complete | For the selected unit, shows its own row plus every row related to it one hop out (via `soft_parents`, both directions) — reporting unit's own row shown first and bolded. |
+| Populations tab — table display, reordering | Complete | Every population table, collapsible, reorderable via ▲/▼. Whichever table sits in position 0 is the master table — no separate flag, position is the only source of truth. Drives the reporting unit picker and the batch loop. |
 
 ---
 
@@ -85,10 +85,13 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Reporting units + identifiers | Complete | Fetched from API at workfile setup; stored as `units.csv`. |
-| Peer group assignments — `Region()` | Complete | Resolved at workfile creation, written permanently into `units.csv`. |
+| Population tables — `nhs_organisations` + `submissions_{year}_{project_id}` (shared spine) | Complete | Every population table shares the same columns — `unit_id`, `unit_code`, `unit_name`, `soft_parents`, plus any number of `Name()` peer-group columns. See Architecture Section 5. |
+| Automatic population-table creation | Complete | Triggered per chart, inside the toolkit fetch, the first time a chart's own project/year is seen on this workfile — not a user-facing action. See Functional Spec Section 7. |
+| `nhs_organisations` merge across projects | Complete | A further project's organisations are appended by `unit_id`, not overwritten; existing rows untouched. Assumes each peer-group column (e.g. `Region()`) is a value handed to us per-organisation by the API, not something computed from the full table — would need revisiting if that stopped being true. |
+| `soft_parents` relationship recording | Complete | Recorded on the child side only; see Glossary. Resolution is one hop only, in both directions (a row's own links, and other rows linking to it) — a chain of more than two tables (e.g. Country→Region→ICB→Organisation) is not walked automatically. |
+| Peer group assignments — `Region()` | Complete | Resolved per organisation from the API at population-table build time, written into whichever population table it belongs to. |
 | Additional peer group columns (`Name()`) | Complete | Both empty-bracket (`Region()`, the selected unit's own group) and explicit-value (`Region(Wales)`, a named group) tokens are supported end-to-end: column discovery, Running Order multi-select (auto-populated with every distinct value per column), and resolution against the population scope. Blank and `x` values are excluded from discovery and treated as no group. |
-| Multi-level hierarchy model | Not built | Current model uses a single flat population. |
+| Multi-level hierarchy model | Not built | `soft_parents` covers one-hop relationships between any number of tables (built, see above); a genuinely deep chain — walking from one table to a related table's own further relationships — is not built. |
 
 ---
 
@@ -122,7 +125,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders. |
-| `set_default_populations` | Complete | |
+| `set_default_populations` | Complete | Also read directly by the Charts tab to default its own preview populations string — a stopgap reading one Running Order row's value directly, not a general settings-reading mechanism. |
 | `update_text` | Partial | See Text tag replacement, Part 5. |
 | `insert_picture` | Complete | `[code]`/`[id]` token substitution; aspect ratio preserved. |
 | Insert Content From Excel | Complete | Requires `pywin32`. Implemented via three functions: `open_excel`, `insert_from_excel`, `close_excel`. |
@@ -139,9 +142,9 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Base Chart library (17 charts across 3 data shapes) | Complete | |
+| Base Chart library (17 charts across 3 data shapes) | Complete | No chart type renders a title. |
 | Populations string — Running Order control | Complete | |
-| Reporting unit highlighting — NumericSeries (6 charts) | Complete | |
+| Reporting unit highlighting — NumericSeries (6 charts) | Complete | Selected can resolve to more than one unit, when the chart's own population table (`population_table` on the data shape) has a one-to-many relationship to the reporting unit — e.g. an organisation with several submissions. See Functional Spec Section 10.4. |
 | Peer group as data filter (peer token leading the populations string) | Complete | Chart data scope narrows to the peer group; e.g. `Region(Wales)^Selected` shows Welsh units only. |
 | Reporting unit highlighting — NumericCompositional | Not built | Per-unit values not currently in the data shape as returned from the API. |
 | Reporting unit highlighting — CategoricalCompositional | Not applicable | These charts show population aggregates only; no per-unit value exists. |

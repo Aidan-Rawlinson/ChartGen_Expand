@@ -46,7 +46,6 @@ def ranked_column(population_layers: list, width=80, height=50, tweaks=[], repor
 
     ax.set_xticks(x)
     ax.set_xticklabels(codes, rotation=90, fontsize=7)
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
@@ -90,7 +89,6 @@ def dot_strip(population_layers: list, width=80, height=40, tweaks=[], report_co
     if ms.q1     is not None: ax.axhline(ms.q1,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=2)
     if ms.q3     is not None: ax.axhline(ms.q3,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=2)
     ax.set_xticks([])
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
@@ -153,7 +151,6 @@ def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_
                         markerfacecolor=colour, markersize=6, label=layer.population_label))
 
     ax.set_xticks([])
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
     ax.tick_params(axis="y", labelsize=9)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
@@ -203,7 +200,6 @@ def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[],
                 ax.axvline(peer_mean, color=colour, linewidth=1.5, linestyle="--",
                            label=f"{layer.population_label} mean: {peer_mean:.1f}")
 
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
     ax.tick_params(labelsize=8)
     ax.set_ylabel("Count", fontsize=8)
@@ -256,7 +252,6 @@ def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_
                         markerfacecolor=colour, markersize=6, label=layer.population_label))
 
     ax.set_xticks([])
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
     ax.tick_params(axis="y", labelsize=9)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
@@ -299,19 +294,20 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
     tiers = []
     peer_colour_idx = 0
     for layer in population_layers:
+        tier_ids  = [u.unit_id for u in layer.units if u.values[0] is not None]
         tier_vals = [u.values[0] for u in layer.units if u.values[0] is not None]
         if not tier_vals:
             continue
         if layer.population_label == "All":
-            tiers.append({"vals": tier_vals, "dot": COLOUR_ALL, "string": STRING_ALL,
+            tiers.append({"ids": tier_ids, "vals": tier_vals, "dot": COLOUR_ALL, "string": STRING_ALL,
                           "label": "All organisations", "opaque": False})
         elif layer.population_label == "Selected":
-            tiers.append({"vals": tier_vals, "dot": COLOUR_SEL, "string": STRING_SEL,
+            tiers.append({"ids": tier_ids, "vals": tier_vals, "dot": COLOUR_SEL, "string": STRING_SEL,
                           "label": layer.population_label or "Selected", "opaque": True})
         else:
             raw = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             r, g, b = mcolors.to_rgb(raw)
-            tiers.append({"vals": tier_vals, "dot": (r, g, b, 0.42), "string": (r, g, b, 0.20),
+            tiers.append({"ids": tier_ids, "vals": tier_vals, "dot": (r, g, b, 0.42), "string": (r, g, b, 0.20),
                           "label": layer.population_label, "opaque": False})
             peer_colour_idx += 1
 
@@ -319,6 +315,22 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
         return _fig_to_bytes(fig), {}
+
+    # Visual-only de-duplication: a unit already shown in a more specific
+    # (later-token) tier is suppressed from every broader (earlier-token)
+    # tier's dots, so e.g. the Selected unit(s) only appear once, in
+    # Selected, rather than also as a dot in Region() and All. Stats (ms,
+    # autotable) are computed from `base` and from the Selected tier's own
+    # values below, both untouched by this — it only affects which dots get
+    # drawn.
+    already_shown = set()
+    for t in reversed(tiers):
+        original_ids = list(t["ids"])
+        if already_shown:
+            keep = [(uid, v) for uid, v in zip(t["ids"], t["vals"]) if uid not in already_shown]
+            t["ids"]  = [uid for uid, v in keep]
+            t["vals"] = [v for uid, v in keep]
+        already_shown.update(original_ids)
 
     n_tiers = len(tiers)
     w, _   = _size_to_inches(width, height)
@@ -399,12 +411,6 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
         fig.patches.append(mpatches.Ellipse(
             (ax_pos.x0 - 0.030, y_fig), width=2*r_x, height=2*r_y,
             transform=fig.transFigure, facecolor=dot_c, edgecolor="none", alpha=0.75, zorder=5))
-
-    title = base.title or (base.metric_names[0] if base.metric_names else "")
-    if title:
-        fig.text(ax_pos.x0, ax_pos.y0 + ax_pos.height + 0.10,
-                 title, ha="left", va="bottom", fontsize=9, fontweight="bold",
-                 color="#222222", transform=fig.transFigure)
 
     sel_val = tiers[-1]["vals"][0] if tiers[-1]["opaque"] and tiers[-1]["vals"] else None
     return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, sel_val)

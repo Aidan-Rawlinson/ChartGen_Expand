@@ -5,8 +5,12 @@ rows in WorkfileState's manifest table.
 """
 
 import os
+from dataclasses import replace
+
 from core.acquisition.template.url_parser import parse_url
 from .api_client import get_tier_info, get_chart_data
+from .table_naming import submissions_table_name
+from .population_tables import ensure_population_tables
 from .transformers import transform
 from .cache_writer import save_chart
 
@@ -52,6 +56,14 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             year           = str(latest["reportYear"])
             service_item_id = str(data_block.get("serviceItemId") or "0")
 
+            # This chart's year/project_id are now known. Before pulling its
+            # own data, make sure its population tables exist — the first
+            # chart seen for a given project/year combination is what
+            # triggers building the submissions + nhs_organisations tables;
+            # every subsequent chart for that same combination finds them
+            # already there and does nothing extra.
+            ensure_population_tables(workfile_state, year, parsed["project_id"], token)
+
             # API call 2: chart data
             raw_json = get_chart_data(
                 report_id=report_id,
@@ -64,6 +76,11 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
 
             # Transform to canonical shape
             shape = transform(raw_json, year)
+            # Stamp which population table this data's units belong to. All
+            # data is submissions data today, so this is always the
+            # submissions table for the chart's own project/year — not
+            # necessarily the workfile's current master table.
+            shape = replace(shape, population_table=submissions_table_name(year, parsed["project_id"]))
             shape_type = type(shape).__name__
             chart_title = str(getattr(shape, "title", "") or "").strip()
 

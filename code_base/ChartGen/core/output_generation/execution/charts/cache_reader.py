@@ -32,6 +32,7 @@ def _from_dict_numeric_series(d):
         metric_names=d.get("metric_names", []),
         year=d.get("year"),
         format_modifier=d.get("format_modifier"),
+        population_table=d.get("population_table"),
         has_valid_unit_data=d.get("has_valid_unit_data", True),
         units=units,
         shape_stats=ShapeStats(**d.get("shape_stats", {})),
@@ -60,6 +61,7 @@ def _from_dict_numeric_compositional(d):
         title=d.get("title"),
         year=d.get("year"),
         format_modifier=d.get("format_modifier"),
+        population_table=d.get("population_table"),
         has_valid_unit_data=d.get("has_valid_unit_data", True),
         metrics=metrics,
         shape_stats=ShapeStats(**d.get("shape_stats", {})),
@@ -86,6 +88,7 @@ def _from_dict_categorical_compositional(d):
     return CategoricalCompositional(
         title=d.get("title"),
         year=d.get("year"),
+        population_table=d.get("population_table"),
         has_valid_unit_data=d.get("has_valid_unit_data", True),
         metrics=metrics,
         shape_stats=ShapeStats(**d.get("shape_stats", {})),

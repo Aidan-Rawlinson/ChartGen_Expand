@@ -65,3 +65,43 @@ def format_uk_time(iso_str: str) -> str:
         return uk_dt.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return iso_str[:16].replace("T", " ")
+
+
+# Internal column name -> display label. A single mapping so the
+# internal/display split happens in exactly one place — same pattern as the
+# Tab short/full naming convention (Functional Spec §3.2).
+#
+# NOTE FOR CLAUDE / FUTURE MAINTAINERS: the internal name is soft_parents,
+# not "parents", deliberately. "Parent" implies a strict one-parent-per-row
+# structure, which is exactly the wrong assumption here — these relationships
+# can be one-to-many, many-to-many, or multiple independent links per row
+# (e.g. one organisation may support two ICBs; see Decisions.md). Calling it
+# "parents" in code or in conversation about this code risks defaulting back
+# to single-value/lookup logic. Keep "soft_parents" everywhere except this
+# one display-label swap — do not rename the underlying column, and do not
+# introduce "parent"/"parents" as a variable or field name elsewhere in the
+# codebase for this concept.
+DISPLAY_COLUMN_NAMES = {
+    "soft_parents": "Parents",
+}
+
+_SPINE_COLUMN_ORDER = ["unit_id", "unit_code", "unit_name", "soft_parents"]
+
+
+def population_table_columns(rows: list) -> list:
+    """
+    Column order for displaying a population-level table: spine columns
+    first (unit_id, unit_code, unit_name, soft_parents), then anything else
+    (peer groups etc.) in the order they appear on the row.
+    """
+    if not rows:
+        return []
+    present = list(rows[0].keys())
+    spine = [c for c in _SPINE_COLUMN_ORDER if c in present]
+    rest = [c for c in present if c not in _SPINE_COLUMN_ORDER]
+    return spine + rest
+
+
+def display_column_labels(cols: list) -> list:
+    """Map internal column names to their display labels (e.g. soft_parents -> Parents)."""
+    return [DISPLAY_COLUMN_NAMES.get(c, c) for c in cols]

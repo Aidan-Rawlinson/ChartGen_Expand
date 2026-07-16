@@ -18,26 +18,13 @@ from core.shared.infrastructure.version_compatibility import (
     get_file_version_written, get_software_id,
 )
 
-# units.csv column schema. Moved here from constants_temp.py during the
-# restructure (Restructure_Plan.md Open Item 2 audit) — this is workfile
-# domain schema, used only by this module, not a generic constant.
-UNITS_FIELDNAMES = [
-    "unit_id",
-    "unit_code",
-    "unit_name",
-    "submission_year",
-    "project_id",
-    "project_name",
-    "organisation_id",
-    "organisation_name",
-    "submission_service_count",
-    "response_count",
-    "submission_level",
-    "service_item_ids",
-    "service_item_names",
-    "service_response_counts",
-    "Region()",
-]
+# Population-level tables (nhs_organisations, submissions_{year}_{project_id},
+# and any future table) have no single fixed column schema here — each is
+# written using its own rows' keys (see _rows_to_csv's fallback). Every such
+# table shares a common spine (unit_id, unit_code, unit_name, soft_parents,
+# plus any number of Name() peer-group columns); the actual column list for
+# a given table is owned by whichever module builds its rows — new_workfile.py
+# for the tables built at New Workfile time.
 
 # data_cache/manifest.csv column schema — the URL/chart table. One row per
 # chart URL, keyed permanently by hex_id. Replaces the former
@@ -126,7 +113,8 @@ class WorkfileState:
 
     # workfile_config/
     settings: dict = field(default_factory=dict)
-    units: list = field(default_factory=list)         # list of dicts
+    tables: dict = field(default_factory=dict)         # {table_name: list[dict]} — every population-level table
+    table_order: list = field(default_factory=list)    # display/priority order; table_order[0] is the master table
     running_order_rows: list = field(default_factory=list)  # list of dicts (CSV rows)
 
     # data_cache/
@@ -226,11 +214,17 @@ def open_workfile(workfile_path: str) -> WorkfileState:
 
         # workfile_config/
         state.settings         = _key_value_csv_to_dict(_read("workfile_config/settings.csv"))
-        state.units            = _csv_to_rows(_read("workfile_config/units.csv"))
+        state.table_order      = [t for t in state.settings.get("table_order", "").split("|") if t]
         state.running_order_rows = _csv_to_rows(_read("workfile_config/running_order.csv"))
         for _row in state.running_order_rows:
             _row.setdefault("enabled", "1")
             coerce_row(_row)
+
+        # workfile_config/tables/ — every population-level table, one CSV each
+        for name in names:
+            if name.startswith("workfile_config/tables/") and name.endswith(".csv"):
+                table_name = name.split("/")[-1][:-4]
+                state.tables[table_name] = _csv_to_rows(_read(name))
 
         # data_cache/
         state.manifest_rows = _csv_to_rows(_read("data_cache/manifest.csv"))
@@ -333,9 +327,12 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
             zf.writestr(arcname, text.encode("utf-8"))
 
         # workfile_config/
+        state.settings["table_order"] = "|".join(state.table_order)
         _write("workfile_config/settings.csv",      _dict_to_key_value_csv(state.settings))
-        _write("workfile_config/units.csv",
-               _rows_to_csv(state.units, UNITS_FIELDNAMES) if state.units else "")
+
+        # workfile_config/tables/ — every population-level table, one CSV each
+        for table_name, rows in state.tables.items():
+            _write(f"workfile_config/tables/{table_name}.csv", _rows_to_csv(rows))
 
         # running_order — derive fieldnames from rows if present
         if state.running_order_rows:
@@ -385,7 +382,7 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
 def new_workfile(workfile_path: str, workfile_name: str) -> WorkfileState:
     """
     Create a blank WorkfileState and write an empty .cgw to disk.
-    Caller populates settings / units / etc. before first save.
+    Caller populates settings / tables / table_order etc. before first save.
     """
     state = WorkfileState(
         workfile_path=workfile_path,
@@ -403,7 +400,6 @@ def _write_empty_cgw(workfile_path: str, workfile_name: str):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name in [
             "workfile_config/settings.csv",
-            "workfile_config/units.csv",
             "workfile_config/running_order.csv",
         ]:
             zf.writestr(name, b"")
@@ -440,3 +436,18 @@ def close_workfile(state: WorkfileState):
         return
     if state.workfile_path and os.path.exists(state.workfile_path):
         clear_lock(state.workfile_path)
+
+
+# ---------------------------------------------------------------------------
+# Master table
+# ---------------------------------------------------------------------------
+
+def master_table_rows(state: WorkfileState) -> list:
+    """
+    Return the rows of the master table — whichever table sits first in
+    table_order. The master table drives the reporting unit picker and the
+    batch loop. Returns [] if no tables exist yet.
+    """
+    if not state.table_order:
+        return []
+    return state.tables.get(state.table_order[0], [])

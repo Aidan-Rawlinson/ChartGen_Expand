@@ -40,7 +40,6 @@ def yn_bar(population_layers: list, width=80, height=55, tweaks=[], report_conte
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
     ax.xaxis.set_major_locator(mticker.MultipleLocator(5))
     ax.xaxis.tick_top(); ax.xaxis.set_label_position("top")
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=20)
     ax.tick_params(axis="x", labelsize=7)
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     ax.spines["bottom"].set_visible(False); ax.spines["right"].set_visible(False)
@@ -80,7 +79,6 @@ def list_pie(population_layers: list, width=50, height=55, tweaks=[], report_con
         ax.annotate(f"{cat}: {pct:.1f}%", xy=(x_i, y_i), xytext=(x_o, y_o),
                     fontsize=7.5, ha="left" if x_o > 0 else "right", va="center",
                     arrowprops=dict(arrowstyle="-", color="#888888", lw=0.8))
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=12)
     fig.tight_layout()
     return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
 
@@ -106,7 +104,6 @@ def diverging_bar(population_layers: list, width=80, height=55, tweaks=[], repor
     lim = max(max(yes_pcts), max(no_pcts)) * 1.1
     ax.set_xlim(-lim, lim)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.tick_params(axis="x", labelsize=7)
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -155,7 +152,6 @@ def dot_matrix(population_layers: list, width=80, height=55, tweaks=[], report_c
     ax.set_xticks([ci * 11 + 4.5 for ci in range(n_c)])
     ax.set_xticklabels(categories, fontsize=8, fontweight="bold")
     ax.tick_params(bottom=False)
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.yaxis.grid(False); ax.set_facecolor("white")
@@ -188,7 +184,6 @@ def donut_pie(population_layers: list, width=50, height=55, tweaks=[], report_co
                     xytext=(x_o, y_o), fontsize=7.5,
                     ha="left" if x_o > 0 else "right", va="center",
                     arrowprops=dict(arrowstyle="-", color="#AAAAAA", lw=0.6))
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=12)
     fig.tight_layout()
     return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
 
@@ -219,6 +214,5 @@ def treemap(population_layers: list, width=65, height=45, tweaks=[], report_cont
                     fontsize=8, color="white")
         x_cursor += bw
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.axis("off")
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     fig.tight_layout()
     return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)

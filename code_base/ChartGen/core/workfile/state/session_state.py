@@ -13,7 +13,7 @@ WorkfileState automatically instead of it being typed at every call site.
 import streamlit as st
 
 from core.output_generation.execution.charts.cache_reader import list_cached_files, load_shape, load_manifest
-from core.workfile.state.workfile_file import WorkfileState
+from core.workfile.state.workfile_file import WorkfileState, master_table_rows
 
 
 def ws() -> WorkfileState:
@@ -35,8 +35,9 @@ def save_settings(s: dict):
     w.dirty = True
 
 
-def units() -> list:
-    return ws().units
+def master_table() -> list:
+    """Rows of the master table — whichever table sits first in table_order."""
+    return master_table_rows(ws())
 
 
 def manifest() -> dict:
@@ -53,5 +54,5 @@ def load_shape_ps(filename):
 
 def clear_workfile_session_state():
     for k in ["ro_selected_idx", "ro_show_uploader", "run_log_rows",
-              "pop_expander_open", "pop_expand_services_val", "pop_include_org_val"]:
+              "pop_expander_open"]:
         st.session_state.pop(k, None)

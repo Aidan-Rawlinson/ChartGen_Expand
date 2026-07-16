@@ -7,7 +7,7 @@ for the currently selected reporting unit.
 import streamlit as st
 
 from core.shared.infrastructure.report_context import build_report_context
-from core.workfile.state.session_state import settings, units
+from core.workfile.state.session_state import settings, master_table
 
 
 def render_text_tab():
@@ -16,7 +16,7 @@ def render_text_tab():
         "Add `update_text` rows to the Running Order to replace these text tags "
         "in your PowerPoint template at generation time."
     )
-    rc_text = build_report_context(settings(), units())
+    rc_text = build_report_context(settings(), master_table())
     preview_value = rc_text.unit_name if rc_text else "— no reporting unit selected —"
 
     st.dataframe(

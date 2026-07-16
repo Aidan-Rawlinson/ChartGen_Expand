@@ -1,66 +1,42 @@
 """
 new_workfile_form.py
-UI for the New Workfile flow: collects year, project, name, and save
-location, then hands off to core.workfile.setup.new_workfile for the API
-calls and units-table construction. This module owns no business logic itself.
+UI for the New Workfile flow: a short description ("what is this workfile
+for?", shown in the app header for as long as the workfile is open) plus a
+single native Save dialog for name and location. Calls create_new_workfile —
+a genuinely blank .cgw, no project, no population tables. This module owns
+no business logic itself.
 """
 
-import datetime
 import os
 
 import streamlit as st
 
-from core.workfile.setup.new_workfile import list_projects_for_year, create_new_workfile
-from core.ui.common.pickers import pick_folder
+from core.workfile.setup.new_workfile import create_new_workfile
+from core.ui.common.pickers import pick_save_file
 from core.workfile.state.session_state import clear_workfile_session_state
 
 
 def render_new_workfile_form():
     st.caption("All fields required.")
 
-    current_year = datetime.date.today().year
-    year_options = [current_year, current_year - 1]
-    selected_year = st.selectbox("Year", options=year_options, index=0, key="np_year")
-
-    @st.cache_data(show_spinner=False)
-    def _cached_projects(year, token):
-        return list_projects_for_year(year, token)
-
-    with st.spinner(f"Loading projects for {selected_year}…"):
-        try:
-            project_options = _cached_projects(selected_year, st.session_state["token"])
-        except Exception as e:
-            st.error(f"Could not load project list: {e}")
-            project_options = {}
-
-    selected_project_name = st.selectbox(
-        "Project", options=list(project_options.keys()), index=None,
-        placeholder="Select a project…", key="np_project", disabled=not project_options,
-    )
-    selected_project_id = project_options.get(selected_project_name, "")
-
-    workfile_name = st.text_input(
-        "Workfile name",
-        value=selected_project_name or "",
-        key="np_workfile_name",
-        help="Used as the file name (without .cgw).",
+    description = st.text_input(
+        "What is the new workfile for?",
+        key="np_description",
+        help="Short description — shown next to the ChartGen title for as long as this workfile is open.",
     )
 
-    col_browse, col_clear = st.columns([2, 1])
-    with col_browse:
-        if st.button("📂  Browse for save location…", key="np_browse", use_container_width=True):
-            picked = pick_folder()
-            if picked:
-                st.session_state["np_save_folder_val"] = picked
-            st.rerun()
-    with col_clear:
-        if st.button("Clear", key="np_clear", disabled=not st.session_state.get("np_save_folder_val")):
-            st.session_state["np_save_folder_val"] = ""
-            st.rerun()
+    st.caption(
+        "Suggested file naming: `CG_Emergency_Care_2026`, `CG_SE_Region_Briefing`"
+    )
+    if st.button("📁  Choose where to save…", key="np_browse", use_container_width=True):
+        picked = pick_save_file(title="Save new workfile as", initial_file="CG_")
+        if picked:
+            st.session_state["np_save_path_val"] = picked
+        st.rerun()
 
-    folder_val = st.session_state.get("np_save_folder_val", "")
-    if folder_val:
-        st.success(f"✔  {folder_val}")
+    save_path = st.session_state.get("np_save_path_val", "")
+    if save_path:
+        st.success(f"✔  {save_path}")
     else:
         st.caption("No location selected.")
 
@@ -68,39 +44,30 @@ def render_new_workfile_form():
 
     if st.button("Create workfile", type="primary", key="np_create"):
         errors = []
-        if not selected_project_id:
-            errors.append("Please select a project.")
-        if not workfile_name.strip():
-            errors.append("Please enter a workfile name.")
-        folder = st.session_state.get("np_save_folder_val", "").strip()
-        if not folder:
-            errors.append("Please enter a save location.")
-        elif not os.path.isdir(folder):
-            errors.append(f"Save location not found: {folder}")
+        if not description.strip():
+            errors.append("Please describe what this workfile is for.")
+        if not save_path:
+            errors.append("Please choose where to save the workfile.")
         if errors:
             for e in errors:
                 st.error(e)
             return
 
-        workfile_path = os.path.join(folder, f"{workfile_name.strip()}.cgw")
+        workfile_name = os.path.splitext(os.path.basename(save_path))[0]
 
-        with st.spinner("Fetching project data…"):
-            try:
-                ws_new = create_new_workfile(
-                    workfile_path=workfile_path,
-                    workfile_name=workfile_name.strip(),
-                    year=selected_year,
-                    project_id=selected_project_id,
-                    project_name=selected_project_name,
-                    token=st.session_state["token"],
-                    username=st.session_state["username"],
-                )
-            except Exception as e:
-                st.error(f"Could not create workfile: {e}")
-                return
+        try:
+            ws_new = create_new_workfile(
+                workfile_path=save_path,
+                workfile_name=workfile_name,
+                description=description.strip(),
+                username=st.session_state["username"],
+            )
+        except Exception as e:
+            st.error(f"Could not create workfile: {e}")
+            return
 
         st.session_state["workfile_state"] = ws_new
         st.session_state.pop("show_new_form", None)
-        st.session_state.pop("np_save_folder", None)
+        st.session_state.pop("np_save_path_val", None)
         clear_workfile_session_state()
         st.rerun()

@@ -28,3 +28,20 @@
 - The chart URL table is read-only in the UI; editing is via the Excel round-trip only. An in-table editor was built and then removed at the user's request after live testing — one editing route, consistent with how users actually work.
 - The manifest Excel export excludes chart_ref (renumbered on import, exporting it invites conflicts) and carries hex_id as the round-trip identity; 300 blank formatted rows appended for user input.
 - File version 0.0.2 bumped immediately with the structure change rather than accumulated to the Tidy step; no migration from 0.0.1, per the established hard-refuse model.
+
+
+## Session: Multi-project population tables, chart-population resolution, and New Workfile streamlining
+
+- **"soft_parents" over "parent."** Relationship columns between population tables are named `soft_parents`, never `parent`/`parents` anywhere in code — "parent" implies strict one-per-row cardinality, which these relationships don't have (one-to-many, many-to-many, and multiple-independent-links all occur). The rationale lives in code comments, not in a user-facing explanation — the naming is for Claude/future maintainers, not the end user.
+- **soft_parents recorded on the child side only.** No reverse reference on the parent-side table; resolving "what links to this row" is a reverse lookup across other tables, not a stored field.
+- **Every population table carries identical headers.** Only the count of `Name()` peer-group columns is allowed to vary between tables. Fields specific to one table's source (e.g. `submission_service_count`, `nhs_code`, `project_id`) were deliberately dropped rather than carried as asymmetric columns.
+- **Master table = position 0 in `table_order`, full stop.** No separate "is master" flag exists or should exist; reordering a table to the top position is what makes it master.
+- **Relationship resolution is one hop only, by design.** Deliberately not walked recursively; revisit only once a genuine multi-level chain is a real, non-hypothetical need.
+- **Population-table creation is fully automatic, with no user-facing trigger.** Triggered inside the toolkit fetch, per chart, on first encounter of a new project/year. Superseded an earlier plan for a manual "Add Project" feature.
+- **`acquisition` must never depend on `workfile.setup`.** This is why population-table building logic (`add_project_tables`, `build_organisations_table`, `build_submissions_table`) moved out of `workfile.setup.new_workfile` into `acquisition.toolkit_nhs.population_tables` — the automatic trigger requires `fetch.py` to call it directly.
+- **Workfile creation and population-table creation are permanently divorced processes.** `create_new_workfile` must never gain knowledge of projects, years, or population tables, even for convenience.
+- **Workfile-level settings hold no project identity.** No year, project_id, or project_name at the `settings.csv` level — none of them are workfile-level facts once a workfile can span multiple projects. Each population table names its own project/year in its table name; each fetched chart carries its own via its URL.
+- **The workfile description field is for the person, not the system.** Free text, shown in the app header, plays no role in file naming, table resolution, or any other logic.
+- **Native OS Save dialogs replace the app's own folder-picker-plus-name-box UI**, for both New Workfile and Save As — including relying on the OS dialog's own overwrite confirmation rather than building a duplicate app-level step.
+- **No Base Chart renders a title** — applies uniformly to both the Charts tab preview and generated report output, since both share the same rendering pipeline.
+- **The Docs Maintenance Guide no longer has a "Refactoring Issues" document or concept.** This phase is new functionality, not a refactor; deferred/known gaps are recorded as Notes on the relevant Feature List row instead. The Guide now governs five documents.

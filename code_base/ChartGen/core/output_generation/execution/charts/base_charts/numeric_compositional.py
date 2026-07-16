@@ -35,7 +35,6 @@ def ugly_bar(population_layers: list, width=80, height=40, tweaks=[], report_con
     if base.format_modifier == "P":
         ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
         ax.set_xlim(0, max(values) * 1.15 if values else 100)
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.tick_params(axis="x", labelsize=8)
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -74,7 +73,6 @@ def radar_chart(population_layers: list, width=55, height=55, tweaks=[], report_
     ax.spines["polar"].set_visible(False)
     if base.format_modifier == "P":
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=20)
     fig.tight_layout()
     return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
 
@@ -97,7 +95,6 @@ def donut_component(population_layers: list, width=55, height=55, tweaks=[], rep
     )
     for at in autotexts:
         at.set_fontsize(8); at.set_color("white"); at.set_fontweight("bold")
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.legend(wedges, [f"{c} ({v/total*100:.1f}%)" for c, v in zip(components, values)],
               loc="upper center", bbox_to_anchor=(0.5, -0.02),
               fontsize=7, frameon=False, ncol=2)
@@ -123,7 +120,6 @@ def lollipop_chart(population_layers: list, width=70, height=40, tweaks=[], repo
     ax.set_yticklabels(components, fontsize=8)
     ax.invert_yaxis()
     ax.set_xlim(0, max(values) * 1.2 if values else 100)
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     ax.tick_params(axis="x", labelsize=8)
     if base.format_modifier == "P":
         ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
@@ -159,7 +155,6 @@ def waffle_chart(population_layers: list, width=60, height=50, tweaks=[], report
             ax.add_patch(rect)
     ax.set_xlim(0, 10); ax.set_ylim(0, 10)
     ax.set_aspect("equal"); ax.axis("off")
-    ax.set_title(base.title or "", fontsize=10, fontweight="bold", pad=10)
     handles = [mpatches.Patch(color=colours[i], label=f"{components[i]} ({pcts[i]:.1f}%)")
                for i in range(len(components))]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.02),

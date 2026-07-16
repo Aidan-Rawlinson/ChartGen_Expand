@@ -18,7 +18,7 @@ from core.output_generation.definition.running_order import (
     get_valid_chart_refs_for_cache_file,
     build_populations_options, parse_populations_string, build_populations_string,
 )
-from core.workfile.state.session_state import ws, manifest, units
+from core.workfile.state.session_state import ws, manifest, master_table
 
 
 def render_running_order_tab():
@@ -87,7 +87,7 @@ def render_running_order_tab():
                 f_chart_type = row.get("chart_type_ref", "")
 
             if needs_populations:
-                peer_options = get_peer_group_value_options(units())
+                peer_options = get_peer_group_value_options(master_table())
                 pop_options = build_populations_options(peer_options)
                 current_pop_str = str(row.get("populations", "") or "")
                 if is_insert_chart and not current_pop_str:

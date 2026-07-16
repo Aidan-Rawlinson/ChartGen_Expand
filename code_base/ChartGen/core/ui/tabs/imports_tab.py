@@ -216,6 +216,19 @@ def _render_fetch_section():
     st.subheader("Toolkit API — Fetch Chart Data")
     st.caption("Full refresh of every chart in the table above.")
 
+    # Flash message from the previous run's fetch (set before rerun) — same
+    # pattern as manifest_merge_result above. Without the rerun, tabs that
+    # render earlier in app.py's script order (Populations, Select) would
+    # keep showing pre-fetch state even though the fetch already completed,
+    # since st.tabs() draws every tab once per run, not on tab switch.
+    flash = st.session_state.pop("fetch_results_flash", None)
+    if flash:
+        for r in flash:
+            if r["status"] == "ok":
+                st.success(f"✓ [{r['hex_id']}] {r['label']} — {r['message']}")
+            else:
+                st.error(f"✗ [{r['hex_id']}] {r['label']} — {r['message']}")
+
     if st.button("Fetch All Chart Data"):
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -233,8 +246,5 @@ def _render_fetch_section():
         status_text.empty()
         progress_bar.empty()
 
-        for r in fetch_results:
-            if r["status"] == "ok":
-                st.success(f"✓ [{r['hex_id']}] {r['label']} — {r['message']}")
-            else:
-                st.error(f"✗ [{r['hex_id']}] {r['label']} — {r['message']}")
+        st.session_state["fetch_results_flash"] = fetch_results
+        st.rerun()

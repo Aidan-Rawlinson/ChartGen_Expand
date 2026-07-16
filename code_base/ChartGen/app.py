@@ -10,6 +10,7 @@ under core/.
 
 import os
 import sys
+import html
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -21,7 +22,7 @@ from core.ui.workfile.workfile_dialogs import render_workfile_dialogs
 from core.workfile.state.session_state import ws, has_workfile
 from core.session_shell.lifecycle.startup_file import apply_startup_workfile
 from core.ui.tabs import (
-    details_tab, config_tab, imports_tab, select_tab,
+    details_tab, config_tab, imports_tab, populations_tab, select_tab,
     text_tab, running_order_tab, charts_tab, outputs_tab,
 )
 
@@ -44,12 +45,27 @@ if not has_workfile():
     st.stop()
 
 ws_main = ws()
+
+# Header: "ChartGen" title, plus whichever badges currently apply — the
+# workfile's own description (what it's for, set at New Workfile time; for
+# the person, not the system) and a READ-ONLY marker. description is free
+# text typed by a user, so it's HTML-escaped before going into unsafe_allow_html.
+badges = []
+description = (ws_main.settings.get("description", "") if ws_main else "").strip()
+if description:
+    badges.append(
+        f'<span style="color:#FF4B4B;font-weight:600;font-size:1.1em;">{html.escape(description)}</span>'
+    )
 if ws_main and ws_main.read_only:
-    st.markdown(
-        '<div style="display:flex;align-items:baseline;gap:14px;">'
-        '<h1 style="margin:0;padding:0;">ChartGen</h1>'
+    badges.append(
         '<span style="color:#c62828;font-weight:800;font-size:1.1em;'
         'letter-spacing:0.05em;">READ-ONLY</span>'
+    )
+
+if badges:
+    st.markdown(
+        '<div style="display:flex;align-items:baseline;gap:14px;">'
+        '<h1 style="margin:0;padding:0;">ChartGen</h1>' + "".join(badges) +
         '</div>',
         unsafe_allow_html=True,
     )
@@ -57,9 +73,9 @@ else:
     st.title("ChartGen")
 st.caption("Analysis and Reporting software")
 
-(tab_details, tab_config, tab_imports, tab_select,
+(tab_details, tab_config, tab_imports, tab_populations, tab_select,
  tab_text, tab_running_order, tab_charts, tab_outputs) = st.tabs([
-    "Details", "Config", "Imports", "Select",
+    "Details", "Config", "Imports", "Populations", "Select",
     "Text", "Running Order", "Charts", "Outputs"
 ])
 
@@ -68,6 +84,9 @@ with tab_details:
 
 with tab_config:
     config_tab.render_config_tab()
+
+with tab_populations:
+    populations_tab.render_populations_tab()
 
 with tab_select:
     select_tab.render_select_tab()

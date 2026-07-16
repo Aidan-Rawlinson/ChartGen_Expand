@@ -1,6 +1,6 @@
 # ChartGen — Architecture
 
-*TBN Internal · Input document for refactoring — describes the current system only*
+*TBN Internal · Describes the current system only*
 
 ---
 
@@ -81,7 +81,9 @@ chartgen/
     │   │   ├── fetch.py
     │   │   ├── transformers.py
     │   │   ├── cache_writer.py
-    │   │   └── peer_groups.py
+    │   │   ├── peer_groups.py
+    │   │   ├── population_tables.py
+    │   │   └── table_naming.py
     │   └── template/
     │       ├── template_reader.py
     │       └── url_parser.py
@@ -117,7 +119,8 @@ chartgen/
     │   │   └── peer_group_tokens.py
     │   └── infrastructure/
     │       ├── constants.py
-    │       └── report_context.py
+    │       ├── report_context.py
+    │       └── soft_parents.py
     └── ui/
         ├── common/
         │   ├── formatting.py
@@ -128,8 +131,8 @@ chartgen/
         │   ├── sidebar.py, workfile_dialogs.py, new_workfile_form.py,
         │   └── open_workfile_form.py, save_as_form.py
         └── tabs/
-            ├── details_tab.py, config_tab.py, imports_tab.py, select_tab.py,
-            └── text_tab.py, running_order_tab.py, charts_tab.py, outputs_tab.py
+            ├── details_tab.py, config_tab.py, imports_tab.py, populations_tab.py,
+            └── select_tab.py, text_tab.py, running_order_tab.py, charts_tab.py, outputs_tab.py
 ```
 
 | Path | Notes |
@@ -140,13 +143,13 @@ chartgen/
 | `user_resources/PPT_Template_Creation.md` | Guidance doc for template designers |
 | `core/session_shell/auth/` | Credential validation, token handling, last-used-username persistence (mechanics only). `credentials.csv` is ★ the one genuine exception to the software/workfile split, see Decision 7 |
 | `core/session_shell/lifecycle/concurrency.py` | Lock-state classification and Open/Open Read-Only mechanics for the workfile advisory lock |
-| `core/workfile/setup/new_workfile.py` | New Workfile flow — fetches submissions/organisations for a chosen project/year, builds the units table with `Region()` assignment |
+| `core/workfile/setup/new_workfile.py` | The New Workfile flow's file-creation half only — a blank `.cgw`, the description field, session settings scaffold. No project, no NHS toolkit involvement, no population tables of any kind |
 | `core/workfile/setup/save_as.py` | Save Workfile As — cleaned-template copy, lock transfer/release, and the read-only-session-must-choose-a-different-folder rule |
-| `core/workfile/state/workfile_file.py` | Owns the `.cgw` format — see Section 5. The only module that reads/writes the ZIP directly. Also owns `UNITS_FIELDNAMES`, the units.csv column schema |
+| `core/workfile/state/workfile_file.py` | Owns the `.cgw` format — see Section 5. The only module that reads/writes the ZIP directly. Population tables have no single fixed column schema here — each is written using its own rows' keys; the shared spine (Section 5) is a convention followed by whichever module builds a table's rows, not a schema enforced here |
 | `core/workfile/state/session_state.py` | Streamlit-side `WorkfileState` accessors — Streamlit-rerun plumbing only |
 | `core/acquisition/import_flow.py` | Coordinator: sequences template read → URL merge into the manifest table → Running Order generation. Data fetching is not part of this sequence — the single fetch process is the Imports tab's Fetch action. The only module that imports both `acquisition` and `output_generation.definition` |
 | `core/acquisition/manifest_table/` | Excel export/import round-trip for the manifest table (`data_cache/manifest.csv`) — the acquisition-side equivalent of the Running Order's xlsx pair. Schema ownership stays with `workfile_file` |
-| `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, cache writer, peer-group menu-building) |
+| `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, cache writer, peer-group menu-building), plus population table construction (`population_tables.py`) and table-naming convention (`table_naming.py`). Lives here, not in `workfile.setup`, because building population tables is a "pull and normalise NHS toolkit data" concern, the same kind of thing as the rest of this package — and because `fetch.py` (same package) needs to call it directly without acquisition code depending on `workfile.setup` (one-way dependency rule, Section 2) |
 | `core/acquisition/template/` | Reads `.pptx` placeholders; detects/strips yellow boxes; parses toolkit URLs |
 | `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
@@ -160,7 +163,8 @@ chartgen/
 | `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule |
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file` |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
-| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (sign-in widget), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the eight tab renderers). Business logic delegated to the owning module rather than living here |
+| `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
+| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (sign-in widget), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the nine tab renderers). Business logic delegated to the owning module rather than living here |
 
 ---
 
@@ -172,7 +176,8 @@ A single workfile's complete, portable, shareable state. Internally a ZIP archiv
 MyWorkfile.cgw  (ZIP)
 ├── workfile_config/
 │   ├── settings.csv
-│   ├── units.csv
+│   ├── tables/
+│   │   └── {table_name}.csv
 │   └── running_order.csv
 ├── data_cache/
 │   ├── manifest.csv
@@ -184,13 +189,25 @@ MyWorkfile.cgw  (ZIP)
 
 | Path | Notes |
 |---|---|
-| `workfile_config/settings.csv` | key,value — paths, year, project_id, batch_cursor, etc. |
-| `workfile_config/units.csv` | Population table — one row per reporting unit, `Region()` column |
+| `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
+| `workfile_config/tables/{table_name}.csv` | ★ One file per population-level table (e.g. `nhs_organisations.csv`, `submissions_2026_123.csv`) — any number of them, added and removed freely. No single fixed column schema at this layer; each is written using its own rows' keys. `table_order` (in `settings.csv`, `\|`-delimited) is the only record of display order — whichever table name is listed first is the master table, driving the reporting unit picker and the batch loop. No separate "master" flag exists; position is the only source of truth |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
 | `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
 | `data_cache/{hex_id}.json` | One file per fetched chart — serialised data shape, named by the owning manifest row's `hex_id` |
 | `template/MyWorkfile.pptx` | Reference copy of the cleaned template — validation only. Never run from. Compared against the live sibling `.pptx` (below) to warn on structural drift |
 | `workfile_info.json` | Stored uncompressed (`ZIP_STORED`) — cheap to read alone, before the rest of the archive loads. Contains `workfile_name`, `last_saved_by`, `last_saved_at`, `chartgen_version`, `locked_by` (advisory concurrency), `locked_at` (see Decision 4) |
+
+**Population table shared spine.** Every population-level table — `nhs_organisations`, any `submissions_{year}_{project_id}` table, and any future table — shares the same columns:
+
+| Column | Description |
+|--------|-------------|
+| `unit_id` | Stable internal identifier for the row, within this table |
+| `unit_code` | Outward-facing label — display only, never relied on for logic |
+| `unit_name` | Display name |
+| `soft_parents` | This row's relationship links to other tables. Format: `table_name:id1^id2\|table_name:id3` — `\|` separates entries for different tables, `^` separates multiple ids within the same table. Recorded on the child side only; the table being linked to carries no reverse reference. Deliberately not called "parent": that word implies a strict one-parent-per-row structure, which these relationships don't have — a row can hold zero, one, or several ids in a given table, and can link to any number of different tables at once (e.g. an organisation supporting two ICBs). See Glossary for the naming rationale |
+| any `Name()` column | Any number of peer-group columns, e.g. `Region()` — see Additional peer group columns, Feature List |
+
+A table is free to add `Name()` columns beyond this spine; it may not add any other bespoke column while keeping the identical-headers convention every population table currently follows.
 
 **Running Order column schema** (`running_order.csv`):
 
@@ -250,7 +267,7 @@ outputs/
 | `outputs/pptx/` | Generated `.pptx` reports, one per batch run output. Recreated fresh wherever the `.cgw` currently lives, including after a Save As — not carried across |
 | `outputs/pdf/` | Generated `.pdf` reports. Recreated fresh wherever the `.cgw` currently lives, including after a Save As — not carried across |
 
-**CSV vs JSON.** `running_order.csv`, `units.csv`, `manifest.csv`: flat, fixed-column, one-row-per-entity — CSV's natural shape, and legible to a non-technical colleague who renames `.cgw` to `.zip`. `data_cache/{hex_id}.json`: nested (serialised dataclasses), never hand-edited. Intentional split, not an inconsistency.
+**CSV vs JSON.** `running_order.csv`, the population tables under `tables/`, `manifest.csv`: flat, fixed-column, one-row-per-entity — CSV's natural shape, and legible to a non-technical colleague who renames `.cgw` to `.zip`. `data_cache/{hex_id}.json`: nested (serialised dataclasses), never hand-edited. Intentional split, not an inconsistency.
 
 ---
 
@@ -263,7 +280,8 @@ Streamlit process (st.session_state)
 ├── st.session_state["ws"] → WorkfileState
 │     workfile_path, workfile_name
 │     settings: dict
-│     units: list[dict]
+│     tables: dict — {table_name: list[dict]}
+│     table_order: list[str]  — position 0 is the master table
 │     running_order_rows: list[dict]
 │     manifest_rows: list[dict]
 │     cache: dict — {filename: json_string}
@@ -286,24 +304,26 @@ Streamlit process (st.session_state)
     │     log: list[dict]
     │     autotable_stats: dict
     │     report_context: ReportContext
+    │     full_unit_set: dict — {table_name: list[dict]} for the current reporting unit
     │     default_populations: str
     │     excel_workbooks: dict
     │
     ├── ReportContext
-    │     unit_id: int
+    │     unit_id: str
     │     unit_code: str
     │     unit_name: str
-    │     organisation_id: str
-    │     organisation_name: str
     │
     └── list[NumericSeries | NumericCompositional | CategoricalCompositional]
           population_label: str  — set per layer by build_population_layers
+          population_table: str  — which population table this data's units belong to, set at fetch
 ```
 
 | Item | Notes |
 |---|---|
 | `st.session_state["ws"]` → `WorkfileState` | ★ The working copy of the open `.cgw` |
 | `WorkfileState.settings: dict` | Mirrors `workfile_config/settings.csv` |
+| `WorkfileState.tables: dict` | Mirrors `workfile_config/tables/*.csv` — every population-level table |
+| `WorkfileState.table_order: list[str]` | Mirrors the `table_order` setting. `master_table_rows()` reads `table_order[0]` — the only definition of "master" anywhere in the system |
 | `WorkfileState.running_order_rows: list[dict]` | ★ Sole live copy — see Section 5 note |
 | `WorkfileState.manifest_rows: list[dict]` | Mirrors `data_cache/manifest.csv` — the manifest table |
 | `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
@@ -314,10 +334,12 @@ Streamlit process (st.session_state)
 | Per-batch-run objects | Live only for the duration of one Run Selected / Run Batch / Run All call — constructed fresh, discarded after |
 | `AssemblyContext` | One per **batch** (persists across reports within it) |
 | `AssemblyContext.report_context: ReportContext` | Rebuilt per report, see below |
+| `AssemblyContext.full_unit_set: dict` | Rebuilt per report, alongside `report_context` — the current reporting unit's own row plus every row related to it one hop out (via `soft_parents`, both directions), keyed by table name. `insert_chart` looks up the data shape's own `population_table` in this dict to find the correct rows/selected-unit(s) for that specific chart, rather than assuming the master table applies to every chart |
 | `AssemblyContext.excel_workbooks: dict` | Added dynamically by `open_excel`, Insert From Excel |
-| `ReportContext` | One per **report** (rebuilt fresh per unit, from the per-report settings dict, never from `load_settings()` — batch overrides apply correctly) |
+| `ReportContext` | One per **report** (rebuilt fresh per unit, from the per-report settings dict, never from `load_settings()` — batch overrides apply correctly). Carries no organisation identity — organisation, if the reporting unit's table has one, is reached via `full_unit_set`, not a field on `ReportContext` itself |
 | `list[data shape]` | One list per `insert_chart` call — built fresh by `build_population_layers()` each time; each entry is a filtered copy of the chart's data shape, stats recalculated |
 | `population_label: str` | Field on the data shape itself — e.g. `"All"`, `"Selected"`, or a resolved peer-group value |
+| `population_table: str` | Field on the data shape itself, set once at fetch (`fetch.py`) — the name of the population table this chart's units belong to, not derived at read time |
 
 Only `WorkfileState` (Decision 1) holds real state. `AssemblyContext`, `ReportContext`, and population-filtered data shape lists are just rebuilt from it on every run, the way any app rebuilds working objects from its underlying data rather than treating them as sources of truth in their own right. If the Streamlit process dies mid-session, everything here is gone except whatever was already saved.
 
@@ -377,10 +399,10 @@ File operations live in the Streamlit sidebar, tab-agnostic. The main tab interf
 
 | Operation | Behaviour |
 |---|---|
-| **New Workfile** | Prompts for save location and name, then runs the New Workfile flow. Submissions fetch is the final blocking step. |
+| **New Workfile** | Collects a short description ("what is this for") and a save location/name via a single native Save dialog, then creates a blank `.cgw` — no project, no population tables. See Decision 9. |
 | **Open Workfile** | File picker for `.cgw`. Always leads to a decision step naming the lock state before the workfile loads, offering Open or Open Read-Only. Open writes the lock; Open Read-Only does not. |
 | **Save** | Serialise `WorkfileState` to ZIP, update `workfile_info.json`. No confirmation dialog. Disabled in a Read-Only session. |
-| **Save As** | New folder/name via native picker. Copies the cleaned template alongside the new `.cgw` under the matching name; releases the lock on the old file, writes a new one. Outputs are not carried across. In a Read-Only session, the target folder must differ from the original workfile's; on success the session becomes normal, and the old file's lock is released only if this session had held it. |
+| **Save As** | Single native Save dialog for name and location together; the OS dialog itself confirms overwrite, so this has no separate app-level overwrite step. Copies the cleaned template alongside the new `.cgw` under the matching name; releases the lock on the old file, writes a new one. Outputs are not carried across. In a Read-Only session, the target folder must differ from the original workfile's; on success the session becomes normal, and the old file's lock is released only if this session had held it. |
 | **Save and Close** | Save, then clear `locked_by`+`locked_at`, return to no-workfile-loaded state. Disabled in a Read-Only session. |
 | **Close Without Saving** | Confirms if dirty. Clears the lock; ZIP otherwise untouched. Skips the confirmation in a Read-Only session — closes immediately regardless of unsaved edits. |
 
@@ -403,3 +425,15 @@ ChartGen is designed for a SharePoint-hosted team environment accessed via OneDr
 Charts render entirely in memory as bytes; the only disk writes during a batch run are the final `save_ppt`/`save_pdf` calls, one per report. The `.cgw` is read once at the start of a run and not written again until Save. This avoids the small, rapid file writes that trigger OneDrive sync issues, and leaves the sync client nothing to lock mid-run.
 
 Files accessed via OneDrive sync appear as ordinary local filesystem paths to Python — `zipfile`, `open()`, `shutil` all work unmodified. This avoids the filesystem-API incompatibilities that affect COM/VBA approaches against SharePoint's virtual file system.
+
+### Decision 9 — New Workfile / Population Tables Divorce
+
+Creating a workfile and populating it with a project's data are two unrelated processes, not one flow with two halves.
+
+`create_new_workfile` (`workfile/setup/`) makes a blank `.cgw` — file, description, settings scaffold — with no knowledge that population tables exist, ever will exist, or what an NHS toolkit project even is. `add_project_tables` / `ensure_population_tables` (`acquisition/toolkit_nhs/population_tables.py`) fetch and build a project's population tables against any `WorkfileState`, new or long-established, with no knowledge of whether the workfile it's given was just created.
+
+**Trigger.** Nothing user-facing decides when a project's tables get built. `fetch.py` identifies a chart's own `year`/`project_id` (from its URL and the toolkit API) during that chart's own pull, and calls `ensure_population_tables` at that point: if that project/year's submissions table already exists, nothing happens; if it doesn't, it's built there and then, before the chart's own data is fetched. The first chart pulled for a given project/year is what builds its tables — every subsequent chart for the same combination is a no-op check.
+
+**Merge, not overwrite.** `nhs_organisations` is shared across every project in a workfile. Adding a further project's tables appends organisations not already present (by `unit_id`) rather than rebuilding the table from scratch; existing rows are untouched. This relies on `Region()` (and any future peer-group column) being a value handed to us per-organisation by the API, not something computed from the full table — if that stopped being true, this merge would need revisiting.
+
+**Why acquisition, not workfile.setup.** Building population tables is the same kind of concern as the rest of `acquisition/toolkit_nhs/` — pulling and normalising NHS toolkit data — not a workfile-creation concern. It also has to live there for `fetch.py` to call it directly: acquisition code must never depend on `workfile.setup` (Section 2's one-way dependency rule), and this logic used to sit in `workfile.setup`, which is exactly why it had to move.

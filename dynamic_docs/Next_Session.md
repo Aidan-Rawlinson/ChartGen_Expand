@@ -2,24 +2,21 @@
 
 ## Pick up here
 
-Step 1 of the expansion plan (manifest table) is done and live-tested. The natural next piece is **Step 2 — multi-project, same database**: adding a URL for a new project_id+year combination triggers a submissions fetch, a new submissions table, and expansion of the organisations table. Same project_id but different year counts as a different project.
+Multi-project/same-database work (submissions/organisations tables, `soft_parents`, master table, automatic per-chart trigger) is done and live-tested. The natural next piece is **Second database** — new timeseries data shape, new Base Charts, a credential requirement per database, organisation ID collision handling.
 
-Design questions to settle before/while building Step 2 (from this session's planning discussion):
+Design questions worth settling before/while building it, given how population tables now actually work:
 
-1. **Submissions vs organisations relationship.** The organisations table expands to hold organisations from multiple projects; submissions tables are per-project records of participation. The user explicitly wants to discuss this relationship before building — start here.
-2. **Master table concept.** With multiple population tables, something must tell the system which table drives the batch loop and the reporting-unit picker. Load-bearing for everything downstream; table relationships come later, not in Step 2.
-3. **units.csv model.** Currently one flat `units.csv` with `UNITS_FIELDNAMES` owned by workfile_file. Multi-table needs a structural decision (multiple CSVs? a table-of-tables?) — a .cgw structure change, so another file version bump.
-4. **Parked from Step 1:** whether `data_updated_at`-style facts should ever live in two places was resolved by consolidation this time; keep the single-source instinct as tables multiply.
+1. **Does a second database change anything about `population_table` naming?** Today's convention (`table_naming.py`) is nhs-specific (`submissions_{year}_{project_id}`). A second database will need its own naming convention — does it get its own `table_naming`-style module, or does the naming function need a database parameter?
+2. **Credential requirement.** Does a second database need its own credentials box on the Imports tab? How does URL-to-database triage decide which credential set applies to a given URL *before* fetch — is that decided by parsing the URL alone, or does it need a lookup?
+3. **Organisation ID collision handling.** `nhs_organisations`' merge-by-`unit_id` logic currently assumes one shared id space across every project on the workfile. If a second database's organisation ids can collide with or duplicate nhs organisation ids (same raw id, different real-world entity), that assumption breaks — needs a decision on how identity is disambiguated across databases before the merge logic can be trusted with two databases in play.
 
 ## Open questions for the user
 
-- Step 2 kickoff: how should the "new project detected" moment surface in the UI — silent on fetch, or a visible confirmation step?
-- Credential persistence (parked from planning): session-only, or per-machine like the stored username (Architecture Decision 7)? Needed by Step 4 at the latest.
-- The maturity-statement gap (docs read more finished than the tool is) was flagged but never resolved — the Primer is the natural home and is edit-locked, so it needs an explicit decision. Decision on hold with the user.
+- **Credential persistence** (parked across several sessions now): session-only, or per-machine like the stored username (Architecture Decision 7)? Needed once a second database exists and Imports needs to hold more than one credential set.
+- **The maturity-statement gap** (docs read more finished than the tool is) — still unresolved. Primer is the natural home and is edit-locked, so it needs an explicit decision from the user before Claude touches it.
+- **Installer release** — `0.0.3` was walked through (Inno Setup compile → test → copy to SharePoint) but completion wasn't confirmed before this Close-down. Worth checking at the start of next session whether it actually shipped.
 
-## Carried forward from the installer session (not urgent)
+## Carried forward, not urgent
 
-- Test the real "update available" path (bump local software_id, run Check for Update, revert).
-- Decide the real first release version — note software id is now 0.0.2 locally but the SharePoint release copy is still the 0.0.1 build; any release needs the Installer_Guide checklist run.
-- Consider Uninstall Delete scope on a second pass.
-- Installer_Guide.md sits outside the six-document ground-truth discipline — occasional manual check.
+- One-hop-only `soft_parents` resolution is a deliberate scope boundary, not a bug — revisit only once a genuine multi-level chain (more than two tables deep) is actually needed.
+- Charts tab's `set_default_populations` read is an acknowledged stopgap (reads one Running Order row's value directly) — fine to leave until it causes a real problem.

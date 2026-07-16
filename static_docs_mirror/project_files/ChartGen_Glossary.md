@@ -1,6 +1,6 @@
-# ChartGen — Glossary (DRAFT — restructured, for review)
+# ChartGen — Glossary
 
-*Working draft, restructured from the original Glossary.*
+*TBN Internal · Naming and taxonomy — the terms used consistently across the other documents.*
 
 ---
 
@@ -161,13 +161,19 @@ MyWorkfile.cgw  (ZIP)
 
 ### Cluster 9 — Runtime objects
 
-- **AssemblyContext** — the in-memory object the Assembly Engine builds once per batch run, carrying the open `Presentation` object, output path, run log, autotable stats, the current `ReportContext`, default populations string, and any open Excel COM workbook references. See the Architecture document, Section 5.
+- **AssemblyContext** — the in-memory object the Assembly Engine builds once per batch run, carrying the open `Presentation` object, output path, run log, autotable stats, the current `ReportContext`, the current `Full Unit Set`, default populations string, and any open Excel COM workbook references. See the Architecture document, Section 5.
 
-- **Population table** — the unit-based table the user interacts with to select a reporting unit and inspect populations; built from `units.csv`.
+- **Full Unit Set** — for the current reporting unit, its own row plus every row related to it one hop out (via `soft_parents`, both directions), keyed by table name — `{table_name: [row, ...]}`. Rebuilt once per report, alongside `ReportContext`. `insert_chart` looks up a chart's own `population_table` in the Full Unit Set to find the correct rows/selected unit(s) for that specific chart, rather than assuming the master table applies to every chart. A table entry can hold more than one row — e.g. an organisation supporting two ICBs — which is expected, not a case to collapse. See Functional Spec, Section 10.4.
 
-- **ReportContext** — the per-report identity object (`unit_id`, `unit_code`, `unit_name`, `organisation_id`, `organisation_name`), rebuilt fresh for each unit in a batch run and passed to chart rendering and text replacement.
+- **Master table** — whichever population table sits first in display order (`table_order[0]`). Drives the reporting unit picker and the batch loop. Position is the only definition of "master" — there is no separate flag, and reordering a table to position 0 makes it master with no further action. See Architecture, Section 5.
 
-- **Unit / unit ID / unit code** — the identifier fields for a single reporting unit, resolved from the API's submission data at workfile setup and used throughout ChartGen from that point on. `unit_id` is the internal identifier; `unit_code` is the outward-facing label (used for display only, never relied on for logic); `unit_name` is the display name (e.g. Trust name). See Data Acquisition, Functional Spec §7.2.
+- **Population table** — a table sharing the common spine (`unit_id`, `unit_code`, `unit_name`, `soft_parents`, plus any number of `Name()` peer-group columns), e.g. `nhs_organisations` or a `submissions_{year}_{project_id}` table. A workfile can hold any number of them; see Master table for how one becomes the reporting-unit source. Built automatically the first time a chart pull encounters a project/year not already represented on the workfile — see Functional Spec, Section 7.2.
+
+- **ReportContext** — the per-report identity object (`unit_id`, `unit_code`, `unit_name`), rebuilt fresh for each unit in a batch run and passed to chart rendering and text replacement. Carries no organisation identity of its own — an organisation, where the reporting unit's table has one, is reached via the Full Unit Set, not a field on `ReportContext`.
+
+- **Soft parent (`soft_parents`)** — a relationship from one population table row to another, recorded on the child side only, as `table_name:id1^id2|table_name:id3`. Deliberately not called "parent": that word implies a strict one-parent-per-row structure, which these relationships don't have — a row may hold zero, one, or several ids in a given table, and may link to any number of different tables at once (e.g. an organisation supporting two ICBs). Resolution is one hop only, in both directions — see Full Unit Set. See Architecture, Section 5, for the format.
+
+- **Unit / unit ID / unit code** — the identifier fields for a single row in a population table. `unit_id` is the internal identifier, stable within that table; `unit_code` is the outward-facing label (used for display only, never relied on for logic); `unit_name` is the display name (e.g. Trust name). See Population Tables, Functional Spec §7.2.
 
 ### Cluster 10 — Chart construction
 

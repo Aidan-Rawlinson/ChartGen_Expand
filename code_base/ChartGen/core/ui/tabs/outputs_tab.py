@@ -9,12 +9,12 @@ import streamlit as st
 
 from core.output_generation.execution.batch_process import run_batch
 from core.ui.common.formatting import render_run_log_html
-from core.workfile.state.session_state import ws, settings, save_settings, units
+from core.workfile.state.session_state import ws, settings, save_settings, master_table
 
 
 def render_outputs_tab():
     s           = settings()
-    subs        = units()
+    subs        = master_table()
     workfile_dir = os.path.dirname(ws().workfile_path)
     cleaned_tpl = s.get("cleaned_template_path", "").strip()
     tpl         = s.get("ppt_template_path", "").strip()
@@ -90,7 +90,7 @@ def render_outputs_tab():
                     f'<div style="border-left:4px solid #C12958;padding:4px 10px;background:#fdf0f3;border-radius:4px;line-height:1.35;display:inline-block;width:100%;">'
                     f'<span style="color:#C12958;font-weight:700;font-size:0.74em;letter-spacing:0.05em;">SELECTED REPORTING UNIT</span><br>'
                     f'<span style="font-size:0.92em;font-weight:600;">{sel_row["unit_name"]}</span><br>'
-                    f'<span style="color:#555;font-size:0.8em;">{sel_row["unit_code"]} &nbsp;·&nbsp; {sel_row["organisation_name"]}</span>'
+                    f'<span style="color:#555;font-size:0.8em;">{sel_row["unit_code"]}</span>'
                     f'</div>', unsafe_allow_html=True,
                 )
             else:

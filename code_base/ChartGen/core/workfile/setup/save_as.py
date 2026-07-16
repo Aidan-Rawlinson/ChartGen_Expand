@@ -4,8 +4,9 @@ Business logic for Save Workfile As: copies the cleaned template alongside
 the new .cgw (renamed to match), transfers/releases the advisory lock, and
 saves the workfile under the new path. Owns the read-only-session-must-
 choose-a-different-folder rule too — a business rule about the lock, not a
-widget concern. The Streamlit form only collects inputs and shows the
-overwrite-confirmation step; everything here is delegated from there.
+widget concern. The Streamlit form only collects the new path (via a native
+Save dialog, which handles its own overwrite confirmation); everything here
+is delegated from there.
 """
 
 import os
