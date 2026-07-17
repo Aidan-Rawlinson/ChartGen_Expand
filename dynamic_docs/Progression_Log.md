@@ -113,3 +113,31 @@ Extensive front-end iteration followed (Streamlit-native layout: expanders, colu
 Governed docs updated to match (Functional Spec §9.3/§9.4, Architecture package tree + Decision 11, Feature List, Glossary) — Primer untouched, edit-locked, not needed this session.
 
 Organisation-identity mismatch work (flagged last session) remains parked — user now has a CSV extract ready to bring into next session to resolve it.
+
+
+---
+
+## Session — Organisation identity resolution (Indicators ↔ NHS)
+
+Resolved the long-parked organisation-identity mismatch between the Indicators (ics) and NHS toolkits, confirmed real and fixed against live data this session.
+
+**First pass (built, then retired):** the user supplied a one-off DB extract (`ics_org_table.csv`, ~1450 rows, columns including `organisation_id`/`external_organisation_id`) mapping ics organisation ids to nhs unit ids. Built `core/acquisition/toolkit_indicators/org_lookup.py` plus a static `static_config/ics_org_lookup.csv` copy, wired into `population_tables.merge_timeseries_population` as a translation step before the `soft_parents` link is written.
+
+**Discovery mid-session:** while testing, found that `/projects/{id}/submissions` — the same endpoint `get_visible_dates` already called for `projectDates` — also returns `userOrganisations`: live `organisationId → externalOrganisationId` pairs per project, plus each organisation's `submissionList` carrying the real `submissionName` per `submissionId`. Confirmed via a live Network-tab capture from the user (project 42, MHLDA Indicators), including a multi-submission organisation (Central and North West London NHS FT, ics org 1043 → external 141).
+
+**Decision:** on the user's explicit instruction, retired the static CSV approach entirely in favour of the live per-project data. Deleted `org_lookup.py` and `static_config/ics_org_lookup.csv` (plus the resulting stale `.pyc`); confirmed no dangling references anywhere in the codebase via full-repo search.
+
+**Final mechanism:**
+- `api_client.get_visible_dates` renamed to `get_project_submissions_data`, now returns the full response dict rather than just `projectDates`.
+- `fetch.py` builds `org_id_map` (`{ics org_id: nhs unit_id or None}`) and `submission_name_map` (`{submissionId: submissionName}`) once per project per fetch run from that response, passing both into `merge_timeseries_population`.
+- `population_tables.merge_timeseries_population` resolves each submission's organisation via `org_id_map`; a miss leaves `soft_parents` empty and `Region()` blank for that submission (minimum footprint, no invented value) and sets a `had_unmapped` flag.
+- A newly-resolved organisation not yet in `nhs_organisations` is enriched via `toolkit_nhs.api_client.get_organisations`, queried against the current calendar year (confirmed with the user as the correct stand-in, since Indicators data has no year of its own) — pulls canonical `organisation_name`/`nhs_code`/`region_name`. Falls back to the Indicators response's own (incomplete) values only if the organisation isn't present in that year's NHS list.
+- Submission `Region()` is resolved from this same now-enriched org data within the same pass, so a submission whose org is newly discovered this fetch gets the correct `Region()` immediately.
+- `unit_name` now sourced from `submission_name_map`'s real `submissionName` (previously duplicated `anon_submission_code` into both `unit_code` and `unit_name` — a genuine bug, now fixed). `unit_code` remains `anon_submission_code`.
+- `fetch.py` accumulates one `any_unmapped_org` flag across the whole run and appends a single synthetic `"warning"`-status entry to its results (message text, no per-submission detail) rather than warning per submission. `imports_tab.py`'s flash-message loop updated to render `"warning"` status distinctly from `"ok"`/`"error"`.
+
+**Verified:** confirmed working end-to-end via a clean test run against a fresh workfile (first-time table creation for that project). The run also surfaced a real data-quality issue in the underlying ics database — some submissions have no matching organisation at all — correctly caught by the new unmapped-organisation warning. Confirmed as a database gap, not a ChartGen bug; user will investigate separately.
+
+**Docs updated:** Functional Spec §7.4 (project-level call description; organisation-link/enrichment/naming paragraph rewritten). Architecture: module table row for `toolkit_indicators/` (mentions reuse of `get_organisations`); Decision 10's "Organisation identity assumption" subsection rewritten as "Organisation identity resolution," describing the live mapping mechanism in place of the earlier unverified assumption.
+
+**Handoff:** user requested two items for next session — "an easy update on the population tables" and "the transformation that creates a metric data shape from a line chart data shape" — neither scoped in detail yet; see Next_Session.md.

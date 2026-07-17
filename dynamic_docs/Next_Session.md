@@ -2,17 +2,17 @@
 
 ## Pick up here
 
-The organisation-identity mismatch between the two toolkits is the live thread, and the user now has a **CSV extract for a map** ready to bring into next session — treat this as the trigger to finally move from "believed real" to actually verified and fixed. Covers at least:
+Two items requested by the user for next session, not yet scoped:
 
-1. **Use the CSV extract to confirm (or rule out) whether Indicators `organisation_id` genuinely doesn't match `nhs_organisations`' `unit_id` space.** This was the open verification step last session; the user now has the data to settle it.
-2. **Design a lookup-table mechanism**, applied at the earliest point in the pipeline — before the `soft_parents` link between a submission and an organisation is made, not as a patch afterward. Likely means rethinking part of `toolkit_indicators/population_tables.py`'s merge logic, not just adding a translation step. Ask the user how they want the CSV brought into the tool (manual upload flow? static config file? something else) before designing the mechanism — don't assume.
-3. **The `organisationCode`/`organisationName` field-name bug** in `extract_submissions` (unverified guessed keys) is probably subsumed by whatever the lookup-table fix ends up being, rather than needing its own separate patch.
-4. **The project_id-shared-but-organisation_id-not asymmetry** — worth deciding explicitly how much of the identity problem is systemic (different backend, `icsapi` vs `membersapi`) vs isolated to organisations specifically.
+1. **An easy update on the population tables.** No detail given yet — ask the user what specifically they have in mind before starting.
+2. **A transformation that creates a metric data shape from a line-chart data shape.** Likely relates to converting a TimeSeries (or a chart's line-chart rendering) into one of the metric-based canonical shapes (NumericSeries/NumericCompositional/CategoricalCompositional) — but this is a guess, not confirmed. Ask the user to describe the intended source and target shapes and the use case before designing anything; don't assume which "line chart" or which "metric" they mean.
 
-Secondary, lower-priority items once the above is scoped:
+## Secondary, lower priority
 
-- The three TimeSeries charts (built two sessions ago) and the new Charts sheet round-trip (built this session) both still haven't had a real batch-run test pass against a live workfile/template. Worth suggesting if the user has a natural gap, but don't push it over the org-identity work unless they want to switch.
-- TimeSeries period cutting (single period/range) and Tweaks generally remain not built — pick back up once the org-identity work is settled, or sooner if the user wants to return to charting instead.
+- The `organisationCode`/`organisationName` field-name bug in `extract_submissions` (unverified guessed keys) is now a narrower concern than before — it only feeds the enrichment fallback path for an organisation not present in the current year's NHS organisations list (see Current_State), rather than the primary identity path. Worth verifying against a live `reportDataDatesSpecificOptions` response if it ever surfaces in practice (e.g. the fallback path actually gets hit), but not urgent — the fallback is a rare edge case (a resolved organisation retired from the NHS list).
+- **Real data-quality gap surfaced this session:** some submissions in the underlying ics database have no matching organisation at all — caught correctly by the new unmapped-organisation warning during a clean test run. This is a database issue, not a ChartGen bug. The user said they'd investigate separately; no action needed from this side unless asked.
+- The three TimeSeries charts and the Charts sheet round-trip (both built in earlier sessions) still haven't had a real batch-run test pass against a live workfile/template. Worth suggesting if the user has a natural gap.
+- TimeSeries period cutting (single period/range) and Tweaks generally remain not built.
 
 ## Correction carried forward (still relevant, unchanged)
 
@@ -20,11 +20,12 @@ Secondary, lower-priority items once the above is scoped:
 
 ## Noted, not yet actioned
 
-- **Placeholder removal alongside yellow-box removal** (raised this session, logged only, not built): the Template Reader strips yellow textboxes at Cleaned Template production but leaves the empty placeholder itself in place — visible in the PowerPoint editing view even though it doesn't render at output. No priority attached; raise if the user brings it up, or opportunistically if touching `template_reader.py` for the org-identity work.
+- **Placeholder removal alongside yellow-box removal**: the Template Reader strips yellow textboxes at Cleaned Template production but leaves the empty placeholder itself in place — visible in the PowerPoint editing view even though it doesn't render at output. No priority attached; raise if the user brings it up.
 
 ## Open questions for the user
 
-None outstanding from this session.
+- What exactly is meant by "an easy update on the population tables"?
+- What are the source and target shapes for "the transformation that creates a metric data shape from a line chart data shape" — and what's the use case driving it?
 
 ## Carried forward, not urgent
 

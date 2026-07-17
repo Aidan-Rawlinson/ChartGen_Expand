@@ -42,11 +42,25 @@ def get_report_data(report_id, token: str) -> dict:
     return response.json()["data"]
 
 
-def get_visible_dates(project_id, token: str) -> list:
+def get_project_submissions_data(project_id, token: str) -> dict:
     """
-    Retrieve the project's date list, each with an outputAvailability
-    timestamp — a period is only visible once that timestamp has passed.
-    Returns the raw projectDates list.
+    Retrieve the full /projects/{id}/submissions response for one project —
+    not just its date list. Returns the raw data dict with (at least):
+
+    - projectDates: each with an outputAvailability timestamp — a period is
+      only visible once that timestamp has passed.
+    - userOrganisations: every organisation this project exposes, each
+      carrying organisationId (the ics-side id used throughout this
+      toolkit) alongside externalOrganisationId (the matching
+      nhs_organisations unit_id) — a live, per-project, always-current
+      version of the mapping a static CSV extract used to stand in for
+      (see Architecture Decision 10 and population_tables.py). Each
+      organisation's submissionList also carries the real submissionName
+      per submissionId, not just anonSubmissionCode.
+
+    One call serves both purposes (dates, and org/submission identity) —
+    callers extract whichever keys they need rather than this module
+    duplicating the request per purpose.
 
     Note: the source VBA (GetVisibleDates) hardcodes project 42 regardless
     of the project_id argument it's given — confirmed as a VBA bug, not
@@ -59,4 +73,4 @@ def get_visible_dates(project_id, token: str) -> list:
         headers={"Accept": "application/json", "Token": token},
     )
     response.raise_for_status()
-    return response.json()["data"]["projectDates"]
+    return response.json()["data"]

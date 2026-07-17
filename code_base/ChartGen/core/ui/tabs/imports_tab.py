@@ -226,6 +226,8 @@ def _render_fetch_section():
         for r in flash:
             if r["status"] == "ok":
                 st.success(f"✓ [{r['hex_id']}] {r['label']} — {r['message']}")
+            elif r["status"] == "warning":
+                st.warning(f"⚠ {r['label']} — {r['message']}")
             else:
                 st.error(f"✗ [{r['hex_id']}] {r['label']} — {r['message']}")
 

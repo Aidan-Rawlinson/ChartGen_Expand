@@ -86,3 +86,18 @@
 - **Screen zoom is a separate, purely cosmetic control** — never stored, never affects the real (percent/EMU) size fields. Placed in its own last-in-rail expander rather than beside the fields that do save, once the rail was reorganised around "what saves vs what doesn't."
 - **Dropdown "no selection" sentinels are plain strings, not Python `None`.** `None` pre-set into `session_state` before a Streamlit widget's own creation collides with Streamlit's internal "no selection" placeholder handling, overriding a custom `format_func`. Applies to all three of the Charts sheet's row/dataset dropdowns.
 - **Front-end density/layout tuning done with native Streamlit only (no custom CSS) for this session**, per explicit instruction — `label_visibility="collapsed"`, `st.expander` default states, `st.columns` ratios, icon-only buttons. A true square/fixed-pixel button remains a known native limitation, left unresolved by choice.
+
+
+---
+
+## Decision — Organisation identity mapping: live per-project lookup, not a static CSV
+
+**Context.** The Indicators (ics) and NHS toolkits' organisation id spaces were confirmed not to match. A static CSV extract of the mapping was built first as a stopgap, then a live source of the same mapping was discovered on the same project-submissions endpoint already being called for visible dates.
+
+**Decision.** Retired the static CSV approach entirely. The live per-project `userOrganisations` data (from `/projects/{id}/submissions`) is now the sole source of the ics-organisation-id → nhs-unit-id mapping, and of real submission names. No fallback to a static file.
+
+**Rationale.** The live data requires no manual upkeep, can't go stale, and was already being fetched for an unrelated purpose (visible dates) — using it costs nothing extra. A static CSV would have needed periodic manual refreshes against a data source expected to be superseded within about a year; retiring it removes that maintenance burden entirely rather than just deferring it.
+
+**Decision.** When a submission's organisation resolves to an nhs unit id not yet present in `nhs_organisations`, enrich it via `toolkit_nhs.api_client.get_organisations`, queried against the current calendar year — confirmed with the user as the correct stand-in, since Indicators data has no year concept of its own (periods only).
+
+**Decision.** An organisation_id with no live mapping entry does not get any invented fallback — no soft_parents link, Region() left blank, and the fetch surfaces exactly one aggregated warning per run (not per submission). Explicitly the user's instruction: "nothing is the best solution providing it is obvious... otherwise the bare minimum we can get away with." Resolving the underlying data gap is treated as the user's job (fix the source data), not something the code should paper over.

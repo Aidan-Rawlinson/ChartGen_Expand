@@ -4,39 +4,38 @@
 >
 > **Phase: Expansion.** The major refactor is complete. `code_base` and the five governed documents describe a stable, refactored base. This phase is about building new functionality on top of that base — which means structure and logic in both the code and the documents SHOULD be expected to change, repeatedly, as each new feature lands. Do not treat the current structure as fixed or sacred. Do not read a structural mismatch between what's documented and what's proposed as an error to flag cautiously — during this phase, it's the expected shape of the work. Ground truth discipline (Maintenance Guide Section 4) still applies fully: check actual code before updating docs, present-tense only. What changes is your posture going in — expect churn, don't resist it.
 
-## Status: Charts sheet rebuilt as a full two-way sync with the Running Order (was previously a preview-only stopgap); governed docs updated to match. Organisation-identity mismatch work remains parked, pending a data extract the user now has in hand for next session.
+## Status: The Indicators/NHS organisation-identity mismatch is resolved and confirmed working against live data. `Region()` and organisation names now flow correctly into both `nhs_organisations` and the Indicators submissions table. Governed docs updated to match.
 
 ### What works (built this session)
 
-- **Charts sheet is now a genuine two-way sync with the Running Order**, replacing the old preview-only tab:
-  - Two entry points, always convertible into each other: load an existing `insert_chart` Running Order row (bound mode), or load a cached dataset directly (free-play, no row bound).
-  - Round-trip fields (`chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu`) governed by a single maintained list, `CHART_SANDBOX_FIELDS` (`running_order/schema.py`) — extending the sync later is a one-line addition there, not a rework.
-  - Save-back via three actions: Overwrite selected row, Insert above, Insert below — new module `running_order/row_ops.py` (`overwrite_row_fields`, `insert_new_row`, `renumber_row_ids`).
-  - Rows referenced by `row_id`, not list position or label — stable across an Overwrite; sandbox state referencing a row is cleared after every save so an Insert's renumbering can't leave a stale reference.
-  - Sizing is authored as a percentage of the PowerPoint page's shorter dimension, not raw EMU — new module `core/shared/infrastructure/page_sizing.py` (`percent_to_emu`, `emu_to_percent`, `get_page_size_emu`, `has_known_template_page_size`, standard page-size presets). Real page size is captured once at template processing (`import_flow.process_template` now writes `template_page_width_emu`/`template_page_height_emu` into workfile settings); a manual dropdown stands in before any template has been processed.
-  - The Charts tab's old stopgap — reading one Running Order row's `populations` value directly to approximate a preview — is gone. It now does real `build_population_layers` resolution, the same mechanism `insert_chart` uses at batch time.
-  - Shape-mismatch handling: swapping the loaded dataset to a different data shape while a row is bound doesn't unbind the row, but warns and re-filters chart type options.
-  - Placeholder dropdown entries ("- Running order line -", "- Chart list -", "- Select target row -") are genuine string options in each dropdown's own list, not Python `None` — this also fixed a real Streamlit bug where a `None`-based sentinel, once pre-set into `session_state`, triggered Streamlit's own built-in "Choose an option" placeholder instead of our `format_func` text.
-  - Selecting either "Select Chart" placeholder after something was already loaded triggers a full sandbox reset (same as the reset button), via transition-detection so it doesn't loop on first load.
-- **Streamlit layout**, native-only (no CSS): title + reset icon at the top; left rail (~17.5% width) holds every control that saves to the Running Order, in expanders ordered as Select Chart (open) → Select Visualisation (auto-expands while no chart type chosen) → Populations → Sizing → Save to Running Order → Zoom (the one expander whose control saves nothing, kept last for that reason).
-- **Governed docs updated to match** (Primer untouched, per its edit lock — nothing here touched design intent): Functional Spec (§9.3 Charts Sheet Round-Trip, §9.4 Page Size Capture, §3.2 tab purpose, §10.6 cross-reference), Architecture (package tree + module table for `row_ops.py`/`page_sizing.py`, `settings.csv` key list, new Decision 11), Feature List (`set_default_populations` stopgap note resolved, two new Complete rows), Glossary (two new Cluster 8 terms).
+- **Organisation identity resolution, Indicators ↔ NHS.** Confirmed live: the two databases' organisation id spaces genuinely do not match (the earlier same-id assumption in `population_tables.py` was wrong).
+  - **First pass (retired):** built a stopgap static CSV lookup (`org_lookup.py` + `static_config/ics_org_lookup.csv`, a one-off DB extract of ics `organisation_id` → `external_organisation_id`), wired into `merge_timeseries_population`.
+  - **Superseded same session:** discovered that `/projects/{id}/submissions` — the same endpoint already called for visible dates — also returns `userOrganisations`, giving the identical `organisationId → externalOrganisationId` mapping live, per project, plus each submission's real `submissionName`. On the user's explicit instruction, the CSV approach was fully retired in favour of this live data: `org_lookup.py` and `static_config/ics_org_lookup.csv` deleted, along with the resulting stale `.pyc`; confirmed no dangling references anywhere in the codebase.
+  - `api_client.get_visible_dates` renamed to `get_project_submissions_data`, now returns the full response (`projectDates` + `userOrganisations`) rather than discarding everything but the dates.
+  - `fetch.py` builds `org_id_map` and `submission_name_map` from that response once per project per fetch run, and passes both into `merge_timeseries_population`.
+  - **Region()/name enrichment:** when a resolved organisation isn't yet in `nhs_organisations`, it's now enriched via `toolkit_nhs.api_client.get_organisations` (queried against the current calendar year — confirmed with the user as the intended stand-in, since Indicators data has no year of its own) for its canonical name and `Region()`, rather than being built from the Indicators response's own (incomplete) values. Falls back to the Indicators-side name/blank `Region()` only if the organisation genuinely isn't in that year's NHS list.
+  - Submission `Region()` is resolved from this same now-enriched data within the same merge pass, so a submission whose organisation is newly discovered in this fetch still gets the correct `Region()` immediately, not one fetch later.
+  - **Unmapped organisations:** a submission whose `organisation_id` has no live mapping entry is still added, with no `soft_parents` link and `Region()` left blank — no invented value, minimum footprint. `fetch.py` accumulates one `any_unmapped_org` flag across the whole run and appends a single synthetic `"warning"`-status result rather than one per submission; `imports_tab.py`'s flash-message loop now renders `"warning"` status distinctly from `"ok"`/`"error"`.
+  - **Submission naming bug fixed:** `unit_name` was previously set to the same anonymised code as `unit_code` (no real name was ever being extracted). Now sourced from the live `submission_name_map`'s real `submissionName`; `unit_code` remains `anonSubmissionCode` — the two fields are genuinely different now.
+- **Confirmed working end-to-end** via a clean test run (fresh workfile, first-time table creation): organisations and peer groups now flow correctly. The test also surfaced a real data-quality issue — some submissions in the underlying database have no matching organisation at all — which the new unmapped-organisation warning correctly caught. That's a database gap, not a ChartGen bug; parked for the user to investigate separately.
+- **Governed docs updated to match** (Primer untouched, per its edit lock): Functional Spec §7.4 (the project-level call's description, and the organisation-link/enrichment/naming paragraph), Architecture (module table row for `toolkit_indicators/`, and Decision 10's "Organisation identity assumption" rewritten as "Organisation identity resolution").
 
-### Known gaps / not yet done (unchanged from last session, still parked)
+### Known gaps / not yet done
 
-- **Organisation-identity mismatch between the two toolkits.** Still believed real, still unconfirmed against live data, still nothing built. **User now has a CSV extract in hand for next session** — see Next_Session.
-- The `organisationCode`/`organisationName` field-name bug in `extract_submissions` (unverified guessed keys) — bundled into the same future fix.
+- **Next session: an easy update on the population tables**, and **the transformation that creates a metric data shape from a line chart data shape** — both requested by the user for next time, not yet scoped in detail. See Next_Session.
+- The `organisationCode`/`organisationName` field-name bug in `extract_submissions` (unverified guessed keys, sourced from `report_data`'s own `organisationList`, not `userOrganisations`) is narrower now than before — it's only ever used as the enrichment fallback for an organisation not present in the current year's NHS organisations list — but the keys themselves remain unverified against a live response.
 - TimeSeries period cutting (single period/range) — not built.
 - Tweaks (reference lines, axis control, conditional colouring, hook architecture) — not built.
 - One-hop-only `soft_parents` resolution — deliberate scope boundary, not a bug.
 - `format_modifier` retrofit — CategoricalCompositional-only gap, unchanged.
-- The three TimeSeries charts (from last session) still haven't had a real batch-run test pass into a live template.
-- The new Charts sheet round-trip likewise hasn't been tested against a live workfile/batch run — built and reasoned through this session, not yet exercised end-to-end by the user.
+- The three TimeSeries charts and the Charts sheet round-trip (both built in earlier sessions) still haven't had a real batch-run test pass into a live template — unchanged from last session.
 
 ### Resolved / dropped this session
 
-- **Charts tab's `set_default_populations` stopgap** — resolved. No longer reads a Running Order row directly; does real population resolution.
-- **Front-end iteration** (this session's early phase, once the round-trip mechanism was built) — layout, wording, sizing tweaks all closed out; user confirmed satisfied with the current state.
+- **Organisation-identity mismatch between the two toolkits** — resolved. Confirmed real, root-caused, fixed, and tested against live data.
+- **Static CSV lookup stopgap** — built, then retired the same session in favour of the live per-project mapping discovered partway through (see above). No trace left in the codebase.
+- **Submission `unit_name` == `unit_code` bug** — resolved. Real submission names now flow through.
 
 ### Noted, not yet actioned
 
-- **Placeholder removal alongside yellow-box removal.** Cleaned-template production strips yellow textboxes but leaves the placeholder itself in place; an empty placeholder is still visible in the PowerPoint editing view (though it doesn't render at output). User asked for this to be logged, not built, this session.
+- **Placeholder removal alongside yellow-box removal.** Cleaned-template production strips yellow textboxes but leaves the placeholder itself in place; an empty placeholder is still visible in the PowerPoint editing view (though it doesn't render at output). Carried forward, unchanged — no priority attached.

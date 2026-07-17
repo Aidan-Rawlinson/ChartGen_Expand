@@ -3,18 +3,25 @@ fetch.py
 Orchestrates data acquisition for every non-deleted manifest row whose
 database is "indicators". Mirrors toolkit_nhs/fetch.py's shape, with two
 deliberate differences: the population table is merged on every row, not
-built once and then skipped (see population_tables.py for why), and
-visible-dates is fetched once per project_id per call, not once per row —
-the source VBA re-fetches it every row, but it's genuinely
-project-level, not report-level, data, so caching it here avoids a
-same-value round trip per chart.
+built once and then skipped (see population_tables.py for why), and one
+project-level API call (/projects/{id}/submissions) is fetched once per
+project_id per run, not once per row — the source VBA re-fetches its
+date-only equivalent every row, but it's genuinely project-level data, so
+caching it here avoids a same-value round trip per chart. That same call
+now also supplies the live organisation-id mapping and real submission
+names used by population_tables.py — see get_project_submissions_data.
+
+Accumulates a single any_unmapped_org flag across every row in the run
+(population_tables.merge_timeseries_population reports one per call) and,
+if set, appends one synthetic "warning"-status entry to the returned
+results — see population_tables.py for what triggers it.
 """
 
 import os
 from dataclasses import replace
 
 from .url_parser import parse_url
-from .api_client import get_report_details, get_report_data, get_visible_dates
+from .api_client import get_report_details, get_report_data, get_project_submissions_data
 from .table_naming import submissions_timeseries_table_name
 from .population_tables import merge_timeseries_population
 from .transformers import transform
@@ -33,7 +40,8 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             and str(r.get("database", "nhs")).strip() == "indicators"]
     results = []
     total = len(rows)
-    visible_dates_cache = {}  # project_id -> projectDates, one API call per project per fetch_all run
+    project_data_cache = {}  # project_id -> full /projects/{id}/submissions response, one API call per project per fetch_all run
+    any_unmapped_org = False  # set if any submission's organisation_id had no live org mapping entry — see population_tables.py
 
     for i, row in enumerate(rows):
         label = _display_label(row)
@@ -50,14 +58,35 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             report_details = get_report_details(report_id, token)
             report_data = get_report_data(report_id, token)
 
-            if project_id not in visible_dates_cache:
-                visible_dates_cache[project_id] = get_visible_dates(project_id, token)
-            project_dates = visible_dates_cache[project_id]
+            if project_id not in project_data_cache:
+                project_data_cache[project_id] = get_project_submissions_data(project_id, token)
+            project_data = project_data_cache[project_id]
+            project_dates = project_data["projectDates"]
+            user_organisations = project_data.get("userOrganisations", [])
+
+            # Live org-id mapping and real submission names — sourced from
+            # this same project-level response, not a static file. See
+            # population_tables.py for how each is used.
+            org_id_map = {
+                str(o["organisationId"]): (
+                    str(o["externalOrganisationId"]) if o.get("externalOrganisationId") is not None else None
+                )
+                for o in user_organisations
+            }
+            submission_name_map = {
+                str(sub["submissionId"]): sub.get("submissionName", "")
+                for o in user_organisations
+                for sub in o.get("submissionList", [])
+            }
 
             # Population table: merge on every row, not build-once — see
             # population_tables.py. A single report response can itself
             # introduce submissions the table doesn't have yet.
-            merge_timeseries_population(workfile_state, project_id, report_data)
+            _, had_unmapped = merge_timeseries_population(
+                workfile_state, project_id, report_data,
+                token=token, org_id_map=org_id_map, submission_name_map=submission_name_map,
+            )
+            any_unmapped_org = any_unmapped_org or had_unmapped
 
             shape = transform(report_details, report_data, project_dates)
             shape = replace(shape, population_table=submissions_timeseries_table_name(project_id))
@@ -91,6 +120,18 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
                 "filepath":   None,
                 "shape_type": None,
             })
+
+    if any_unmapped_org:
+        results.append({
+            "hex_id":     "",
+            "label":      "Organisation mapping",
+            "status":     "warning",
+            "message":    "One or more submissions have no organisation match in this "
+                          "project's own organisation data — those submissions were "
+                          "added with no organisation link.",
+            "filepath":   None,
+            "shape_type": None,
+        })
 
     return results
 
