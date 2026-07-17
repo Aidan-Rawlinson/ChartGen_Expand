@@ -26,6 +26,7 @@ NO_COL       = "#C0392B"
 NAVY         = "#1F4E79"
 ORANGE       = "#E87722"
 HIGHLIGHT    = "#C12958"   # TBN crimson — Selected population
+GREY_LIGHT   = "#D9D9D9"   # background spaghetti lines — full/largest population, de-emphasised
 PIE_COLOURS  = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]  # one per peer group layer
 

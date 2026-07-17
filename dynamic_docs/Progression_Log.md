@@ -81,3 +81,22 @@ Built Step 2 (multi-project, same database) and Step 6 (streamlined New Workfile
 **Chart rendering for TimeSeries explicitly deferred** to next session, per user instruction — this session's scope ends at data landing in cache, confirmed via the Charts tab (identifies the shape, shows "no charts defined", doesn't crash).
 
 **Docs:** All five governed documents updated to match (see Current_State for the full breakdown). Two prior sessions' documentation debt (credentials-tab wording, "three" vs "four" canonical shapes) closed out in the same pass as this session's own changes.
+
+
+## Session — TimeSeries charting, Primer maturity statement, organisation-identity mismatch surfaced
+
+Reviewed the existing chart pathway for the three built shapes (NumericSeries, NumericCompositional, CategoricalCompositional) end-to-end before touching TimeSeries, to keep the new path as close to identical as possible. Confirmed most of the pipeline (`insert_chart`, `build_population_layers`, EMU sizing, image insertion, Charts tab preview) was already shape-agnostic.
+
+Wired TimeSeries into the two remaining generic dispatch points (`shapes/dispatch.py`, `population_layers.py`'s `_get_shape_units`) — both trivial, since `filter_time_series`/`time_series_autotable_stats` already existed from the previous session and just weren't called yet.
+
+Built three Base Chart functions for TimeSeries in a new `base_charts/timeseries.py`: `period_line_chart` (mean + IQR band), then, at the user's request, `median_comparison_linechart` (median per layer, actual value(s) for Selected) and `full_lines_linechart` (full population as light grey lines, highlighted layers on top). Before wiring the last two into the registry, the user asked for a design pass — web research on spaghetti-plot/line-highlighting conventions confirmed the grey-background approach but flagged that flat light-grey with no transparency doesn't get the density effect real spaghetti plots rely on; fixed with thin lines + alpha. Also fixed a legend-duplication bug (per-unit labels inside a loop) using a proxy-artist pattern, applied to both new charts. All three then registered in `registry.py` and `chart_type_map.csv`.
+
+Resolved the long-standing maturity-statement gap: drafted and, with explicit user approval, added a one-sentence anchor to the top of Primer Section 1 (Primer being edit-locked otherwise).
+
+All three affected governed documents (Feature List, Functional Spec, Architecture) updated to match, written to the mirror mid-session per Section 8 of the Maintenance Guide.
+
+Used `conversation_search` at the user's request to pull design intent from an earlier session (the Indicators org name/code extraction plan) when investigating a data-quality bug the user had spotted: `nhs_organisations` rows added via the Indicators toolkit were showing only `unit_id`, not name/code. Traced this to `population_tables.py`'s `extract_submissions` using field names (`organisationCode`, `organisationName`) that — unlike every other field it reads — are never used or confirmed anywhere else in the codebase, and noted the NHS toolkit's own equivalent uses `nhsCode`, not `organisationCode`, as a further hint the guessed key is probably wrong.
+
+While discussing this, the user raised a much bigger concern: organisation IDs may not match between the NHS and Indicators APIs at all, which would mean the current `soft_parents` linkage is wrong at the root, not just missing display fields. User confirmed a lookup table will likely be needed, and gave explicit instruction that it must be applied at the earliest point in the pipeline (before the `soft_parents` link is formed), not patched on afterward. This was deliberately not built this session — user wants to draw up a full list next time rather than fix in isolation. Also discussed, at the user's prompting, whether anything in either API hints at the underlying database/system identity — no explicit field exists, but the differing hostnames (`icsapi` vs `membersapi`) were noted as a reasonable signal of separate backend systems, alongside an observation that `project_id` (unlike `organisation_id`) does appear to be a shared concept across both toolkit front-ends.
+
+User also explicitly asked that the installer release status (an open item from a previous session) not be raised again for now, since the project is still solo/early-stage.

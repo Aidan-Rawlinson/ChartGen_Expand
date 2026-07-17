@@ -13,6 +13,7 @@ from dataclasses import replace
 
 from core.shared.normalisation_containers.shapes import (
     filter_shape, NumericSeries, NumericCompositional, CategoricalCompositional,
+    TimeSeries,
 )
 from core.shared.normalisation_containers.peer_group_tokens import (
     parse_peer_token, is_no_group_value,
@@ -23,7 +24,7 @@ def _get_shape_units(data_shape) -> list:
     """Return the flat list of units from any shape type."""
     if isinstance(data_shape, NumericSeries):
         return data_shape.units
-    elif isinstance(data_shape, (NumericCompositional, CategoricalCompositional)):
+    elif isinstance(data_shape, (NumericCompositional, CategoricalCompositional, TimeSeries)):
         return data_shape.metrics[0].units if data_shape.metrics else []
     return []
 

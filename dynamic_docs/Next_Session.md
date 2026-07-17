@@ -2,24 +2,28 @@
 
 ## Pick up here
 
-Second-database work (Indicators toolkit, TimeSeries shape, credentials relocation) is done and documented. The natural next piece is **chart creation for TimeSeries** — building the first Base Chart(s) that accept it, which means:
+The organisation-identity mismatch between the two toolkits is the live thread. User wants to draw up a proper list next session, covering at least:
 
-1. **Wiring TimeSeries into the shared dispatch machinery.** `filter_shape`/`autotable_stats` (`shapes/dispatch.py`) and `build_population_layers` (`population_layers.py`) don't handle TimeSeries yet — nothing has called them with one, since no chart type references it. This has to land before any chart can actually render one.
-2. **What does population-layer resolution mean for a time axis?** `build_population_layers`'s current model produces one filtered snapshot per population token. TimeSeries needs stats resolved per period, per layer — worth deciding whether that's an extension of the existing function or a TimeSeries-specific variant before writing the first chart.
-3. **Which chart(s) first?** The source VBA rendered two views per metric — a bar chart of one specific period plus a line chart across all periods. Worth checking with the user whether both are wanted immediately or the line chart alone is enough to start.
-4. **`chart_type_map.csv`** needs its first TimeSeries row(s) once a chart type ref is agreed.
+1. **Confirm whether Indicators `organisation_id` genuinely doesn't match `nhs_organisations`' `unit_id` space.** User is fairly confident it doesn't, but this hasn't been verified against real data yet.
+2. **Design a lookup-table mechanism**, applied at the earliest point in the pipeline — before the `soft_parents` link between a submission and an organisation is made, not as a patch afterward. This will likely mean rethinking part of `toolkit_indicators/population_tables.py`'s merge logic, not just adding a translation step.
+3. **The `organisationCode`/`organisationName` field-name bug** in `extract_submissions` (unverified guessed keys — see Current_State) is probably subsumed by whatever the lookup-table fix ends up being, rather than needing its own separate patch.
+4. **The project_id-shared-but-organisation_id-not asymmetry** — worth deciding explicitly how much of the identity problem is systemic (different backend, `icsapi` vs `membersapi`) vs isolated to organisations specifically.
 
-## Correction carried forward from this session
+Secondary, lower-priority items once the above is scoped:
 
-`format_modifier` retrofit (raised mid-session as an "all three other shapes" gap) turned out narrower on inspection: NumericSeries and NumericCompositional already populate it correctly from the API; only CategoricalCompositional lacks it. If this comes up again, it's a one-shape fix, not three.
+- The three new TimeSeries charts have only been discussed/reasoned through this session, not confirmed against a live batch run into a real template — worth a real test pass.
+- TimeSeries period cutting (single period / range) and Tweaks generally remain not built — pick back up once the org-identity work is settled, or sooner if the user wants to return to charting instead.
+
+## Correction carried forward (still relevant, unchanged)
+
+`format_modifier` retrofit: NumericSeries and NumericCompositional already populate it correctly from the API; only CategoricalCompositional lacks it. One-shape fix, not three, if this comes up again.
 
 ## Open questions for the user
 
-- **The maturity-statement gap** (docs read more finished than the tool is) — still unresolved, carried across many sessions now. Primer is the natural home and is edit-locked, so it needs an explicit decision from the user before Claude touches it.
-- **Installer release** — last confirmed status was `0.0.3` walked through (Inno Setup compile → test → copy to SharePoint) but completion wasn't confirmed. Not revisited this session either — worth checking directly at the start of a future session.
+None outstanding. The maturity-statement gap is resolved (Primer edited this session). The installer release question has been explicitly dropped per the user's instruction — do not raise it again unless they do.
 
 ## Carried forward, not urgent
 
 - One-hop-only `soft_parents` resolution is a deliberate scope boundary, not a bug — revisit only once a genuine multi-level chain (more than two tables deep) is actually needed.
 - Charts tab's `set_default_populations` read is an acknowledged stopgap (reads one Running Order row's value directly) — fine to leave until it causes a real problem.
-- Organisation-identity assumption (Indicators org ids = NHS org ids) is confirmed-for-now, not confirmed-forever — revisit if it ever produces a soft_parents link to the wrong real-world organisation.
+- `format_modifier` — CategoricalCompositional-only gap (see above).

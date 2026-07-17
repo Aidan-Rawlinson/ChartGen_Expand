@@ -6,6 +6,8 @@
 
 ## 1. What ChartGen Is
 
+ChartGen is under active development, built and maintained by a single developer. This document describes what it is built to do; the Feature List is the authority on what is currently built versus planned.
+
 ChartGen is a comparative analysis and reporting tool. It takes benchmarking data collected from NHS organisations and turns it into PowerPoint and PDF outputs — from individualised reports run at scale across an entire comparator population, to one-off reports and standalone presentations.
 
 Most reporting software is special-purpose — built around one specific output, with that structure assumed from the start. ChartGen is general-purpose: it makes no assumption about what a report should look like, so it can produce any length or structure — from a one-page flyer to a two-hundred-page report — draw on any appropriately-shaped data source, and render almost any visualisation, rather than being built around one fixed design.

@@ -15,6 +15,9 @@ from core.shared.normalisation_containers.shapes.categorical_compositional impor
     CategoricalCompositional, filter_categorical_compositional,
     categorical_autotable_stats,
 )
+from core.shared.normalisation_containers.shapes.timeseries import (
+    TimeSeries, filter_time_series, time_series_autotable_stats,
+)
 
 
 def filter_shape(shape, unit_ids: set):
@@ -25,6 +28,8 @@ def filter_shape(shape, unit_ids: set):
         return filter_numeric_compositional(shape, unit_ids)
     elif isinstance(shape, CategoricalCompositional):
         return filter_categorical_compositional(shape, unit_ids)
+    elif isinstance(shape, TimeSeries):
+        return filter_time_series(shape, unit_ids)
     raise TypeError(f"Unknown shape type: {type(shape)}")
 
 
@@ -36,4 +41,6 @@ def autotable_stats(shape) -> dict:
         return numeric_compositional_autotable_stats(shape)
     elif isinstance(shape, CategoricalCompositional):
         return categorical_autotable_stats(shape)
+    elif isinstance(shape, TimeSeries):
+        return time_series_autotable_stats(shape)
     raise TypeError(f"Unknown shape type: {type(shape)}")

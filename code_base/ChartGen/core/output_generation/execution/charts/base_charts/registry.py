@@ -1,7 +1,7 @@
 """
 registry.py
 Chart registry and dispatch — maps chart_type_ref to its Base Chart function
-across all three data shapes.
+across all four data shapes.
 """
 
 from core.output_generation.execution.charts.base_charts.numeric_series import (
@@ -13,6 +13,9 @@ from core.output_generation.execution.charts.base_charts.numeric_compositional i
 )
 from core.output_generation.execution.charts.base_charts.categorical_compositional import (
     yn_bar, list_pie, diverging_bar, dot_matrix, donut_pie, treemap,
+)
+from core.output_generation.execution.charts.base_charts.timeseries import (
+    period_line_chart, median_comparison_linechart, full_lines_linechart,
 )
 
 CHART_REGISTRY = {
@@ -33,6 +36,9 @@ CHART_REGISTRY = {
     "donut_pie":            donut_pie,
     "treemap":              treemap,
     "bead_string_dot_plot": bead_string_dot_plot,
+    "period_line_chart":    period_line_chart,
+    "median_comparison_linechart": median_comparison_linechart,
+    "full_lines_linechart": full_lines_linechart,
 }
 
 

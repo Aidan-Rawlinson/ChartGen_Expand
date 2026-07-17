@@ -144,14 +144,16 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Base Chart library (17 charts across 3 data shapes) | Complete | No chart type renders a title. |
-| TimeSeries chart rendering | Not built | Data shape, acquisition, and population table are complete (see Part 3); no Base Chart accepts TimeSeries yet — `chart_type_map.csv` has no entries for it. Deliberately deferred to a following session. |
+| Base Chart library (20 charts across 4 data shapes) | Complete | No chart type renders a title. |
+| TimeSeries chart rendering | Complete | Three chart types: `period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`. Renders the first Metric-Series only. |
+| Period selection / cutting (TimeSeries) | Not built | Every chart currently renders all periods; cutting to a single period or range is not yet built. |
 | Populations string — Running Order control | Complete | |
 | Reporting unit highlighting — NumericSeries (6 charts) | Complete | Selected can resolve to more than one unit, when the chart's own population table (`population_table` on the data shape) has a one-to-many relationship to the reporting unit — e.g. an organisation with several submissions. See Functional Spec Section 10.4. |
 | Peer group as data filter (peer token leading the populations string) | Complete | Chart data scope narrows to the peer group; e.g. `Region(Wales)^Selected` shows Welsh units only. |
 | Reporting unit highlighting — NumericCompositional | Not built | Per-unit values not currently in the data shape as returned from the API. |
 | Reporting unit highlighting — CategoricalCompositional | Not applicable | These charts show population aggregates only; no per-unit value exists. |
-| Selection identity in autotable stats (all 17 charts) | Complete | |
+| Reporting unit highlighting — TimeSeries | Complete | Selected unit(s) drawn as their own line(s); same one-to-many handling as other shapes. |
+| Selection identity in autotable stats (all 20 charts) | Complete | |
 | Peer group as visualisation layer (peer token following `All`) | Complete | Full population retained; the peer group is rendered as an additional layer. Per-chart rendering of layers is prototype-level. |
 | Autotable populations (separate from chart populations) | Not built | No `table_populations` field exists on `insert_chart` rows. |
 | Multiple units from same org (distinct colour) | Not built | |

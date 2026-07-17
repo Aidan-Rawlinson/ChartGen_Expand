@@ -12,13 +12,11 @@ computation (compute_*_stats, used both at first build from API data and at
 population-filter recalculation) and the shape's autotable statistics
 (*_autotable_stats).
 
-TimeSeries is deliberately NOT wired into dispatch.py's filter_shape/
-autotable_stats, or into population_layers.build_population_layers, yet —
-no chart type maps to it (chart_type_map.csv has no TimeSeries rows), so
-nothing calls those generic dispatch points with a TimeSeries instance.
-filter_time_series/time_series_autotable_stats exist and work standalone;
-wiring them into the shared dispatch machinery is chart-support work, a
-separate later step.
+TimeSeries is wired into dispatch.py's filter_shape/autotable_stats and into
+population_layers.build_population_layers, the same as every other shape —
+chart_type_map.csv now has a TimeSeries row (period_line_chart), so the
+generic dispatch points are called with a TimeSeries instance in the normal
+course of rendering.
 """
 
 from core.shared.normalisation_containers.shapes.common import Unit, ShapeStats

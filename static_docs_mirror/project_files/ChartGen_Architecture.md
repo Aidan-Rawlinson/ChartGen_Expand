@@ -109,7 +109,7 @@ chartgen/
     │       ├── charts/
     │       │   ├── base_charts/
     │       │   │   ├── shared.py, numeric_series.py, numeric_compositional.py,
-    │       │   │   └── categorical_compositional.py, registry.py
+    │       │   │   └── categorical_compositional.py, timeseries.py, registry.py
     │       │   ├── cache_reader.py
     │       │   └── chart_type_map.py
     │       ├── pictures/
@@ -167,12 +167,12 @@ chartgen/
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
 | `core/output_generation/execution/batch_process.py` | Batch loop — splits enabled Running Order rows by scope (`batch_open`/`normal`/`batch_close`) and iterates `assembly_engine.run_running_order` across the units in a run |
 | `core/output_generation/execution/results.py` | `ok_result` / `err_result` — kept local to `execution`, not shared globally |
-| `core/output_generation/execution/charts/` | 17 Base Charts, split into `base_charts/` by canonical data shape (`numeric_series.py`, `numeric_compositional.py`, `categorical_compositional.py`), with shared palette/helpers in `shared.py` and dispatch in `registry.py`; cache reading |
+| `core/output_generation/execution/charts/` | 20 Base Charts, split into `base_charts/` by canonical data shape (`numeric_series.py`, `numeric_compositional.py`, `categorical_compositional.py`, `timeseries.py`), with shared palette/helpers in `shared.py` and dispatch in `registry.py`; cache reading |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
-| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule. TimeSeries is not wired into `dispatch.py`/`build_population_layers` yet — no chart type references it, so nothing calls those generic dispatch points with a TimeSeries instance |
+| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule |
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file` |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |

@@ -16,3 +16,6 @@ CategoricalCompositional,diverging_bar,Diverging bar — Yes right / No left fro
 CategoricalCompositional,dot_matrix,Dot matrix — filled dots per category per question
 CategoricalCompositional,donut_pie,Donut chart — ring variant of pie
 CategoricalCompositional,treemap,Treemap — area-proportional category rectangles
+TimeSeries,period_line_chart,Line chart — Metric-Series across every period, with Selected/peer highlighting
+TimeSeries,median_comparison_linechart,Line chart — median per population layer across every period, Selected shows actual unit value(s)
+TimeSeries,full_lines_linechart,Line chart — every unit in the largest population as a light grey line, Selected/peer lines highlighted on top
