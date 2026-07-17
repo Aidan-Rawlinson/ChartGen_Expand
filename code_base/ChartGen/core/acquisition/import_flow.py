@@ -94,6 +94,12 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
         f.write(template_result.cleaned_pptx_bytes)
     workfile_state.template_pptx_bytes = template_result.cleaned_pptx_bytes
 
+    # Page size is workfile-level metadata, not a chart-specific fact — captured
+    # once here, alongside the cleaned-template asset, for the Charts sheet's
+    # percent-of-page-size sizing control (core.shared.infrastructure.page_sizing).
+    workfile_state.settings["template_page_width_emu"] = str(template_result.slide_width)
+    workfile_state.settings["template_page_height_emu"] = str(template_result.slide_height)
+
     urls = [p.url for p in template_result.placeholders if p.url]
     merge = merge_urls_into_manifest(urls, "Template", workfile_state=workfile_state)
 

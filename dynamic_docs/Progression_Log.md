@@ -100,3 +100,16 @@ Used `conversation_search` at the user's request to pull design intent from an e
 While discussing this, the user raised a much bigger concern: organisation IDs may not match between the NHS and Indicators APIs at all, which would mean the current `soft_parents` linkage is wrong at the root, not just missing display fields. User confirmed a lookup table will likely be needed, and gave explicit instruction that it must be applied at the earliest point in the pipeline (before the `soft_parents` link is formed), not patched on afterward. This was deliberately not built this session — user wants to draw up a full list next time rather than fix in isolation. Also discussed, at the user's prompting, whether anything in either API hints at the underlying database/system identity — no explicit field exists, but the differing hostnames (`icsapi` vs `membersapi`) were noted as a reasonable signal of separate backend systems, alongside an observation that `project_id` (unlike `organisation_id`) does appear to be a shared concept across both toolkit front-ends.
 
 User also explicitly asked that the installer release status (an open item from a previous session) not be raised again for now, since the project is still solo/early-stage.
+
+
+---
+
+## Session — Charts Sheet / Running Order Two-Way Sync
+
+Rebuilt the Charts tab from a preview-only stopgap into a full two-way sync with the Running Order: load an existing `insert_chart` row or a cached dataset directly, edit chart-relevant fields (chart type, data, populations, size), and write back via Overwrite / Insert above / Insert below. Round-trip governed by a single maintained field list (`CHART_SANDBOX_FIELDS`). Sizing moved to a percent-of-page-shorter-dimension unit, backed by a new page-size capture at template processing and a new `page_sizing.py` module. New `row_ops.py` module for generic row insert/overwrite, used by the save-back control. Rows referenced by `row_id` rather than position/label for stability across edits.
+
+Extensive front-end iteration followed (Streamlit-native layout: expanders, columns, placeholder text, sizing tweaks) — no CSS used throughout, per explicit instruction. Found and fixed a genuine Streamlit bug along the way: a `None`-based "no selection" sentinel, once pre-set into `session_state` before widget creation, triggers Streamlit's own built-in placeholder text instead of a custom `format_func` — fixed by using plain string sentinels as real dropdown options instead.
+
+Governed docs updated to match (Functional Spec §9.3/§9.4, Architecture package tree + Decision 11, Feature List, Glossary) — Primer untouched, edit-locked, not needed this session.
+
+Organisation-identity mismatch work (flagged last session) remains parked — user now has a CSV extract ready to bring into next session to resolve it.

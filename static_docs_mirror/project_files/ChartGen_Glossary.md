@@ -158,7 +158,11 @@ MyWorkfile.cgw  (ZIP)
 
 - **Batch** — processing multiple outputs in a single run.
 
+- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu`. See Architecture, Decision 11.
+
 - **Enabled column** — the per-row on/off switch in the Running Order. Stored as an integer `1`/`0` at runtime.
+
+- **Page size (workfile)** — the associated PowerPoint template's slide width and height, captured once at template processing and held in workfile settings (`template_page_width_emu`, `template_page_height_emu`). The reference dimension for the Charts sheet's percent-of-shorter-dimension sizing unit. See Architecture, Decision 11.
 
 - **Running Order** — the user-authored, row-based instruction table that defines report assembly: function, parameters, control flag. See Functional Spec, Section 9, and the Architecture document, Decision 1, for storage format.
 

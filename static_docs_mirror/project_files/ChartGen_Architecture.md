@@ -100,7 +100,7 @@ chartgen/
     │   │   └── chart_type_map.csv
     │   ├── definition/
     │   │   └── running_order/
-    │   │       ├── schema.py, dialog_support.py, generation.py,
+    │   │       ├── schema.py, dialog_support.py, generation.py, row_ops.py,
     │   │       └── xlsx_writer.py, xlsx_reader.py
     │   └── execution/
     │       ├── assembly_engine.py
@@ -129,6 +129,7 @@ chartgen/
     │       ├── constants.py
     │       ├── report_context.py
     │       ├── soft_parents.py
+    │       ├── page_sizing.py
     │       └── cache_writer.py
     └── ui/
         ├── common/
@@ -163,7 +164,7 @@ chartgen/
 | `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, peer-group menu-building), plus population table construction (`population_tables.py`) and table-naming convention (`table_naming.py`). Lives here, not in `workfile.setup`, because building population tables is a "pull and normalise NHS toolkit data" concern, the same kind of thing as the rest of this package — and because `fetch.py` (same package) needs to call it directly without acquisition code depending on `workfile.setup` (one-way dependency rule, Section 2) |
 | `core/acquisition/toolkit_indicators/` | The Indicators toolkit's own fetch pipeline — separate API, separate URL shape, separate population-table trigger model from `toolkit_nhs/` (build-once vs merge-every-fetch). Shares NHS's token (`toolkit_nhs.api_client.get_token`) and the shared `cache_writer` — see Decision 10 |
 | `core/acquisition/template/` | Reads `.pptx` placeholders; detects/strips yellow boxes; parses toolkit URLs |
-| `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
+| `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), generic row insert/overwrite operations (`row_ops.py`, used by the Charts sheet's save-back control), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
 | `core/output_generation/execution/batch_process.py` | Batch loop — splits enabled Running Order rows by scope (`batch_open`/`normal`/`batch_close`) and iterates `assembly_engine.run_running_order` across the units in a run |
 | `core/output_generation/execution/results.py` | `ok_result` / `err_result` — kept local to `execution`, not shared globally |
@@ -176,6 +177,7 @@ chartgen/
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file` |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
+| `core/shared/infrastructure/page_sizing.py` | `percent_to_emu` / `emu_to_percent` / `get_page_size_emu` / `has_known_template_page_size` — conversion between EMU and a percent-of-shorter-page-dimension unit, and resolution of which page size to convert against (the real captured template size once known, a manual standard-size fallback otherwise). Used by the Charts sheet only; has no bearing on batch execution, which continues to work in raw EMU throughout |
 | `core/shared/infrastructure/cache_writer.py` | `save_chart` — serialises any canonical data shape into `WorkfileState.cache`. Moved here from `acquisition/toolkit_nhs/` this session: audited as having no NHS-specific logic at all, so it's shared by both toolkit packages rather than duplicated. See Decision 10 |
 | `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (credentials box widget, rendered within the Config tab), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the nine tab renderers). Business logic delegated to the owning module rather than living here |
 
@@ -202,7 +204,7 @@ MyWorkfile.cgw  (ZIP)
 
 | Path | Notes |
 |---|---|
-| `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
+| `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, `template_page_width_emu`/`template_page_height_emu` (captured once at template processing — see Decision 11), etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
 | `workfile_config/tables/{table_name}.csv` | ★ One file per population-level table (e.g. `nhs_organisations.csv`, `submissions_2026_123.csv`) — any number of them, added and removed freely. No single fixed column schema at this layer; each is written using its own rows' keys. `table_order` (in `settings.csv`, `\|`-delimited) is the only record of display order — whichever table name is listed first is the master table, driving the reporting unit picker and the batch loop. No separate "master" flag exists; position is the only source of truth |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
 | `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
@@ -472,3 +474,13 @@ A second data source — the Indicators toolkit, timeseries data — was added t
 **Organisation identity assumption.** Each Indicators submission's `soft_parents` links to `nhs_organisations:{organisation_id}`, on the assumption that organisation ids match across both APIs — confirmed as an assumption to revisit if it turns out to be wrong, not a verified fact. `Region()` is carried on `submissions_timeseries_{project_id}` rows too (keeping the identical-headers convention every population table follows, Section 5), sourced the same way the NHS side sources it — a lookup against the organisation row, not anything from the chart data itself — just looked up against whatever's already in `nhs_organisations` at merge time, since the Indicators API supplies no region field of its own. Left blank only when the organisation itself is new to `nhs_organisations` in that same fetch.
 
 **Naming.** `submissions_timeseries_{project_id}` — no year component, unlike the NHS side's `submissions_{year}_{project_id}`. The Indicators toolkit has periods, not years, and a single fetch response already spans every period at once; the table was never partitioned by year to begin with.
+
+### Decision 11 — Charts Sheet Round-Trip Field List and Row Identity
+
+The Charts sheet's two-way sync with the Running Order (Functional Spec Section 9.3) is built over a single maintained field list, `CHART_SANDBOX_FIELDS` (`running_order/schema.py`) — `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu`. The Charts sheet's load and save logic both iterate this list rather than naming each field individually; extending the sync to a future field (e.g. a shape-specific analytical field, per the Primer's normalisation-at-the-boundary principle) is a one-line addition to this list, not a rework of the sync mechanism.
+
+**Row identity is by `row_id`, not list position.** A row selected in the Charts sheet is tracked by its `row_id` across reruns, since an Overwrite leaves `row_id` unchanged while an Insert (`row_ops.insert_new_row`) renumbers every `row_id` after the insertion point (`row_ops.renumber_row_ids`). Rather than resolving a stale index after every save, the Charts sheet clears its row-referencing state (bound row, target row) immediately after any save and requires a fresh selection — simpler and safer than trying to track a moving position.
+
+**`row_ops.py` is deliberately separate from `generation.py` and `dialog_support.py`.** `generation.py` builds rows from a template read result; `dialog_support.py` governs the Running Order tab's own row-edit dialog validity rules. `row_ops.py` holds only generic list operations (insert relative to a row, overwrite fields, renumber) with no knowledge of charts, shapes, or the Charts sheet — the Charts sheet is simply its first caller, not a reason to couple the module to it.
+
+**Page size is captured once, at template processing, the same trigger point as the cleaned template asset (Decision 2).** `template_page_width_emu`/`template_page_height_emu` are read from the `.pptx` at that point and written into `settings.csv` — workfile-level metadata, not a chart-specific fact. `core/shared/infrastructure/page_sizing.py` converts between this page size and a percent-of-shorter-dimension unit; this conversion is a Charts-sheet-authoring concern only; batch execution (`assembly_engine.py`) continues to read and write `width_emu`/`height_emu` directly and is unaffected.

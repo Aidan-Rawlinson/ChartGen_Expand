@@ -71,3 +71,18 @@
 - **Legend entries use a proxy-artist pattern (empty `ax.plot([], [])`) rather than labelling every unit's line.** Needed because a population layer can legitimately hold more than one unit (the documented one-to-many `Selected` case, or a multi-unit peer group) — labelling per-unit would duplicate legend entries.
 - **Organisation-identity mismatch between the NHS and Indicators toolkits is now being treated as a likely real problem, not just a documented assumption to revisit.** User's explicit instruction: any lookup-table fix must be applied at the earliest point in the pipeline — before the `soft_parents` link between a submission and an organisation is formed — not as a patch on top of the existing link. Full scoping deferred to a future session by user request.
 - **Installer release status is no longer an active tracked item.** User explicitly asked not to be prompted about it while the project remains solo/early-stage; dropped from Next_Session/Current_State open questions accordingly.
+
+
+---
+
+## Session — Charts Sheet / Running Order Two-Way Sync
+
+- **Charts sheet owns the sync entirely; Running Order stays passive.** The Charts sheet reads a Running Order row and writes back on explicit Save; the Running Order tab/store never pushes to, or flags anything for, the Charts sheet.
+- **Round-trip fields live in one maintained list (`CHART_SANDBOX_FIELDS`), not hardcoded per call site.** Chosen specifically so future chart-viz-related Running Order fields (e.g. Tweaks, when built) ride the same sync mechanism without reworking it — the field list is expected to grow over time.
+- **Free-play (loading a dataset with no bound row) keeps full save-back capability** (Overwrite/Insert above/Insert below + target-row control), not just a read-only preview — the two entry modes are disconnected only at the load end, not the save end.
+- **Major, shape-specific analytical fields (e.g. a future TimeSeries period-cut) get their own named, shape-gated Running Order column — never folded into Tweaks.** A tweak is a minor, rendering-only adjustment; a field that changes which chart types are even valid for the data is an analytical choice, structurally the same category as `chart_type_ref` itself.
+- **Rows referenced by `row_id`, not list position or a descriptive label.** `row_id` survives an Overwrite; an Insert renumbers it, so sandbox state referencing a specific row is cleared after every save rather than trying to track a moving position.
+- **Sizing unit is percent of the page's shorter dimension, not raw EMU, and this applies universally** — both entry paths, always, not just as a free-play convenience. Real template page size (captured once at template processing) always wins over the manual/standard-size dropdown once known.
+- **Screen zoom is a separate, purely cosmetic control** — never stored, never affects the real (percent/EMU) size fields. Placed in its own last-in-rail expander rather than beside the fields that do save, once the rail was reorganised around "what saves vs what doesn't."
+- **Dropdown "no selection" sentinels are plain strings, not Python `None`.** `None` pre-set into `session_state` before a Streamlit widget's own creation collides with Streamlit's internal "no selection" placeholder handling, overriding a custom `format_func`. Applies to all three of the Charts sheet's row/dataset dropdowns.
+- **Front-end density/layout tuning done with native Streamlit only (no custom CSS) for this session**, per explicit instruction — `label_visibility="collapsed"`, `st.expander` default states, `st.columns` ratios, icon-only buttons. A true square/fixed-pixel button remains a known native limitation, left unresolved by choice.

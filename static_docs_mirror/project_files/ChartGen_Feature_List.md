@@ -109,6 +109,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Cleaned template production | Complete | |
 | Cleaned template as user-owned asset | Complete | Two edit tiers: cosmetic edits picked up silently on next run; structural edits require re-upload, which regenerates the Running Order. See Architecture Decision 2. |
 | Template validation on run (slide layout comparison) | Complete | Compares slide layout names between the `.cgw` reference copy and the live template; warns on mismatch, doesn't block. See Architecture Decision 3. |
+| Page size capture at template processing | Complete | Slide width/height captured once into workfile settings; the reference for the Charts sheet's percent-of-shorter-dimension sizing unit. See Architecture Decision 11. |
 | User template creation (self-service placeholder positioning) | Not built | |
 
 ---
@@ -127,7 +128,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders. |
-| `set_default_populations` | Complete | Also read directly by the Charts tab to default its own preview populations string — a stopgap reading one Running Order row's value directly, not a general settings-reading mechanism. |
+| `set_default_populations` | Complete | The Charts sheet no longer reads this row directly to default its own preview — see Charts sheet round-trip, below. |
 | `update_text` | Partial | See Text tag replacement, Part 5. |
 | `insert_picture` | Complete | `[code]`/`[id]` token substitution; aspect ratio preserved. |
 | Insert Content From Excel | Complete | Requires `pywin32`. Implemented via three functions: `open_excel`, `insert_from_excel`, `close_excel`. |
@@ -135,6 +136,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Conditional Running Order logic (insert/delete slides per unit) | Not built | Needed for algorithmic reports. |
 | `insert_slide` / `insert_section` / `delete_slide` | Not built | |
 | `submission_list` | Not built | |
+| Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
 
 ---
 

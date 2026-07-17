@@ -44,3 +44,11 @@ SCOPE_VALUES = ["normal", "batch_open", "batch_close"]
 STRUCTURAL_FUNCTIONS = {"create_ppt", "set_default_populations", "update_text", "save_ppt", "save_pdf"}
 CONTENT_FUNCTIONS    = {"insert_chart", "insert_picture", "insert_from_excel", "empty_placeholder"}
 BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
+
+# Fields the Charts sheet sandbox reads from, and writes back to, a single
+# insert_chart Running Order row. A single list so extending the round-trip
+# later (e.g. a future shape-specific analytical field) is a one-line change
+# here rather than a rework of the sync logic itself. width_emu/height_emu
+# are always edited via the sandbox's percent-of-page-size unit
+# (core.shared.infrastructure.page_sizing), never as raw EMU.
+CHART_SANDBOX_FIELDS = ["chart_type_ref", "cache_file", "populations", "width_emu", "height_emu"]
