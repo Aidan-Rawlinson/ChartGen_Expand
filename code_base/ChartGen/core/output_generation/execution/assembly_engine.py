@@ -26,6 +26,9 @@ from core.output_generation.execution.text.text_engine import update_text
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.population_layers import build_population_layers
+from core.shared.normalisation_containers.shapes import apply_period_range
+from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
+from core.output_generation.definition.running_order.dialog_support import parse_metric_periods_string
 from core.output_generation.execution.pictures.insert_picture import insert_picture
 from core.output_generation.execution.excel.insert_from_excel import (
     open_excel, close_excel, insert_from_excel
@@ -130,6 +133,28 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         data_shape, shape_type = _load_chart_data(cache_file, settings.get("workfile_state"))
     except Exception as e:
         return err_result(row, f"insert_chart: failed to load cache '{cache_file}': {e}")
+
+    # --- Trim to the row's period range (TimeSeries only; no-op otherwise) ---
+    # A normalisation step at the boundary, ahead of population-layer
+    # filtering, so the charting side sees a shape that already only spans
+    # the periods in scope — nothing downstream needs to know a range was
+    # ever set (Functional Spec §10.4 filters units the same way).
+    start_period = str(row.get("start_period", "") or "").strip()
+    end_period = str(row.get("end_period", "") or "").strip()
+    if start_period or end_period:
+        data_shape = apply_period_range(data_shape, start_period, end_period)
+
+    # --- Convert selected periods into a metric snapshot (TimeSeries only;
+    # no-op if metric_periods is blank). Applied after the range trim, so a
+    # metric_periods id that fell outside a start_period/end_period range on
+    # the same row correctly surfaces as the same "not found" error below,
+    # rather than silently succeeding against the untrimmed shape. ---
+    metric_period_ids = parse_metric_periods_string(str(row.get("metric_periods", "") or ""))
+    if metric_period_ids:
+        try:
+            data_shape = maybe_convert_periods_to_metrics(data_shape, metric_period_ids)
+        except ValueError as e:
+            return err_result(row, f"insert_chart: metric_periods conversion failed: {e}")
 
     # --- Build population layers ---
     population_layers = []

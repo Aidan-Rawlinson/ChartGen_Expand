@@ -17,6 +17,7 @@ from core.shared.normalisation_containers.shapes.categorical_compositional impor
 )
 from core.shared.normalisation_containers.shapes.timeseries import (
     TimeSeries, filter_time_series, time_series_autotable_stats,
+    filter_time_series_periods,
 )
 
 
@@ -31,6 +32,18 @@ def filter_shape(shape, unit_ids: set):
     elif isinstance(shape, TimeSeries):
         return filter_time_series(shape, unit_ids)
     raise TypeError(f"Unknown shape type: {type(shape)}")
+
+
+def apply_period_range(shape, start_period_id: str = "", end_period_id: str = ""):
+    """
+    Trim a shape to a period_id range, ahead of any population-layer
+    filtering — a normalisation step at the boundary, not a charting
+    concern (Primer, Section 4). No-op for any shape without a period axis;
+    only TimeSeries carries one.
+    """
+    if isinstance(shape, TimeSeries):
+        return filter_time_series_periods(shape, start_period_id, end_period_id)
+    return shape
 
 
 def autotable_stats(shape) -> dict:

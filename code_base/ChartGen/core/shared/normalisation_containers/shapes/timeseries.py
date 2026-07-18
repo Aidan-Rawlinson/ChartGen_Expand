@@ -17,12 +17,8 @@ against whatever population layer gets resolved — just applied once per
 period instead of once for the whole shape. calculatedNationalAverages is
 dropped outright; it was never adopted for this shape.
 
-Outstanding — format_modifier is already populated correctly for
-NumericSeries and NumericCompositional (both set it from the NHS API's
-formatModifier field). CategoricalCompositional has no format_modifier
-field at all and isn't populated by its transformers — that's the actual
-retrofit gap, narrower than "every other shape" first suggested. Not part
-of this shape's build.
+format_modifier is populated from the NHS API's formatModifier field for
+NumericSeries, NumericCompositional, and CategoricalCompositional alike.
 """
 
 from dataclasses import dataclass, field, replace
@@ -156,6 +152,55 @@ def time_series_autotable_stats(shape: "TimeSeries") -> dict:
             }
         out[name] = per_period
     return out
+
+
+def filter_time_series_periods(shape: "TimeSeries", start_period_id: str = "",
+                                end_period_id: str = "") -> "TimeSeries":
+    """
+    Return a new TimeSeries trimmed to the inclusive period_id range
+    [start_period_id, end_period_id]. A blank id at either end means "from
+    the first period" / "to the last period". No stats are recalculated —
+    each period's stats are already independent of every other (see module
+    docstring), so trimming is a pure slice of periods, each metric's
+    values, and period_stats down to the same index range.
+
+    An id given but not found among shape.periods, or a start that resolves
+    after the end, produces an empty range — the same "unresolvable ->
+    nothing" behaviour as an unresolvable population token
+    (Functional Spec §10.4), not a special case.
+    """
+    ids_in_order = [p.period_id for p in shape.periods]
+
+    start_idx = 0 if not start_period_id else (
+        ids_in_order.index(start_period_id) if start_period_id in ids_in_order else None
+    )
+    end_idx = len(ids_in_order) - 1 if not end_period_id else (
+        ids_in_order.index(end_period_id) if end_period_id in ids_in_order else None
+    )
+
+    if start_idx is None or end_idx is None or start_idx > end_idx:
+        new_periods = []
+        new_metrics = [replace(m, units=[replace(u, values=[]) for u in m.units], period_stats=[])
+                       for m in shape.metrics]
+    else:
+        new_periods = shape.periods[start_idx:end_idx + 1]
+        new_metrics = [
+            replace(
+                m,
+                units=[replace(u, values=u.values[start_idx:end_idx + 1]) for u in m.units],
+                period_stats=m.period_stats[start_idx:end_idx + 1],
+            )
+            for m in shape.metrics
+        ]
+
+    new_shape_stats = replace(
+        shape.shape_stats,
+        count_units_with_any_data=sum(
+            1 for u in (new_metrics[0].units if new_metrics else [])
+            if any(v is not None for v in u.values)
+        ) if new_metrics else 0,
+    )
+    return replace(shape, periods=new_periods, metrics=new_metrics, shape_stats=new_shape_stats)
 
 
 def filter_time_series(shape: "TimeSeries", unit_ids: set) -> "TimeSeries":

@@ -10,11 +10,12 @@ import streamlit as st
 
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.ui.common.formatting import population_table_columns, display_column_labels
+from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import settings, save_settings, master_table, ws
 
 
 def render_select_tab():
-    st.header("Reporting unit selection")
+    render_tab_header("Reporting unit selection", "select")
     the_units = master_table()
 
     if not the_units:

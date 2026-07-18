@@ -234,7 +234,6 @@ def _is_chart_placeholder(shape) -> bool:
         PP_PLACEHOLDER.TABLE,
         PP_PLACEHOLDER.ORG_CHART,
         PP_PLACEHOLDER.MEDIA_CLIP,
-        PP_PLACEHOLDER.BODY,
     }
     return ph_type in _content_types
 
@@ -275,6 +274,7 @@ def read_template(pptx_path: str) -> TemplateReadResult:
     for slide_idx, slide in enumerate(prs.slides):
         # --- Step 1: collect chart placeholders on this slide ---
         chart_placeholders = []
+        ph_shapes: dict[str, object] = {}   # name -> shape, for removal once matched
         for shape in slide.shapes:
             if _is_chart_placeholder(shape):
                 chart_placeholders.append(
@@ -287,6 +287,7 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                         height=int(shape.height),
                     )
                 )
+                ph_shapes[shape.name] = shape
 
         # --- Step 2: collect yellow textboxes on this slide ---
         yellow_shapes = []
@@ -358,6 +359,16 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                     ph.excel_path         = m.get("excel_path",         "")
                     ph.excel_export_range = m.get("excel_export_range", "")
                     ph.excel_driver_range = m.get("excel_driver_range", "")
+
+                # This placeholder is now fully captured (position/size in
+                # PlaceholderInfo, content assignment above) — content is
+                # inserted at generation time by coordinate, not via the
+                # placeholder shape itself (Functional Spec §6.2), so the
+                # placeholder shape is removed from the cleaned template
+                # alongside its yellow box, rather than left behind empty.
+                ph_shape = ph_shapes.get(ph.name)
+                if ph_shape is not None:
+                    elements_to_remove.append((slide, ph_shape._element))
 
             result.placeholders.append(ph)
 

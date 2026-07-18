@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.ticker as mticker
 
 # ---------------------------------------------------------------------------
 # Palette
@@ -58,8 +59,27 @@ def _apply_spine_style(ax):
     ax.set_axisbelow(True)
 
 
-def _k_fmt(v, _):
-    return f"{v/1000:.1f}K" if abs(v) >= 1000 else f"{v:g}"
+def _format_number(value, format_modifier):
+    """
+    Format a scalar value per the shape's format_modifier, Excel-style:
+    no modifier -> comma-thousands, no decimals ("#,###"); "P" -> the same
+    plus a "%" suffix ("#,##0%"); "C" -> the same with a "£" prefix
+    ("£#,##0"). Values are not rescaled (a "P" value is assumed already on
+    a 0-100-ish percentage scale, per the API's own convention) — this only
+    controls display. Returns "" for None.
+    """
+    if value is None:
+        return ""
+    if format_modifier == "P":
+        return f"{value:,.0f}%"
+    if format_modifier == "C":
+        return f"£{value:,.0f}"
+    return f"{value:,.0f}"
+
+
+def _axis_formatter(format_modifier):
+    """Matplotlib tick formatter applying _format_number for the given format_modifier."""
+    return mticker.FuncFormatter(lambda v, _: _format_number(v, format_modifier))
 
 
 def _resolve_unit_colours(units: list, population_layers: list) -> list:

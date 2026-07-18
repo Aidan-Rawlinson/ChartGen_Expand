@@ -18,11 +18,13 @@ from core.output_generation.definition.running_order import (
     get_valid_chart_refs_for_cache_file,
     build_populations_options, parse_populations_string, build_populations_string,
 )
+from core.output_generation.execution.charts.cache_reader import periods_for_cache_file
+from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, manifest, master_table
 
 
 def render_running_order_tab():
-    st.header("Running Order")
+    render_tab_header("Running Order", "running_order")
 
     ws_ro = ws()
     if not ws_ro.running_order_rows:
@@ -60,7 +62,8 @@ def render_running_order_tab():
 
             if is_insert_chart:
                 cache_file = str(row.get("cache_file", "") or "")
-                valid_refs = get_valid_chart_refs_for_cache_file(cache_file, the_manifest)
+                converts_to_metrics = bool(str(row.get("metric_periods", "") or "").strip())
+                valid_refs = get_valid_chart_refs_for_cache_file(cache_file, the_manifest, converts_to_metrics)
                 shape_type = the_manifest.get(cache_file, {}).get("shape_type", "")
                 label_hint = cache_to_label.get(cache_file, cache_file)
                 shape_hint = f"  ·  {shape_type}" if shape_type else ""
@@ -167,7 +170,16 @@ def render_running_order_tab():
         )
 
         ro_buffer = io.BytesIO()
-        write_xlsx(rows, ro_buffer, manifest=the_manifest)
+        # Only cache files actually referenced by an insert_chart row need
+        # a period list — built once per download rather than for every
+        # cached file in the workfile.
+        periods_by_cache_file = {}
+        for r in rows:
+            if str(r.get("function", "")) == "insert_chart":
+                cf = str(r.get("cache_file") or "").strip()
+                if cf and cf not in periods_by_cache_file:
+                    periods_by_cache_file[cf] = periods_for_cache_file(cf, ws_ro)
+        write_xlsx(rows, ro_buffer, manifest=the_manifest, periods_by_cache_file=periods_by_cache_file)
         col_dl.download_button(
             label="⬇  Download Running Order", data=ro_buffer.getvalue(),
             file_name="running_order.xlsx",

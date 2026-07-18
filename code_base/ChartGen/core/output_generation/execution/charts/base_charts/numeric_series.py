@@ -7,13 +7,12 @@ independent numeric Metric-Series, one value per unit per metric.
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import matplotlib.ticker as mticker
 import matplotlib.colors as mcolors
 
 from core.shared.normalisation_containers.shapes import autotable_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, MEAN_COL, MEDIAN_COL, QUARTILE_COL, NAVY, ORANGE, HIGHLIGHT, PEER_COLOURS,
-    _size_to_inches, _fig_to_bytes, _apply_spine_style, _k_fmt,
+    _size_to_inches, _fig_to_bytes, _apply_spine_style, _format_number, _axis_formatter,
     _resolve_unit_colours, _population_legend_handles, _get_selected_unit,
     _selected_layer_value, _autotable_with_selection,
 )
@@ -46,7 +45,7 @@ def ranked_column(population_layers: list, width=80, height=50, tweaks=[], repor
 
     ax.set_xticks(x)
     ax.set_xticklabels(codes, rotation=90, fontsize=7)
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -89,7 +88,7 @@ def dot_strip(population_layers: list, width=80, height=40, tweaks=[], report_co
     if ms.q1     is not None: ax.axhline(ms.q1,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=2)
     if ms.q3     is not None: ax.axhline(ms.q3,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=2)
     ax.set_xticks([])
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -135,7 +134,7 @@ def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_
                 ax.axhline(sv, color=HIGHLIGHT, linewidth=1, linestyle=":", zorder=5, alpha=0.6)
                 extra_handles.append(plt.Line2D([0],[0], marker="D", color="w",
                     markerfacecolor=HIGHLIGHT, markersize=7,
-                    label=f"{report_context.unit_code}: {sv:g}" if report_context else "Selected"))
+                    label=f"{report_context.unit_code}: {_format_number(sv, base.format_modifier)}" if report_context else "Selected"))
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
@@ -151,7 +150,7 @@ def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_
                         markerfacecolor=colour, markersize=6, label=layer.population_label))
 
     ax.set_xticks([])
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.tick_params(axis="y", labelsize=9)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -159,9 +158,9 @@ def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_
     handles = [
         mpatches.Patch(facecolor=BAR_BLUE, edgecolor=NAVY, label="IQR"),
         plt.Line2D([0],[0], color=MEDIAN_COL, linewidth=2,
-                   label=f"Median: {ms.median:.1f}" if ms.median else "Median"),
+                   label=f"Median: {_format_number(ms.median, base.format_modifier)}" if ms.median is not None else "Median"),
         plt.Line2D([0],[0], color=MEAN_COL, linewidth=1.5, linestyle="--",
-                   label=f"Mean: {ms.mean:.1f}" if ms.mean else "Mean"),
+                   label=f"Mean: {_format_number(ms.mean, base.format_modifier)}" if ms.mean is not None else "Mean"),
         plt.Line2D([0],[0], marker="o", color="w", markerfacecolor=ORANGE, markersize=5, label="Outliers"),
     ] + extra_handles
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.08),
@@ -180,8 +179,8 @@ def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[],
     n_bins = min(max(int(np.sqrt(len(values))), 8), 20)
     ax.hist(values, bins=n_bins, color=BAR_BLUE, edgecolor="white", linewidth=0.8, zorder=2)
     ms = base.metric_stats[0]
-    if ms.mean   is not None: ax.axvline(ms.mean,   color=MEAN_COL,   linewidth=1.5, label=f"Mean: {ms.mean:.1f}")
-    if ms.median is not None: ax.axvline(ms.median, color=MEDIAN_COL, linewidth=1.5, label=f"Median: {ms.median:.1f}")
+    if ms.mean   is not None: ax.axvline(ms.mean,   color=MEAN_COL,   linewidth=1.5, label=f"Mean: {_format_number(ms.mean, base.format_modifier)}")
+    if ms.median is not None: ax.axvline(ms.median, color=MEDIAN_COL, linewidth=1.5, label=f"Median: {_format_number(ms.median, base.format_modifier)}")
 
     peer_colour_idx = 0
     for layer in population_layers[1:]:
@@ -190,7 +189,7 @@ def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[],
             if sel_vals and report_context:
                 sv = sel_vals[0]
                 ax.axvline(sv, color=HIGHLIGHT, linewidth=2, linestyle="--", zorder=4,
-                           label=f"{report_context.unit_code}: {sv:g}")
+                           label=f"{report_context.unit_code}: {_format_number(sv, base.format_modifier)}")
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
@@ -198,9 +197,9 @@ def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[],
             if peer_vals:
                 peer_mean = float(np.mean(peer_vals))
                 ax.axvline(peer_mean, color=colour, linewidth=1.5, linestyle="--",
-                           label=f"{layer.population_label} mean: {peer_mean:.1f}")
+                           label=f"{layer.population_label} mean: {_format_number(peer_mean, base.format_modifier)}")
 
-    ax.xaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
+    ax.xaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.tick_params(labelsize=8)
     ax.set_ylabel("Count", fontsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
@@ -237,7 +236,7 @@ def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_
                 ax.axhline(sv, color=HIGHLIGHT, linewidth=1, linestyle=":", zorder=5, alpha=0.6)
                 extra_handles.append(plt.Line2D([0],[0], marker="D", color="w",
                     markerfacecolor=HIGHLIGHT, markersize=7,
-                    label=f"{report_context.unit_code}: {sv:g}"))
+                    label=f"{report_context.unit_code}: {_format_number(sv, base.format_modifier)}"))
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
@@ -252,7 +251,7 @@ def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_
                         markerfacecolor=colour, markersize=6, label=layer.population_label))
 
     ax.set_xticks([])
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(_k_fmt))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.tick_params(axis="y", labelsize=9)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
@@ -260,9 +259,9 @@ def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_
     handles = [
         mpatches.Patch(facecolor=BAR_BLUE, edgecolor=NAVY, alpha=0.75, label="Distribution"),
         plt.Line2D([0],[0], color=MEDIAN_COL, linewidth=2,
-                   label=f"Median: {ms.median:.1f}" if ms.median else "Median"),
+                   label=f"Median: {_format_number(ms.median, base.format_modifier)}" if ms.median is not None else "Median"),
         plt.Line2D([0],[0], marker="o", color="w", markerfacecolor=MEAN_COL, markersize=6,
-                   label=f"Mean: {ms.mean:.1f}" if ms.mean else "Mean"),
+                   label=f"Mean: {_format_number(ms.mean, base.format_modifier)}" if ms.mean is not None else "Mean"),
     ] + extra_handles
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.08),
               ncol=3, fontsize=7, frameon=False)
@@ -375,14 +374,14 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
             facecolor=(181/255, 212/255, 244/255, 0.38), edgecolor="none", zorder=1)
         ax.add_patch(iqr_rect)
         label_y = y_max + TIER_GAP * 0.08
-        ax.text(q1, label_y, f"Q1\n{q1:.1f}", ha="center", va="bottom",
+        ax.text(q1, label_y, f"Q1\n{_format_number(q1, base.format_modifier)}", ha="center", va="bottom",
                 fontsize=6.5, color=(100/255, 130/255, 180/255, 0.85))
-        ax.text(q3, label_y, f"Q3\n{q3:.1f}", ha="center", va="bottom",
+        ax.text(q3, label_y, f"Q3\n{_format_number(q3, base.format_modifier)}", ha="center", va="bottom",
                 fontsize=6.5, color=(100/255, 130/255, 180/255, 0.85))
 
     if median is not None:
         ax.vlines(median, y_min, y_max, colors="#E24B4A", linewidth=1.2, linestyles="dashed", zorder=3)
-        ax.text(median, y_max + TIER_GAP * 0.08, f"Median\n{median:.1f}",
+        ax.text(median, y_max + TIER_GAP * 0.08, f"Median\n{_format_number(median, base.format_modifier)}",
                 ha="center", va="bottom", fontsize=6.5, color="#E24B4A")
 
     for t in tiers:
@@ -396,7 +395,7 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
 
     if tiers[-1]["opaque"] and tiers[-1]["vals"]:
         sv = tiers[-1]["vals"][0]
-        ax.annotate(f"{sv:.1f}", xy=(sv, tiers[-1]["y"]),
+        ax.annotate(_format_number(sv, base.format_modifier), xy=(sv, tiers[-1]["y"]),
                     xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=7.5, color=COLOUR_SEL, fontweight="bold")
 

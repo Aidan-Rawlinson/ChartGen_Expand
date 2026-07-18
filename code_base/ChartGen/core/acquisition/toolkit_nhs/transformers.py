@@ -130,6 +130,7 @@ def transform_pie_chart(data, year):
     return CategoricalCompositional(
         title=data.get("reportName"),
         year=int(year),
+        format_modifier=data.get("formatModifier"),
         has_valid_unit_data=True,
         metrics=[metric],
         shape_stats=ShapeStats(
@@ -187,6 +188,7 @@ def transform_yn_chart(data, year):
     return CategoricalCompositional(
         title=data.get("reportName"),
         year=int(year),
+        format_modifier=data.get("formatModifier"),
         has_valid_unit_data=True,
         metrics=metrics,
         shape_stats=ShapeStats(

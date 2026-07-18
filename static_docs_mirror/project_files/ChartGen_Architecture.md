@@ -124,30 +124,34 @@ chartgen/
     │   │   │   ├── common.py, numeric_series.py, numeric_compositional.py,
     │   │   │   └── categorical_compositional.py, timeseries.py, dispatch.py
     │   │   ├── population_layers.py
-    │   │   └── peer_group_tokens.py
+    │   │   ├── peer_group_tokens.py
+    │   │   └── shape_transforms.py
     │   └── infrastructure/
     │       ├── constants.py
     │       ├── report_context.py
     │       ├── soft_parents.py
     │       ├── page_sizing.py
-    │       └── cache_writer.py
+    │       ├── cache_writer.py
+    │       └── population_table_xlsx.py
     └── ui/
         ├── common/
         │   ├── formatting.py
-        │   └── pickers.py
+        │   ├── pickers.py
+        │   ├── guidance.py
+        │   └── layout_css.py
         ├── auth/
         │   └── login_form.py
         ├── workfile/
         │   ├── sidebar.py, workfile_dialogs.py, new_workfile_form.py,
         │   └── open_workfile_form.py, save_as_form.py
         └── tabs/
-            ├── details_tab.py, config_tab.py, imports_tab.py, populations_tab.py,
-            └── select_tab.py, text_tab.py, running_order_tab.py, charts_tab.py, outputs_tab.py
+            ├── imports_tab.py, populations_tab.py, select_tab.py,
+            └── text_tab.py, running_order_tab.py, charts_tab.py, outputs_tab.py
 ```
 
 | Path | Notes |
 |---|---|
-| `app.py` | Streamlit entry point — sequences the startup workfile check, sidebar, dialogs, and tabs; holds no UI construction or business logic of its own. No authentication gate — see Decision 7 |
+| `app.py` | Streamlit entry point — sequences the sign-in gate, startup workfile check, sidebar, dialogs, and tabs; holds no UI construction or business logic of its own. The sign-in gate is the first thing rendered — see Decision 7 |
 | `run_chartgen.bat` | Double-click launcher; creates venv on first run |
 | `requirements.txt` | Python dependencies (kept in sync with `.bat`) |
 | `user_resources/PPT_Template_Creation.md` | Guidance doc for template designers |
@@ -173,13 +177,14 @@ chartgen/
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
-| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`); `build_population_layers`; the shared peer-group token rule |
-| `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file` |
+| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`/`apply_period_range`); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12) |
+| `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file`; also `SPINE_COLUMN_ORDER`, the population-table spine's display/authoring column order, shared between the UI and the Excel round-trip below |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
 | `core/shared/infrastructure/page_sizing.py` | `percent_to_emu` / `emu_to_percent` / `get_page_size_emu` / `has_known_template_page_size` — conversion between EMU and a percent-of-shorter-page-dimension unit, and resolution of which page size to convert against (the real captured template size once known, a manual standard-size fallback otherwise). Used by the Charts sheet only; has no bearing on batch execution, which continues to work in raw EMU throughout |
 | `core/shared/infrastructure/cache_writer.py` | `save_chart` — serialises any canonical data shape into `WorkfileState.cache`. Moved here from `acquisition/toolkit_nhs/` this session: audited as having no NHS-specific logic at all, so it's shared by both toolkit packages rather than duplicated. See Decision 10 |
-| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers), `auth/` (credentials box widget, rendered within the Config tab), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the nine tab renderers). Business logic delegated to the owning module rather than living here |
+| `core/shared/infrastructure/population_table_xlsx.py` | Excel export/import round-trip for any population-level table — the workfile-state equivalent of the manifest table's own xlsx pair (`acquisition/manifest_table/`). Generic across any table's own columns; identity is `unit_id`, not a system-generated key |
+| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers, per-tab guidance links, layout CSS), `auth/` (the page-level sign-in gate), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the seven tab renderers). Business logic delegated to the owning module rather than living here |
 
 ---
 
@@ -237,6 +242,9 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `chart_type_ref` | Base Chart function name, e.g. `ranked_column` (blank for non-chart rows) |
 | `cache_file` | JSON cache filename supplying data for this chart (blank for non-chart rows) |
 | `populations` | Per-row populations string, overriding the project default (blank to use the default) |
+| `start_period` | Period_id, TimeSeries rows only — inclusive range start (blank = from the first period). See Decision 12 |
+| `end_period` | Period_id, TimeSeries rows only — inclusive range end (blank = to the last period). See Decision 12 |
+| `metric_periods` | `^`-delimited period_id(s), TimeSeries rows only — converts the row to a NumericSeries snapshot before rendering (blank = no conversion). See Decision 12 |
 | `image_path` | Source image path for `insert_picture`; may contain `[code]`/`[id]` tokens |
 | `excel_path` | Workbook path for `open_excel` / `insert_from_excel` / `close_excel` |
 | `export_range` | Excel named range captured as an image by `insert_from_excel` |
@@ -429,11 +437,11 @@ Buttons are active/inactive based on the state of the software.
 
 ### Decision 7 — Credentials Location and Validation Timing
 
-Only the username is stored, in `core/session_shell/auth/credentials.csv` — rewritten on every successful credential validation, saving the user from re-entering it next time. The password and session token are never persisted to disk; the token lives only in `st.session_state["token"]` for the session's duration.
+Only the username is stored, in `core/session_shell/auth/credentials.csv` — rewritten on every successful sign-in, saving the user from re-entering it next time. The password and session token are never persisted to disk; the token lives only in `st.session_state["token"]` for the session's duration.
 
-Validation happens on demand, from a single box in the Config tab (Functional Spec Section 3) — not as a gate before the main interface loads. A workfile can be created, opened, edited, and saved with no credentials validated in that session at all; the only consequence is that Fetch (Functional Spec Section 7.1) fails until credentials are validated.
+Validation is a page-level gate (`core.ui.auth.login_form.render_login_gate`, Functional Spec Section 3) rendered before anything else — sidebar, workfile creation/opening, every tab — regardless of launch route (direct, or via a `.cgw` file association). This replaced an on-demand model (a credentials box in a since-removed Config tab) under which a workfile could be opened, and its advisory lock claimed (Decision 5), with a blank username — `classify_lock_state` reads a blank `locked_by` as unlocked, so the lock was silently non-functional for anyone who skipped validation. The gate closes that gap as a side effect: `username` is now always populated before any workfile action is possible.
 
-Save attribution (`last_saved_by`) reads `st.session_state["username"]` directly; with no credentials validated this session, it is blank rather than defaulted to anything else — the audit trail is simply absent, not falsely attributed.
+Save attribution (`last_saved_by`) reads `st.session_state["username"]` directly — now always populated by the time any workfile action is possible, so the save history is never blank.
 
 This is per-machine, per-user data, not workfile data, so it lives in `session_shell/auth/` rather than the workfile or static config.
 
@@ -477,10 +485,22 @@ A second data source — the Indicators toolkit, timeseries data — was added t
 
 ### Decision 11 — Charts Sheet Round-Trip Field List and Row Identity
 
-The Charts sheet's two-way sync with the Running Order (Functional Spec Section 9.3) is built over a single maintained field list, `CHART_SANDBOX_FIELDS` (`running_order/schema.py`) — `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu`. The Charts sheet's load and save logic both iterate this list rather than naming each field individually; extending the sync to a future field (e.g. a shape-specific analytical field, per the Primer's normalisation-at-the-boundary principle) is a one-line addition to this list, not a rework of the sync mechanism.
+The Charts sheet's two-way sync with the Running Order (Functional Spec Section 9.3) is built over a single maintained field list, `CHART_SANDBOX_FIELDS` (`running_order/schema.py`) — `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`. The Charts sheet's load and save logic both iterate this list rather than naming each field individually; extending the sync to a future field (e.g. a shape-specific analytical field, per the Primer's normalisation-at-the-boundary principle) is a one-line addition to this list, not a rework of the sync mechanism.
 
 **Row identity is by `row_id`, not list position.** A row selected in the Charts sheet is tracked by its `row_id` across reruns, since an Overwrite leaves `row_id` unchanged while an Insert (`row_ops.insert_new_row`) renumbers every `row_id` after the insertion point (`row_ops.renumber_row_ids`). Rather than resolving a stale index after every save, the Charts sheet clears its row-referencing state (bound row, target row) immediately after any save and requires a fresh selection — simpler and safer than trying to track a moving position.
 
 **`row_ops.py` is deliberately separate from `generation.py` and `dialog_support.py`.** `generation.py` builds rows from a template read result; `dialog_support.py` governs the Running Order tab's own row-edit dialog validity rules. `row_ops.py` holds only generic list operations (insert relative to a row, overwrite fields, renumber) with no knowledge of charts, shapes, or the Charts sheet — the Charts sheet is simply its first caller, not a reason to couple the module to it.
 
 **Page size is captured once, at template processing, the same trigger point as the cleaned template asset (Decision 2).** `template_page_width_emu`/`template_page_height_emu` are read from the `.pptx` at that point and written into `settings.csv` — workfile-level metadata, not a chart-specific fact. `core/shared/infrastructure/page_sizing.py` converts between this page size and a percent-of-shorter-dimension unit; this conversion is a Charts-sheet-authoring concern only; batch execution (`assembly_engine.py`) continues to read and write `width_emu`/`height_emu` directly and is unaffected.
+
+### Decision 12 — Period Range, Convert Periods to Metrics, and Their Excel Dropdowns
+
+Two TimeSeries-only Running Order columns, both added this session: `start_period`/`end_period` (a continuous range trim) and `metric_periods` (one or more discrete periods, converting the row to a NumericSeries snapshot — `shape_transforms.time_series_to_numeric_series`). Both are applied in `assembly_engine.insert_chart` ahead of `build_population_layers` — a normalisation step at the boundary (Primer, Section 4), so the charting side never needs to know either was involved. The range trim runs first; a `metric_periods` id that the range trim has already cut out then correctly surfaces as an unresolvable id, rather than silently succeeding against the untrimmed shape.
+
+**Why a separate cross-shape module.** `shape_transforms.py` sits outside `shapes/` for the same reason `url_triage.py` sits outside both toolkit packages (Decision 10): converting between two shapes needs to know about both without either shape module depending on the other.
+
+**Chart-type validity follows the conversion.** `get_valid_chart_refs_for_cache_file` takes a `converts_to_metrics` flag — true whenever a row's `metric_periods` is set — and substitutes NumericSeries's valid chart types for TimeSeries's, for that row only. This is what keeps the Charts sheet, the Running Order edit dialog, and the xlsx's own per-row `chart_type_ref` dropdown all offering the right options as `metric_periods` is added or removed.
+
+**Excel dropdowns via a hidden list sheet, not an inline formula.** Excel's inline list validation (used for `function`/`chart_type_ref`/etc.) is capped at 255 characters — fine for a handful of options, not for a chart's full period history. A hidden sheet (`_period_lists`) holds each distinct cache_file's period options in its own column (consecutive — column 1 for the first cache_file encountered, and so on); `start_period`, `end_period`, and `metric_periods` all validate against the same column for a given cache_file, one shared `DataValidation` object per cache_file rather than a fresh list per row. The dropdown itself is always single-value (Excel has no multi-select list validation) — `metric_periods` is the one column where more than one may be wanted, so a cell already holding a `^`-delimited value (Charts sheet multi-select, or typed by hand) isn't blocked by the dropdown being there; it just makes adding or replacing one value easy without knowing a period_id.
+
+**Display format.** Cells show `period_label(period_id)` rather than a bare id (meaningless to the user) or a bare label (Excel risks reinterpreting e.g. "Jan 24" as a date). The parenthesised id is what `xlsx_reader.py` extracts back into canonical storage on import; a cell that doesn't match the pattern (blank, or free text typed over the dropdown) resolves to nothing, the same "unresolvable → nothing" rule as an unresolvable population token.

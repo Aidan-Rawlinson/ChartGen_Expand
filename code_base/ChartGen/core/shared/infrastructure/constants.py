@@ -16,6 +16,12 @@ FIELD_TYPES = {
     "enabled":         "bool_int",
 }
 
+# Population-table shared spine, display/authoring order. Any column not in
+# this list (Name() peer-group columns) follows after, in the order it
+# appears on the row. Used by the UI (column display order) and the Excel
+# round-trip (export/import column order) — one definition, not two.
+SPINE_COLUMN_ORDER = ["unit_id", "unit_code", "unit_name", "soft_parents"]
+
 
 def coerce_row(row: dict, field_types: dict = FIELD_TYPES) -> dict:
     """Coerce known fields in a dict to their canonical type in place; fields not present are left untouched."""

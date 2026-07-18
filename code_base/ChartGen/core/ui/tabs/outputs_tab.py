@@ -9,6 +9,7 @@ import streamlit as st
 
 from core.output_generation.execution.batch_process import run_batch
 from core.ui.common.formatting import render_run_log_html
+from core.ui.common.guidance import guidance_link_html
 from core.workfile.state.session_state import ws, settings, save_settings, master_table
 
 
@@ -26,7 +27,8 @@ def render_outputs_tab():
     outputs_dir = os.path.join(workfile_dir, "outputs")
     ro_rows     = ws().running_order_rows
 
-    st.markdown('<h1 style="font-size:1.8em;margin:0 0 4px 0;padding:0;">Create Outputs</h1>'
+    st.markdown('<h1 style="font-size:1.8em;margin:0 0 4px 0;padding:0;">Create Outputs' +
+                guidance_link_html("outputs") + '</h1>'
                 '<hr style="border:none;border-top:1px solid #ddd;margin:0 0 6px 0;">', unsafe_allow_html=True)
 
     issues = []

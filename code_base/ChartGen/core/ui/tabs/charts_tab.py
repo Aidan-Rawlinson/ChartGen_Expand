@@ -31,8 +31,11 @@ start collapsed except where there's a live reason to show them open
 (Select Chart, and Select Visualisation while no chart type is chosen yet).
 Zoom is the one expander whose control saves nothing to the Running Order —
 it only changes how the already-correct preview looks on this screen — so
-it sits last in the rail, after Save to Running Order, rather than grouped
-with the fields that do save.
+it sits last among the expanders, after Save to Running Order, rather than
+grouped with the fields that do save. Reset sits at the very bottom of the
+rail, below every other control, and only appears once a chart has actually
+been selected (it lives after the early return on an unselected data shape,
+so it's structurally absent until then rather than merely hidden).
 
 Running Order rows are referenced here by row_id, not by list position or
 by a descriptive label — row_id is stable across an Overwrite, so a
@@ -49,6 +52,7 @@ from core.acquisition.toolkit_nhs.peer_groups import get_peer_group_value_option
 from core.output_generation.definition.running_order import (
     get_valid_chart_refs_for_cache_file,
     build_populations_options, parse_populations_string, build_populations_string,
+    parse_metric_periods_string, build_metric_periods_string,
     CHART_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
 )
 from core.output_generation.execution.charts.base_charts import render_chart
@@ -60,6 +64,9 @@ from core.shared.infrastructure.page_sizing import (
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.population_layers import build_population_layers
+from core.shared.normalisation_containers.shapes import apply_period_range
+from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
+from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import settings, master_table, cached_files, manifest, load_shape_ps, ws
 
 ZOOM_OPTIONS = ["0.75x", "Actual size (approximately)", "1.25x", "1.5x", "2x", "Fit to screen"]
@@ -105,22 +112,7 @@ def _clear_row_referencing_state():
 
 
 def render_charts_tab():
-    # Reset sits immediately after the title, in a narrow column, rather than
-    # on the far right — the wide trailing spacer keeps both left-aligned.
-    # Note: Streamlit buttons have no native width/height control, so this is
-    # narrowed via column ratio only — a true square (and any vertical
-    # shrink) would need custom CSS, which we're deliberately not using here.
-    title_col, reset_col, _spacer = st.columns([4.165, 0.34, 4])
-    with title_col:
-        st.header("Chart Review, Customisation and Formatting")
-    with reset_col:
-        st.write("")  # nudge the button down to roughly align with the title
-        if st.button(
-            "↺", type="primary", help="Reset — clear the Charts sheet back to a fresh state",
-            use_container_width=True,
-        ):
-            _clear_sandbox_state()
-            st.rerun()
+    render_tab_header("Chart Review, Customisation and Formatting", "charts")
 
     the_cached_files = cached_files()
     the_manifest = manifest()
@@ -204,6 +196,9 @@ def render_charts_tab():
                     st.session_state["cs_pending_shape_choice"] = label_by_cache_file.get(cache_file)
                     st.session_state["cs_pending_chart_type_ref"] = str(row.get("chart_type_ref", "") or "")
                     st.session_state["cs_pending_populations_str"] = str(row.get("populations", "") or "")
+                    st.session_state["cs_pending_start_period"] = str(row.get("start_period", "") or "")
+                    st.session_state["cs_pending_end_period"] = str(row.get("end_period", "") or "")
+                    st.session_state["cs_pending_metric_periods_str"] = str(row.get("metric_periods", "") or "")
                     st.session_state["cs_width_pct"] = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 50.0
                     st.session_state["cs_height_pct"] = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 50.0
                     st.session_state["cs_target_row_choice"] = ro_choice
@@ -247,12 +242,110 @@ def render_charts_tab():
                 f"('{bound_shape_type}' → '{shape_type}'). Chart type will need to be reselected."
             )
 
-        # --- Chart type — filtered to this shape, clamped before rendering ---
-        valid_types = get_valid_chart_types(shape_type)
+        # --- Period range and metric-periods conversion (TimeSeries only) —
+        # both reshape `shape` ahead of the chart-type choice below, since
+        # converting periods into metrics changes which chart types are
+        # valid (NumericSeries's, not TimeSeries's). Options are built from
+        # this shape's own period list so the user only ever picks a label,
+        # never types an id. ---
+        start_period = ""
+        end_period = ""
+        metric_period_ids = []
+        converts_to_metrics = False
+        if shape_type == "TimeSeries" and shape.periods:
+            period_ids = [p.period_id for p in shape.periods]
+            label_by_period_id = {p.period_id: p.period_label for p in shape.periods}
+
+            if "cs_pending_start_period" in st.session_state:
+                pending_start = st.session_state.pop("cs_pending_start_period")
+                st.session_state["cs_start_period"] = pending_start if pending_start in period_ids else ""
+            if "cs_pending_end_period" in st.session_state:
+                pending_end = st.session_state.pop("cs_pending_end_period")
+                st.session_state["cs_end_period"] = pending_end if pending_end in period_ids else ""
+            st.session_state.setdefault("cs_start_period", "")
+            st.session_state.setdefault("cs_end_period", "")
+            # Clamp — a prior shape's periods may not include the current selection.
+            if st.session_state["cs_start_period"] not in ([""] + period_ids):
+                st.session_state["cs_start_period"] = ""
+            if st.session_state["cs_end_period"] not in ([""] + period_ids):
+                st.session_state["cs_end_period"] = ""
+
+            def _period_format(v):
+                return "(full range)" if v == "" else label_by_period_id.get(v, v)
+
+            with st.expander("Period Range", expanded=False):
+                st.caption("Start period")
+                start_period = st.selectbox(
+                    "Start period", options=[""] + period_ids, format_func=_period_format,
+                    key="cs_start_period", label_visibility="collapsed",
+                )
+                st.caption("End period")
+                end_period = st.selectbox(
+                    "End period", options=[""] + period_ids, format_func=_period_format,
+                    key="cs_end_period", label_visibility="collapsed",
+                )
+                if start_period and end_period and period_ids.index(start_period) > period_ids.index(end_period):
+                    st.warning("Start period is after end period — this resolves to an empty range.")
+
+            if start_period or end_period:
+                shape = apply_period_range(shape, start_period, end_period)
+
+            # --- Convert Periods to Metrics — a different concept from the
+            # range above: one or more discrete periods, each becoming its
+            # own output metric (one per source Metric-Series x selected
+            # period), turning this into a NumericSeries snapshot. Options
+            # reflect the range trim above, so a period already trimmed out
+            # can't be picked here only to error later. ---
+            period_ids_in_scope = [p.period_id for p in shape.periods]
+            label_by_period_id_in_scope = {p.period_id: p.period_label for p in shape.periods}
+
+            if "cs_pending_metric_periods_str" in st.session_state:
+                pending_mp_str = st.session_state.pop("cs_pending_metric_periods_str")
+                pending_mp_ids = parse_metric_periods_string(pending_mp_str)
+                st.session_state["cs_metric_periods"] = [
+                    pid for pid in pending_mp_ids if pid in period_ids_in_scope
+                ]
+            st.session_state.setdefault("cs_metric_periods", [])
+            st.session_state["cs_metric_periods"] = [
+                pid for pid in st.session_state["cs_metric_periods"] if pid in period_ids_in_scope
+            ]
+
+            with st.expander("Convert to Metrics", expanded=False):
+                metric_period_ids = st.multiselect(
+                    "Periods", options=period_ids_in_scope,
+                    format_func=lambda v: label_by_period_id_in_scope.get(v, v),
+                    key="cs_metric_periods", label_visibility="collapsed",
+                )
+
+            if metric_period_ids:
+                try:
+                    shape = maybe_convert_periods_to_metrics(shape, metric_period_ids)
+                    converts_to_metrics = True
+                except ValueError as e:
+                    st.error(f"Metric-periods conversion failed: {e}")
+                    metric_period_ids = []
+        else:
+            # Not TimeSeries, or no periods on this shape — clear any stale
+            # selection so a later TimeSeries load doesn't inherit it.
+            st.session_state.pop("cs_pending_start_period", None)
+            st.session_state.pop("cs_pending_end_period", None)
+            st.session_state.pop("cs_start_period", None)
+            st.session_state.pop("cs_end_period", None)
+            st.session_state.pop("cs_pending_metric_periods_str", None)
+            st.session_state.pop("cs_metric_periods", None)
+
+        metric_periods_str = build_metric_periods_string(metric_period_ids)
+
+        # --- Chart type — filtered to this shape (or, if metric_periods
+        # converted it, to NumericSeries instead), clamped before rendering ---
+        effective_shape_type = "NumericSeries" if converts_to_metrics else shape_type
+        valid_types = get_valid_chart_types(effective_shape_type)
         if not valid_types:
-            st.warning(f"No Base Charts defined for shape type '{shape_type}'.")
+            st.warning(f"No Base Charts defined for shape type '{effective_shape_type}'.")
             return
-        valid_refs = get_valid_chart_refs_for_cache_file(selected_file, the_manifest)
+        valid_refs = get_valid_chart_refs_for_cache_file(
+            selected_file, the_manifest, converts_to_metrics=converts_to_metrics
+        )
         type_desc_by_ref = {ref: desc for ref, desc in valid_types}
 
         if "cs_pending_chart_type_ref" in st.session_state:
@@ -385,6 +478,9 @@ def render_charts_tab():
                     "chart_type_ref": lambda: chart_type_ref,
                     "cache_file":     lambda: selected_file,
                     "populations":    lambda: populations_str,
+                    "start_period":   lambda: start_period,
+                    "end_period":     lambda: end_period,
+                    "metric_periods": lambda: metric_periods_str,
                     "width_emu":      lambda: width_emu,
                     "height_emu":     lambda: height_emu,
                 }
@@ -410,6 +506,12 @@ def render_charts_tab():
                 "Screen zoom (display only — never saved)", options=ZOOM_OPTIONS,
                 key="cs_zoom", label_visibility="collapsed",
             )
+
+        if st.button(
+            "↺  Reset", type="primary", help="Reset — clear the Charts sheet back to a fresh state",
+        ):
+            _clear_sandbox_state()
+            st.rerun()
 
     with right:
         if not chart_type_ref:

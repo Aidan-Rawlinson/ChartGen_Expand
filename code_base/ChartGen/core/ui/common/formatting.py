@@ -6,6 +6,8 @@ purely presentation for the Streamlit UI.
 
 import datetime
 
+from core.shared.infrastructure.constants import SPINE_COLUMN_ORDER
+
 
 def _build_rows_html(rows):
     """Build the <tr> rows for the Outputs tab's run log table."""
@@ -85,7 +87,7 @@ DISPLAY_COLUMN_NAMES = {
     "soft_parents": "Parents",
 }
 
-_SPINE_COLUMN_ORDER = ["unit_id", "unit_code", "unit_name", "soft_parents"]
+_SPINE_COLUMN_ORDER = SPINE_COLUMN_ORDER
 
 
 def population_table_columns(rows: list) -> list:

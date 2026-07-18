@@ -25,6 +25,8 @@ from core.output_generation.definition.running_order.dialog_support import (
     build_populations_options,
     parse_populations_string,
     build_populations_string,
+    parse_metric_periods_string,
+    build_metric_periods_string,
 )
 from core.output_generation.definition.running_order.generation import (
     generate_from_template,
@@ -49,6 +51,8 @@ __all__ = [
     "build_populations_options",
     "parse_populations_string",
     "build_populations_string",
+    "parse_metric_periods_string",
+    "build_metric_periods_string",
     "generate_from_template",
     "renumber_row_ids",
     "overwrite_row_fields",

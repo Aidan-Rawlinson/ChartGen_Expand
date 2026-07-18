@@ -14,7 +14,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Credential validation (Config tab) | Complete | Single box — email, password, Validate button — session-only token; username persisted, password never saved. Not a launch gate; a workfile can be created, opened, and saved with none validated. |
+| Sign-in gate | Complete | Full-page sign-in form — email (pre-filled from last session), password, Sign in button — blocks the sidebar, workfile creation/opening, and every tab until it succeeds, whether launched directly or via a `.cgw` file association. Sign Out (sidebar) ends the session. Session-only token; username persisted to `credentials.csv`, password never saved. |
 
 ---
 
@@ -53,7 +53,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 | New Workfile flow (description → single native Save dialog) | Complete | See Functional Spec Section 4. Collects no project/year — creates a genuinely blank `.cgw`; no toolkit involvement at this step at all. |
 | Workfile description field | Complete | Free text, "what is this workfile for"; shown next to the ChartGen title in the app header for as long as the workfile is open. For the person, not the system — plays no part in naming the file or resolving anything. |
 | Native Save dialog (New Workfile and Save As) | Complete | One OS dialog for filename and location together; the OS itself handles overwrite confirmation, so neither flow has its own overwrite step. |
-| Details tab (file identity, save history) | Complete | Read-only file path and last-saved-by/at. No project identity shown — year/project_id/project_name are not workfile-level concepts (see Population tables, Part 3). |
+| Workfile Details (sidebar expander) | Complete | Collapsed by default — file name, description, full file path, last-saved-by/at. No project identity shown — year/project_id/project_name are not workfile-level concepts (see Population tables, Part 3). |
+| Population tables — Excel download/upload round-trip | Partial | Per-table download/upload on the Populations tab, generic across any table. Identity is `unit_id`: unmatched id added, missing id removed (no soft-delete flag on these tables), blank id skipped. No validation of edited values — a removed `unit_id` can leave a dangling `soft_parents` reference elsewhere. See Functional Spec Section 7.2. |
 
 ---
 
@@ -136,7 +137,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Conditional Running Order logic (insert/delete slides per unit) | Not built | Needed for algorithmic reports. |
 | `insert_slide` / `insert_section` / `delete_slide` | Not built | |
 | `submission_list` | Not built | |
-| Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
+| Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
 
 ---
 
@@ -148,7 +149,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 |---|---|---|
 | Base Chart library (20 charts across 4 data shapes) | Complete | No chart type renders a title. |
 | TimeSeries chart rendering | Complete | Three chart types: `period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`. Renders the first Metric-Series only. |
-| Period selection / cutting (TimeSeries) | Not built | Every chart currently renders all periods; cutting to a single period or range is not yet built. |
+| Period selection / cutting (TimeSeries) | Complete | Running Order `start_period`/`end_period` columns (period_id, blank = full range) trim the shape before population-layer filtering. Authored via the Charts sheet's Period Range box. See Functional Spec Section 10.7. |
+| Convert periods to metrics (TimeSeries → NumericSeries snapshot) | Complete | Running Order `metric_periods` column (one or more period_ids) converts a TimeSeries row into a NumericSeries snapshot before rendering — one metric per source Metric-Series × period. Feeds any NumericSeries chart type. See Functional Spec Section 10.8. |
 | Populations string — Running Order control | Complete | |
 | Reporting unit highlighting — NumericSeries (6 charts) | Complete | Selected can resolve to more than one unit, when the chart's own population table (`population_table` on the data shape) has a one-to-many relationship to the reporting unit — e.g. an organisation with several submissions. See Functional Spec Section 10.4. |
 | Peer group as data filter (peer token leading the populations string) | Complete | Chart data scope narrows to the peer group; e.g. `Region(Wales)^Selected` shows Welsh units only. |

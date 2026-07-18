@@ -2,11 +2,14 @@
 app.py
 ChartGen Python Prototype — Streamlit entry point.
 
-This module only sequences the page: apply any startup workfile, render
-the sidebar, render whichever modal dialog is active, then render the
-tabs. All UI construction, form logic, and business logic live in their
-owning modules under core/. No authentication gate exists here —
-credentials are validated inline within the Config tab, not at launch.
+This module only sequences the page: gate on sign-in, apply any startup
+workfile, render the sidebar, render whichever modal dialog is active,
+then render the tabs. All UI construction, form logic, and business logic
+live in their owning modules under core/. The sign-in gate
+(core.ui.auth.login_form.render_login_gate) is the first thing rendered —
+nothing else in the app (sidebar, workfile open/new, tabs) is reachable
+without a validated session token, whether ChartGen was launched directly
+or via a .cgw file association.
 """
 
 import os
@@ -17,19 +20,25 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 
+from core.ui.auth.login_form import render_login_gate
+from core.ui.common.layout_css import inject_layout_css
 from core.ui.workfile.sidebar import render_sidebar
 from core.ui.workfile.workfile_dialogs import render_workfile_dialogs
 from core.workfile.state.session_state import ws, has_workfile
 from core.session_shell.lifecycle.startup_file import apply_startup_workfile
 from core.ui.tabs import (
-    details_tab, config_tab, imports_tab, populations_tab, select_tab,
+    imports_tab, populations_tab, select_tab,
     text_tab, running_order_tab, charts_tab, outputs_tab,
 )
 
 
-apply_startup_workfile()
-
 st.set_page_config(page_title="ChartGen", layout="wide")
+inject_layout_css()
+
+if not render_login_gate():
+    st.stop()
+
+apply_startup_workfile()
 
 if st.session_state.get("startup_file_error"):
     st.error(st.session_state.pop("startup_file_error"))
@@ -72,17 +81,11 @@ else:
     st.title("ChartGen")
 st.caption("Analysis and Reporting software")
 
-(tab_details, tab_config, tab_imports, tab_populations, tab_select,
+(tab_imports, tab_populations, tab_select,
  tab_text, tab_running_order, tab_charts, tab_outputs) = st.tabs([
-    "Details", "Config", "Imports", "Populations", "Select",
+    "Imports", "Populations", "Select",
     "Text", "Running Order", "Charts", "Outputs"
 ])
-
-with tab_details:
-    details_tab.render_details_tab()
-
-with tab_config:
-    config_tab.render_config_tab()
 
 with tab_populations:
     populations_tab.render_populations_tab()

@@ -21,6 +21,7 @@ from core.acquisition.fetch_dispatch import fetch_all
 from core.acquisition.manifest_table import (
     write_manifest_xlsx, read_manifest_xlsx, apply_manifest_import,
 )
+from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, settings, save_settings
 
 TABLE_COLUMNS = [
@@ -31,7 +32,7 @@ TABLE_COLUMNS = [
 
 
 def render_imports_tab():
-    st.header("Import Project Data")
+    render_tab_header("Import Project Data", "imports")
 
     _render_template_section()
     st.divider()
@@ -235,8 +236,7 @@ def _render_fetch_section():
         token = st.session_state.get("token")
         if not token:
             st.error(
-                "No valid credentials — validate credentials in the Config "
-                "tab before fetching."
+                "No valid session credentials — please sign out and sign in again."
             )
             st.stop()
 

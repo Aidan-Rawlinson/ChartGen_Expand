@@ -90,6 +90,7 @@ def _from_dict_categorical_compositional(d):
     return CategoricalCompositional(
         title=d.get("title"),
         year=d.get("year"),
+        format_modifier=d.get("format_modifier"),
         population_table=d.get("population_table"),
         has_valid_unit_data=d.get("has_valid_unit_data", True),
         metrics=metrics,
@@ -167,3 +168,23 @@ def load_manifest(workfile_state):
         for row in workfile_state.manifest_rows
         if str(row.get("deleted", "0")) != "1" and row.get("hex_id")
     }
+
+
+def periods_for_cache_file(cache_file: str, workfile_state):
+    """
+    Return the (period_id, period_label) pairs for a cached TimeSeries
+    chart, in the shape's own (trusted-chronological) order — [] for any
+    other shape, or a cache_file that isn't loaded. Used to build the
+    Running Order xlsx's per-row start_period/end_period dropdowns
+    (Excel export/import), so those columns can offer real period labels
+    rather than requiring the user to know a period_id.
+    """
+    if not cache_file or cache_file not in workfile_state.cache:
+        return []
+    try:
+        shape, shape_type = load_shape(cache_file, workfile_state)
+    except Exception:
+        return []
+    if shape_type != "TimeSeries":
+        return []
+    return [(p.period_id, p.period_label) for p in shape.periods]

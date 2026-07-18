@@ -14,29 +14,52 @@ from core.workfile.state.session_state import ws, clear_workfile_session_state
 from core.workfile.state.workfile_file import save_workfile, close_workfile
 
 
+def _group_spacer():
+    """
+    Extra breathing room between button groups in the sidebar, in place of
+    st.divider(). No line — every attempt at combining a visible line with
+    reliable, even spacing ran into some form of Streamlit layout quirk
+    (trailing space collapsing regardless of technique, or a fixed-height
+    box overlapping the next element); the plain spacer alone reliably gave
+    correct, even spacing, so that's what's kept.
+    """
+    st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+
+
 def render_sidebar():
     with st.sidebar:
         st.markdown("## ChartGen")
         st.caption("Analysis and Reporting software")
-        st.divider()
+        _group_spacer()
 
         w = ws()
         has_workfile = w is not None
         read_only = has_workfile and w.read_only
 
         if has_workfile:
-            workfile_label = w.workfile_name or os.path.basename(w.workfile_path)
-            dirty_marker = " ●" if w.dirty else ""
-            st.markdown(f"**{workfile_label}**{dirty_marker}")
             if read_only:
                 st.markdown(
                     "<span style='color:#c62828;font-weight:700;'>READ-ONLY</span>",
                     unsafe_allow_html=True,
                 )
-            if w.last_saved_by:
-                st.caption(f"Saved by {w.last_saved_by}")
-                st.caption(format_uk_time(w.last_saved_at))
-            st.divider()
+            with st.expander("Workfile Details", expanded=False):
+                description = (w.settings.get("description", "") if w.settings else "").strip()
+                workfile_label = w.workfile_name or os.path.basename(w.workfile_path)
+
+                st.caption("File name")
+                st.write(workfile_label)
+
+                st.caption("Description")
+                st.write(description or "—")
+
+                st.caption("Full file path")
+                st.write(w.workfile_path)
+
+                st.caption("Last saved by")
+                st.write(w.last_saved_by or "—")
+
+                st.caption("Last saved at")
+                st.write(format_uk_time(w.last_saved_at) if w.last_saved_at else "—")
 
         # New / Open — active only when no workfile is open
         if st.button("New workfile", use_container_width=True, disabled=has_workfile):
@@ -49,7 +72,7 @@ def render_sidebar():
             st.session_state.pop("show_new_form", None)
             st.rerun()
 
-        st.divider()
+        _group_spacer()
 
         # Save / Save and Close are unavailable in a read-only session; Save As
         # remains available so a read-only session can become a normal one.
@@ -77,20 +100,22 @@ def render_sidebar():
                 clear_workfile_session_state()
             st.rerun()
 
-        st.divider()
-        _username = st.session_state.get("username", "")
-        st.caption(f"Signed in as {_username}" if _username else "Not signed in")
+        _group_spacer()
 
-        # Check for Update — available only with no workfile open (Decisions.md),
-        # sidesteps mid-session file-lock issues entirely rather than handling them.
-        if st.button("Check for update", use_container_width=True, disabled=has_workfile):
-            st.session_state["show_update_form"] = True
-            st.session_state.pop("update_check_result", None)
-            st.rerun()
+        with st.expander("Version / Sign Out", expanded=False):
+            _username = st.session_state.get("username", "")
+            st.caption(f"Signed in as {_username}" if _username else "Not signed in")
 
-        if st.button("Sign out", use_container_width=True):
-            if w:
-                close_workfile(w)
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.rerun()
+            # Check for Update — available only with no workfile open (Decisions.md),
+            # sidesteps mid-session file-lock issues entirely rather than handling them.
+            if st.button("Check for update", use_container_width=True, disabled=has_workfile):
+                st.session_state["show_update_form"] = True
+                st.session_state.pop("update_check_result", None)
+                st.rerun()
+
+            if st.button("Sign out", use_container_width=True):
+                if w:
+                    close_workfile(w)
+                for k in list(st.session_state.keys()):
+                    del st.session_state[k]
+                st.rerun()

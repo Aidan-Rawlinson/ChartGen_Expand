@@ -1,9 +1,11 @@
 """
 login_form.py
-Credentials box widget — rendered inline within the Config tab, not as a
-page-level gate. Credential validation and token handling live in
-core.session_shell.auth.login. No workfile-launch gate exists any more;
-see config_tab.py for where this is called from.
+Page-level sign-in gate — rendered before anything else in app.py (sidebar,
+workfile dialogs, tabs). Nothing past it renders until a valid token exists
+for this session; there is no inline re-validation elsewhere (sign-in
+status is shown read-only in the sidebar's "Version / Sign Out" expander —
+there is no Config tab any more). Credential validation and token/username
+handling live in core.session_shell.auth.login.
 """
 
 import streamlit as st
@@ -11,27 +13,27 @@ import streamlit as st
 from core.session_shell.auth.login import load_last_username, authenticate
 
 
-def render_credentials_box():
+def render_login_gate() -> bool:
     """
-    Render the single credentials box (username, password, validate button).
-    On success: stores the session token and username in session state and
-    shows a confirmation message. On failure: shows an error, no token
-    stored. Safe to call every rerun — it does not gate or halt the script.
+    Render the sign-in form and return False (caller should st.stop()) until
+    st.session_state["token"] is set. The last successfully validated
+    username is pre-filled from credentials.csv; the password is never
+    stored and is re-entered every session.
     """
-    st.subheader("NHS Annual and Indicator Toolkits")
+    if st.session_state.get("token"):
+        return True
 
-    current_username = st.session_state.get("username", "")
-    if current_username:
-        st.caption(f"Signed in this session as {current_username}")
-    else:
-        st.caption("Not signed in this session.")
+    st.title("ChartGen")
+    st.caption("Analysis and Reporting software")
+    st.subheader("Sign in")
+    st.caption("Sign in with your NHS Benchmarking Network Toolkit credentials to continue.")
 
-    default_email = current_username or load_last_username()
+    default_email = load_last_username()
 
-    with st.form("credentials_form"):
+    with st.form("login_gate_form"):
         email = st.text_input("Email", value=default_email)
         password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Validate credentials")
+        submitted = st.form_submit_button("Sign in")
 
     if submitted:
         if not email or not password:
@@ -42,6 +44,8 @@ def render_credentials_box():
                     token = authenticate(email, password)
                     st.session_state["username"] = email.strip()
                     st.session_state["token"] = token
-                    st.success("Credentials validated.")
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"Validation failed — please check your credentials. ({e})")
+                    st.error(f"Sign-in failed — please check your credentials. ({e})")
+
+    return False

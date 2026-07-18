@@ -50,6 +50,7 @@ from core.shared.normalisation_containers.shapes.categorical_compositional impor
 from core.shared.normalisation_containers.shapes.dispatch import (
     filter_shape,
     autotable_stats,
+    apply_period_range,
 )
 from core.shared.normalisation_containers.shapes.timeseries import (
     TimeSeriesPeriod,
@@ -60,6 +61,7 @@ from core.shared.normalisation_containers.shapes.timeseries import (
     compute_time_series_period_stats,
     time_series_autotable_stats,
     filter_time_series,
+    filter_time_series_periods,
 )
 
 __all__ = [
@@ -93,6 +95,8 @@ __all__ = [
     "compute_time_series_period_stats",
     "time_series_autotable_stats",
     "filter_time_series",
+    "filter_time_series_periods",
     "filter_shape",
     "autotable_stats",
+    "apply_period_range",
 ]

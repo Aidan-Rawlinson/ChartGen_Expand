@@ -28,20 +28,18 @@ Covers the core report generation pipeline: data acquisition, chart construction
 
 The system is a desktop application launched via a `.bat` file. Double-clicking the launcher opens the Streamlit UI in the user's browser.
 
-No login is required to launch the app or to create, open, edit, or save a workfile. Credentials are validated on demand from the Config tab (Section 3.2), via a single box: email (pre-populated once previously validated), password (entered manually, with a show/hide toggle), and a Validate button. Validation calls the API immediately and shows a confirmation message on success. On success, the username is written to `credentials.csv` for reuse next time; the password and session token are never persisted to disk — the token is held only for the session's duration. With no credentials validated, the only consequence is that Fetch (Section 7.1) fails until they are.
+Launching ChartGen — directly, or via a `.cgw` file association — always shows a sign-in screen first: email (pre-populated from `credentials.csv` once previously validated) and password. Nothing else — sidebar, workfile creation or opening, tabs — is reachable until sign-in succeeds. On success, the username is written to `credentials.csv` for reuse next session; the password and session token are never persisted to disk, and sign-in persists for the rest of that session across any number of workfile opens and closes.
 
 The Streamlit UI provides access to all workflow stages. Tab names follow a dual-naming convention: a short label displayed on the tab, and a full descriptive title as the page heading.
 
 ### 3.1 Sidebar File Operations
 
-File operations sit in the sidebar, independent of the active tab; with no workfile open, tabs remain visible but empty. New Workfile, Open Workfile, Save, Save As, Save and Close, and Close Without Saving cover the full lifecycle. New Workfile triggers the New Workfile flow (Section 4); Save As prompts for a save location; Open Workfile and Close prompt to save first if the current workfile is dirty. Open Workfile leads to the file version compatibility check and concurrency decision step (Section 5) before a workfile loads.
+File operations sit in the sidebar, independent of the active tab; with no workfile open, tabs remain visible but empty. New Workfile, Open Workfile, Save, Save As, Save and Close, Close Without Saving, Check for Update, and Sign Out cover the full lifecycle. New Workfile triggers the New Workfile flow (Section 4); Save As prompts for a save location; Open Workfile and Close prompt to save first if the current workfile is dirty. Open Workfile leads to the file version compatibility check and concurrency decision step (Section 5) before a workfile loads. A collapsed Workfile Details expander (file name, description, full file path, last-saved by/at) sits above the file-operation buttons when a workfile is open — this replaces the former Details tab.
 
 ### 3.2 Tab Structure
 
 | Tab (short) | Tab (full) | Purpose |
 |-------------|------------|---------|
-| **Details** | Project Details | Read-only view of file identity and save history (file path, last saved by/at). No project identity shown — year/project/organisation are not workfile-level concepts once a workfile can hold more than one project's data (Section 7.2). |
-| **Config** | User Controlled Configuration Files | Houses the single credentials box (Section 3). Management of reference CSVs and other runtime configuration files not yet implemented. |
 | **Imports** | Import Project Data | Template upload and processing (Template Reader); the chart URL table (read-only view, edited via Excel download/upload); toolkit API fetch. |
 | **Populations** | Populations | Every population table currently in the workfile, collapsible and reorderable. Whichever table sits on top (position 0) is the master table, driving the reporting unit picker and the batch loop — see Section 7.2. |
 | **Select** | Reporting unit selection | Select an individual reporting unit from the master table, and see its Full Unit(s) — its own row plus every row related to it one hop out, across every population table. |
@@ -96,7 +94,7 @@ PowerPoint template files are produced separately from the ChartGen codebase —
 
 ### 6.2 Placeholders as Element Slots
 
-Each slide contains PowerPoint placeholders positioned and sized by the template designer. ChartGen recognises a placeholder by its native PowerPoint type — Content, Picture, Chart, Clip Art, Table, SmartArt, Media, or Text — not by its name; no naming convention is required. ChartGen reads each placeholder's name, position, and size directly from the `.pptx` file via the Template Reader. No separate coordinate config file is required — the template is entirely self-contained.
+Each slide contains PowerPoint placeholders positioned and sized by the template designer. ChartGen recognises a placeholder by its native PowerPoint type — Content, Picture, Chart, Clip Art, Table, SmartArt, or Media — not by its name; no naming convention is required. A native Text placeholder is deliberately excluded from this set — it is populated only by text tag replacement (Section 12), never by the yellow-box convention below. ChartGen reads each placeholder's name, position, and size directly from the `.pptx` file via the Template Reader. No separate coordinate config file is required — the template is entirely self-contained.
 
 The Running Order references placeholders by name for display only; the system resolves coordinates from the template at generation time. A designer can reposition or resize a placeholder in the normal PowerPoint UI and the change is picked up automatically on next upload.
 
@@ -125,6 +123,8 @@ URLs extracted from chart-type boxes are merged into the chart URL table (`manif
 
 After reading, the Template Reader strips all detected yellow textboxes from the template and saves a cleaned copy. The Assembly Engine works exclusively from the cleaned copy; the original is preserved. Yellow annotation boxes must never appear in output.
 
+Once a placeholder has been matched to a yellow box's content (chart, picture, or Excel), the placeholder itself is also removed from the cleaned template alongside its yellow box — its position and size are already captured in the Running Order, and content is inserted by coordinate at generation time, not via the placeholder object. An unmatched placeholder (destined for `empty_placeholder`) is left in place.
+
 ### 6.5 Template Validation
 
 At run time, ChartGen compares the ordered list of slide layout names between the `.cgw`'s reference copy of the cleaned template and the live copy alongside the workfile. Matching lists proceed silently. A mismatch raises a warning naming which slides changed and how — soft, not blocking; the user can proceed or reprocess the template. Layout names are compared rather than slide count, since this catches slides added, removed, reordered, or reassigned to a different layout — all of which shift placeholder positions in the Running Order — while staying silent on cosmetic in-slide edits.
@@ -141,7 +141,7 @@ Fetching is a single, explicit action on the Imports tab: a full refresh of ever
 
 Every URL entering the chart URL table — whether extracted from a template or entered directly — is also classified by database ("nhs" or "indicators") at that point, decided from the URL's own path shape alone (`/outputs/{id}` vs `/project/{id}/toolkit`). This determines which toolkit's fetch pipeline processes the row at Fetch. See Section 7.4 for the Indicators toolkit's own pipeline.
 
-Fetch requires a valid session token (Section 3); with none, it fails immediately with a message directing the user to the Config tab, rather than attempting per-row calls.
+Fetch requires a valid session token — guaranteed present by the sign-in gate (Section 3) before any tab is reachable, so this is a defensive check rather than a normal-operation path.
 
 ### 7.2 Population Tables
 
@@ -165,7 +165,7 @@ Every peer group — however many named values it has, including a simple yes/no
 
 `Region()` is the first peer group column, resolved per organisation from `GET /organisations?year={year}` at the point a project's tables are built. Additional `Name()` columns can be added to any population table and will be picked up automatically by `build_population_layers` and the Running Order dialog without code changes.
 
-Each population table is human-readable, editable in Excel, and uploadable via the Streamlit UI.
+Each population table is human-readable, editable in Excel, and uploadable via the Streamlit UI. Each also has its own Excel download/upload round-trip on the Populations tab, generic across any table (see Feature List for import semantics).
 
 *Multi-level hierarchy model is not built. `soft_parents` covers one-hop relationships between any number of tables; a genuinely deep chain is not walked automatically.*
 
@@ -214,7 +214,7 @@ Every shape carries flags indicating where its data is incomplete, so consumers 
 
 Each chart type reference in the Chart Engine declares the data shape(s) it accepts. The Running Order editor uses this to constrain chart type options to valid combinations for the selected data. Invalid pairings — a bar chart against compositional data, a radar chart against a single-metric dataset — are prevented at authoring time rather than discovered at batch runtime.
 
-TimeSeries has three (`period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`) — it fetches, caches, and renders correctly. Cutting to a single period or range is not yet built; every chart currently renders all periods — see Feature List.
+TimeSeries has three (`period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`) — it fetches, caches, and renders correctly. Cutting to a period range is built (Section 10.7); converting selected periods into a NumericSeries snapshot is also built (Section 10.8), letting a TimeSeries cache file feed any NumericSeries chart type as well.
 
 ---
 
@@ -234,7 +234,7 @@ Outputs are generated by processing the functions on the Running Order.
 
 Generated Running Orders follow a standard structure: any `open_excel` rows (scope `batch_open`) first; then `create_ppt`, `set_default_populations` (defaulting to `All^Selected`), and `update_text`; one row per placeholder, resolved by yellow-box classification (`insert_chart`, `insert_picture`, `insert_from_excel`, or `empty_placeholder`); then `save_ppt` and `save_pdf` (disabled); and finally any `close_excel` rows (scope `batch_close`).
 
-An `.xlsx` version can be generated by the system as a human-editing format for the Running Order — created on demand for download and parsed back in on upload. It is never written to disk on its own and never persisted inside the `.cgw` itself. Dropdown validation constrains `function`, `enabled`, and `chart_type_ref` (per-row, filtered to valid chart types for the assigned cache file's data shape) on each export. It is editable directly in Excel and uploadable/downloadable via the Streamlit Running Order tab.
+An `.xlsx` version can be generated by the system as a human-editing format for the Running Order — created on demand for download and parsed back in on upload. It is never written to disk on its own and never persisted inside the `.cgw` itself. Dropdown validation constrains `function`, `enabled`, `scope`, and `chart_type_ref` (per-row, filtered to valid chart types for the assigned cache file's data shape — also accounting for `metric_periods`, see Section 10.8) on each export, plus `start_period`, `end_period`, and `metric_periods` (per-row, against that cache file's own period list via a hidden list sheet — see Architecture Decision 12). It is editable directly in Excel and uploadable/downloadable via the Streamlit Running Order tab.
 
 ### 9.2 Running Order Functions (Current Scope)
 
@@ -254,7 +254,7 @@ An `.xlsx` version can be generated by the system as a human-editing format for 
 
 ### 9.3 Charts Sheet Round-Trip
 
-The Charts sheet provides two entry points into a chart's specification, always interchangeable: loading an existing `insert_chart` Running Order row, or loading a cached dataset directly with no row bound. Editable fields are `chart_type_ref`, `cache_file`, `populations`, `width_emu`, and `height_emu` — a fixed set (`CHART_SANDBOX_FIELDS`, see Architecture) rather than the full row schema. Position (`left_emu`/`top_emu`), slide/placeholder assignment, and scope are never touched from this sheet.
+The Charts sheet provides two entry points into a chart's specification, always interchangeable: loading an existing `insert_chart` Running Order row, or loading a cached dataset directly with no row bound. Editable fields are `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, and `height_emu` — a fixed set (`CHART_SANDBOX_FIELDS`, see Architecture) rather than the full row schema. Position (`left_emu`/`top_emu`), slide/placeholder assignment, and scope are never touched from this sheet.
 
 Width and height are authored as a percentage of the shorter dimension of the associated PowerPoint page (Section 9.4) rather than as raw EMU, converting to EMU only at the point of writing back.
 
@@ -301,6 +301,8 @@ The system supports all four canonical data shapes — NumericSeries, NumericCom
 
 No Base Chart renders a title.
 
+Numeric values in every Base Chart — axis ticks and inline labels alike — are formatted from the data shape's own `format_modifier`: no modifier renders as a plain comma-thousands integer, `"P"` appends a `%` suffix, and `"C"` prefixes `£`. CategoricalCompositional is the one exception — its values are always rendered as proportion-of-whole percentages by chart design, independent of `format_modifier`.
+
 `bead_string_dot_plot` additionally de-duplicates visually across its tiers: a unit already shown in a more specific (later-token) tier is suppressed from every broader (earlier-token) tier's dots, so e.g. the `Selected` unit(s) appear once, in the `Selected` tier, rather than also as a dot in `Region()` and `All`. This affects only which dots are drawn — the reference statistics (mean/median/quartiles) and the value shown for `Selected` are computed independently of the suppression.
 
 ### 10.3 Tweaks
@@ -337,6 +339,14 @@ Autotable statistics are computed by the shape modules and merely collected at c
 ### 10.6 Chart Sizing
 
 Charts are sized to their placeholder dimensions. The Running Order stores placeholder width and height in EMU (captured from the template by the Template Reader). The Assembly Engine scales the rendered chart to those dimensions and inserts it at the exact EMU coordinates. The Charts sheet offers a percent-of-page-size alternative to authoring these values directly — see Section 9.3.
+
+### 10.7 Period Range
+
+The Running Order's `start_period`/`end_period` columns (period_id, blank = full range) trim a TimeSeries shape's period axis before population-layer filtering — a pure slice of `periods`, each metric's values, and per-period stats down to the id range; nothing is recalculated, since each period's stats are already computed independently of every other (Section 7.4). An id not found on the shape, or a start resolving after the end, produces an empty range. Authored via the Charts sheet's Period Range box, which lists real period labels rather than ids.
+
+### 10.8 Convert Periods to Metrics
+
+The Running Order's `metric_periods` column (one or more period_ids, `^`-delimited) converts a TimeSeries cache file into a NumericSeries snapshot before rendering, so it can feed any NumericSeries chart type. One output metric per source Metric-Series × selected period, grouped by metric then period, each named `"{Metric-Series name} ({period label})"`. Applied after the period-range trim above, so a period trimmed out by `start_period`/`end_period` on the same row is treated the same as any other unresolvable id: the row halts rather than rendering against the untrimmed shape. Authored via the Charts sheet's Convert to Metrics box; chart-type options switch to NumericSeries's as soon as a period is selected there.
 
 ---
 

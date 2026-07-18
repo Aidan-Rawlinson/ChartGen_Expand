@@ -128,7 +128,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Cleaned template** — the version of a `.pptx` template with all yellow annotation textboxes stripped out. The Assembly Engine always runs from this version, never the original marked-up template.
 
-- **Placeholder** — a PowerPoint placeholder ChartGen recognises by its native type (Content, Picture, Chart, Clip Art, Table, SmartArt, Media, or Text), not by its name. The Running Order references it by name for display only. See Functional Spec, Section 6.2.
+- **Placeholder** — a PowerPoint placeholder ChartGen recognises by its native type (Content, Picture, Chart, Clip Art, Table, SmartArt, or Media), not by its name. A native Text placeholder is not in this set — it is populated only by text tag replacement, never the yellow-box convention. The Running Order references it by name for display only. See Functional Spec, Section 6.2.
 
 - **Yellow textbox convention** — the template-authoring method of placing a yellow-filled textbox inside a placeholder to associate it with a data source (URL), image path, or Excel range.
 
@@ -158,7 +158,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Batch** — processing multiple outputs in a single run.
 
-- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `width_emu`, `height_emu`. See Architecture, Decision 11.
+- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`. See Architecture, Decision 11.
 
 - **Enabled column** — the per-row on/off switch in the Running Order. Stored as an integer `1`/`0` at runtime.
 

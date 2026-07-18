@@ -34,12 +34,11 @@ Three chart types share this module:
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 
 from core.shared.normalisation_containers.shapes import autotable_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, MEAN_COL, HIGHLIGHT, PEER_COLOURS, NAVY, GREY_LIGHT,
-    _size_to_inches, _fig_to_bytes, _apply_spine_style,
+    _size_to_inches, _fig_to_bytes, _apply_spine_style, _axis_formatter,
     _autotable_with_selection,
 )
 
@@ -95,8 +94,7 @@ def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], r
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
-    if base.format_modifier == "P":
-        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
@@ -156,8 +154,7 @@ def median_comparison_linechart(population_layers: list, width=80, height=45, tw
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
-    if base.format_modifier == "P":
-        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
@@ -217,8 +214,7 @@ def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[]
     ax.tick_params(axis="y", labelsize=8)
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
-    if base.format_modifier == "P":
-        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 

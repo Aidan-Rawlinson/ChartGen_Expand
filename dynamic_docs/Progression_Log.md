@@ -141,3 +141,39 @@ Resolved the long-parked organisation-identity mismatch between the Indicators (
 **Docs updated:** Functional Spec §7.4 (project-level call description; organisation-link/enrichment/naming paragraph rewritten). Architecture: module table row for `toolkit_indicators/` (mentions reuse of `get_organisations`); Decision 10's "Organisation identity assumption" subsection rewritten as "Organisation identity resolution," describing the live mapping mechanism in place of the earlier unverified assumption.
 
 **Handoff:** user requested two items for next session — "an easy update on the population tables" and "the transformation that creates a metric data shape from a line chart data shape" — neither scoped in detail yet; see Next_Session.md.
+
+---
+
+## Session — TimeSeries period handling + population-table Excel round-trip
+
+**Population tables — Excel round-trip.** Added per-table download/upload (`core/shared/infrastructure/population_table_xlsx.py`), controls placed inside each table's "Show rows" expander on the Populations tab. Identity is `unit_id`: matched row updated, unmatched non-blank id added, blank id skipped, existing row missing from the file removed (no soft-delete flag on these tables). No validation of edited values — dangling `soft_parents` explicitly accepted as a known gap, deferred to a future table-wide validation pass at the user's request.
+
+**Period Range (TimeSeries).** New Running Order columns `start_period`/`end_period` (period_id, blank = full range). `shapes/dispatch.py::apply_period_range` trims the period axis ahead of population-layer filtering — pure slice, no stats recompute (each period's stats are already independent). Charts sheet "Period Range" box (two selects, period labels only, never raw ids). Start-after-end or unresolvable id → empty range (not an error).
+
+**Convert Periods to Metrics.** New `core/shared/normalisation_containers/shape_transforms.py::time_series_to_numeric_series()` — converts one or more periods into a NumericSeries snapshot, one output metric per (source Metric-Series × selected period), metric-major, `"MetricName (PeriodLabel)"` naming, chronological within each metric. Unresolvable period_id here is a hard error (row halts) — different from Period Range's silent-empty behaviour, per explicit user decision. New Running Order column `metric_periods` (`^`-delimited ids). Charts sheet "Convert to Metrics" multiselect. `get_valid_chart_refs_for_cache_file` gained a `converts_to_metrics` flag, threaded through everywhere the chart-type dropdown appears (xlsx writer, Running Order edit dialog, Charts sheet) so valid chart types switch to NumericSeries's when `metric_periods` is set.
+
+**Running Order xlsx — hidden-sheet period dropdowns.** `start_period`/`end_period`/`metric_periods` validate against a hidden `_period_lists` sheet (one column per distinct cache_file, built once, shared across all rows referencing it), replacing Excel's 255-char inline-list limit. Cells display `period_label(period_id)`; reader extracts the id. `metric_periods` reuses the single-value dropdown but the cell can still hold a `^`-delimited multi-value string.
+
+**Built then explicitly removed:** a chart-type reconciliation check on Excel upload (`clear_invalid_chart_types`) — user wants proper table-wide validation later instead, not a partial check now. Fully removed, no trace left.
+
+**Docs:** Feature List, Functional Spec, Architecture, Glossary all updated to match (new Decision 12 in Architecture covers the period-handling work as a set). Primer untouched (edit-locked).
+
+**Non-code:** established `st.tabs()` mechanics (no rerun on tab click, active tab never reaches `session_state`) in response to a "guidance PDF per current tab" sidebar idea. Three implementation options discussed, none chosen; nothing built.
+
+
+## Session — Quick wins, login rebuild, tab consolidation, sidebar polish
+
+Large mixed session working through a "quick wins" list plus follow-on UI work.
+
+**Built/fixed:**
+- `format_modifier` retrofit for `CategoricalCompositional` (was the one shape missing it), plus a full Excel-style number-formatting rule (`#,###` / `#,##0%` / `£#,##0`) applied consistently across all base charts via new `_format_number`/`_axis_formatter` helpers in `shared.py`. Replaced NumericSeries's old K-abbreviation formatter and NumericCompositional/TimeSeries's old "P"-only checks.
+- Placeholder handling in `template_reader.py`: fixed a real bug (native Text placeholders were wrongly eligible for yellow-box matching — should only ever get tag-replacement text), and matched placeholders are now removed from the cleaned template alongside their yellow box (previously only the yellow box was stripped, leaving an empty placeholder behind).
+- Verified the `organisationCode`/`organisationName` guessed keys in `extract_submissions` against live output — behaving as expected, gap closed.
+- Login process rebuilt: mandatory sign-in gate (`render_login_gate`) at the very top of `app.py`, blocking everything until a valid token exists, replacing the old on-demand Config-tab validation. Found and documented a real side-benefit: this also closes a gap where an unvalidated session could silently defeat the advisory workfile lock via a blank username.
+- Removed the Details tab and Config tab entirely. Details' content moved to a collapsed "Workfile Details" sidebar expander; Config's reference-CSV placeholder scope dropped (superseded by an API endpoint, no longer needed) and its credentials content moved to the gate.
+- Added per-tab guidance links (`core/ui/common/guidance.py`) — small muted inline link after each tab's title, linking out to a per-tab URL. Sidesteps `st.tabs()`'s inability to report the active tab, since each tab renders its own link.
+- Sidebar layout iteration: button groups, spacing, and a CSS pass (`layout_css.py`) targeting Streamlit's default padding/gaps. A cosmetic divider-line idea was tried extensively and dropped by explicit user call after consistent, unexplained CSS behaviour (see Current_State/Next_Session for details) — settled on plain spacer divs instead.
+
+**Governed docs updated:** Functional Spec, Architecture, Glossary, Feature List — all reflecting the login gate, tab removals, placeholder-handling fix, and the number-formatting rule. Primer untouched. Net effect was a shorter set of docs overall (two tab-table rows removed outweighed additions).
+
+**Not done / carried forward:** guidance URLs are still placeholders; no live batch-run test for anything built this session or last; table-wide Excel validation still deferred; Tweaks still not built. Full detail in Current_State.md and Next_Session.md.
