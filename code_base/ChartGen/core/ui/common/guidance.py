@@ -30,16 +30,20 @@ guidance page written yet shows a plain title with no dead link.
 
 import streamlit as st
 
+_GUIDANCE_PDF = (
+    "https://rcigroupuk.sharepoint.com/sites/TBNIntranet/Shared%20Documents/"
+    "Resource%20Library/Tools%20%26%20Templates/Internal%20Tools/ChartGen/"
+    "Tab_Guide/ChartGen_Tab_Guidance.pdf"
+)
+
 GUIDANCE_URLS = {
-    "details":       "https://www.bbc.co.uk",
-    "config":        "https://www.bbc.co.uk",
-    "imports":       "https://www.bbc.co.uk",
-    "populations":   "https://www.bbc.co.uk",
-    "select":        "https://www.bbc.co.uk",
-    "text":          "https://www.bbc.co.uk",
-    "running_order": "https://www.bbc.co.uk",
-    "charts":        "https://www.bbc.co.uk",
-    "outputs":       "https://www.bbc.co.uk",
+    "imports":       f"{_GUIDANCE_PDF}#page=3",
+    "populations":   f"{_GUIDANCE_PDF}#page=4",
+    "select":        f"{_GUIDANCE_PDF}#page=5",
+    "text":          f"{_GUIDANCE_PDF}#page=6",
+    "running_order": f"{_GUIDANCE_PDF}#page=7",
+    "charts":        f"{_GUIDANCE_PDF}#page=8",
+    "outputs":       f"{_GUIDANCE_PDF}#page=9",
 }
 
 

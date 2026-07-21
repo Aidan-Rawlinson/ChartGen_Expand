@@ -3,21 +3,23 @@ layout_css.py
 One-off CSS injection to tighten pieces of Streamlit's own default spacing
 that no native Streamlit parameter controls:
 
-1. The fixed padding-top above the main content area. Streamlit has
-   renamed the container responsible for this across versions
-   (.block-container -> stAppViewBlockContainer -> stMainViewBlockContainer
-   in different releases) — all three selectors are included so whichever
-   one the installed version actually uses gets hit; the others simply
-   match nothing.
-2. The sidebar's own reserved header bar (data-testid="stSidebarHeader"),
+1. The sidebar's own reserved header bar (data-testid="stSidebarHeader"),
    which houses the collapse-arrow button — confirmed via browser
    inspection to be the actual source of the large gap above the
-   "ChartGen" heading in the sidebar, not the block-container above (a
-   separate element in the main content area, not the sidebar).
-3. The default vertical gap Streamlit applies between stacked elements
+   "ChartGen" heading in the sidebar.
+2. The default vertical gap Streamlit applies between stacked elements
    inside a vertical block, scoped to the sidebar only (not the main
    content area) via the stSidebar ancestor selector, so this doesn't
    affect chart-tab spacing etc.
+
+An earlier version of this file also forced padding-top down on the main
+content area's block-container, as a first guess at the sidebar gap before
+the real cause (stSidebarHeader/stLogoSpacer, below) was found via browser
+inspection. That rule was never actually doing anything useful — but it
+was left in place unnecessarily, and eventually clipped the main "ChartGen"
+title against Streamlit's fixed header bar (too tight for that font size).
+Removed for that reason: it wasn't fixing anything real, and it broke
+something real.
 
 This is a deliberate, narrow exception to keeping the UI free of custom
 CSS — the underlying spacing genuinely isn't reachable through Streamlit's
@@ -30,15 +32,9 @@ import streamlit as st
 
 _CSS = """
 <style>
-div[data-testid="stAppViewBlockContainer"],
-div[data-testid="stMainViewBlockContainer"],
-.block-container {
-    padding-top: 1rem !important;
-}
-
 /* The sidebar's own reserved header bar (holds the collapse-arrow button)
-   — separate from the main content's block-container above, and the actual
-   source of the large gap above the "ChartGen" heading in the sidebar. */
+   — the source of the large gap above the "ChartGen" heading in the
+   sidebar. */
 div[data-testid="stSidebarHeader"],
 section[data-testid="stSidebar"] div[data-testid="stSidebarHeader"] {
     padding-top: 0.25rem !important;

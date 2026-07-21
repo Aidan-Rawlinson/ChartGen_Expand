@@ -125,3 +125,15 @@
 - **Details tab and Config tab both removed from the tab bar permanently.** Details' content relocated to a sidebar expander; Config's reference-CSV placeholder scope dropped outright — the ics lookup-CSV use case it was reserved for was superseded by an API endpoint, so there's no foreseeable purpose for it. Explicitly revivable later "if we find a clear purpose," per the user, but not kept as a placeholder tab in the meantime.
 - **Per-tab guidance links live inline next to each tab's own title, not as a sidebar button.** Chosen because `st.tabs()` cannot report which tab is active into `session_state`, ruling out a single adaptive sidebar button. Each tab's own render function carries its own link instead, which needs no active-tab detection at all.
 - **Sidebar divider line between button groups: attempted extensively, then explicitly dropped by the user.** Plain spacer divs (no line) are the accepted final state. Not to be revisited via the same techniques (margin/padding/fixed-height flex box/absolute positioning) without understanding the root cause first, per the user's own call to stop spending time on it.
+
+## Session — Prototype-sharing prep
+
+- **No functionality changes during prototype-sharing prep**, guidance links/content excepted. Explicit user call at the start of this work.
+- **No known-issues briefing for the colleague.** User ruled this out — it's a look/feel/usability prototype, not an alpha or beta, so untested-detail caveats aren't being surfaced.
+- **No pre-built sample workfile for the colleague.** New Workfile flow is smooth enough on its own; user is instead building sample PowerPoint templates (two or three, varying complexity) for the colleague to run through the system themselves.
+- **Guidance content structure: one PDF, one page per tab, linked via `#page=N` anchors** — chosen over separate hosted pages per tab, to keep `GUIDANCE_URLS` pointing at a single hosted file.
+- **Keep the client-supplied style guide's NHSBN colour palette/branding as given**, despite ChartGen being an internal TBN tool rather than NHSBN member-facing — explicit user call.
+- **Full cover + contents page** in the guidance PDF, rather than a lean reference doc — explicit user call.
+- **Removed stale `"details"`/`"config"` keys from `GUIDANCE_URLS`** (dead code from an earlier session's tab removal) — confirmed with the user before applying.
+- **Sidebar has a guidance PDF page but no in-app guidance link** — no `"sidebar"` key added to `GUIDANCE_URLS`; user chose to leave it unlinked rather than add a new UI element for it.
+- **The guidance PDF's build script and output were not saved into the project folder** — user explicitly declined persistence; regenerating or updating the guide later will mean rebuilding it from scratch.

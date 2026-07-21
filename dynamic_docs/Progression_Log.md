@@ -177,3 +177,17 @@ Large mixed session working through a "quick wins" list plus follow-on UI work.
 **Governed docs updated:** Functional Spec, Architecture, Glossary, Feature List — all reflecting the login gate, tab removals, placeholder-handling fix, and the number-formatting rule. Primer untouched. Net effect was a shorter set of docs overall (two tab-table rows removed outweighed additions).
 
 **Not done / carried forward:** guidance URLs are still placeholders; no live batch-run test for anything built this session or last; table-wide Excel validation still deferred; Tweaks still not built. Full detail in Current_State.md and Next_Session.md.
+
+## Session — Prototype-sharing prep (guidance content and links)
+
+Scoped what's needed to hand a working ChartGen prototype to a colleague shortly: real per-tab guidance content, a quick-start guide, sample PowerPoint templates, and an installer check. Agreed no functional changes at this stage, and no known-issues briefing — this is a look/feel/usability prototype, not an alpha or beta.
+
+Drafted succinct purpose/functionality write-ups for the sidebar and all seven tabs, then expanded them substantially by reading the actual tab source files (`core/ui/tabs/*.py`, `core/ui/workfile/*.py`) and cross-referencing the Functional Spec/Glossary — covering buttons and controls not previously referenced anywhere (Open Workfile's lock-decision states, the Charts tab's full control set, Outputs' preflight checks, etc.), and expanding the Text tab from a one-line stub into a full explanation of the text-tag mechanism itself.
+
+Built these into `ChartGen_Tab_Guidance.pdf` using ReportLab, against a client-supplied style guide (NHSBN palette/typography, A4, cover + contents page, banded tables) — kept the palette as given despite ChartGen being an internal TBN tool, per user instruction. Used a two-pass build (throwaway pass to record real per-section page numbers via a zero-space `Flowable`, then a final pass with those numbers in the cover contents) so the contents page stays accurate regardless of how long each section's content runs.
+
+User hosted the PDF on SharePoint; worked through several SharePoint URL formats (sharing-shortcut `:b:` links, `AllItems.aspx` folder views) before landing on the real direct file path, and confirmed the `#page=N` fragment works in their browser against that URL.
+
+Updated `core/ui/common/guidance.py`: replaced all placeholder `bbc.co.uk` entries in `GUIDANCE_URLS` with the real SharePoint URL plus the correct page anchor per tab, and removed the stale `"details"`/`"config"` dict keys left over from an earlier session's tab removal (both confirmed with the user before applying). Sidebar intentionally left with no guidance link — no `"sidebar"` key exists in the mechanism, and the user chose not to add one.
+
+By explicit user choice, the PDF and its build script were not saved into the project folder — they exist only on SharePoint and in this session's now-discarded sandbox.
