@@ -24,7 +24,9 @@ from core.acquisition.template.template_reader import read_template
 from core.acquisition.url_triage import url_to_database
 from core.workfile.state.workfile_file import new_manifest_row, renumber_chart_refs
 from core.output_generation.execution.charts.cache_reader import load_manifest
-from core.output_generation.definition.running_order import generate_from_template
+from core.output_generation.definition.running_order import (
+    generate_from_template, backfill_default_chart_types,
+)
 
 
 def merge_urls_into_manifest(urls: list[str], source: str, *, workfile_state) -> dict:
@@ -77,7 +79,8 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
        added, existing preserved, deleted rows resurrected). No fetch.
     4. Generate the Running Order from the template read result and the
        manifest table — chart rows get cache_file={hex_id}.json immediately;
-       chart-type constraints tighten once data is fetched.
+       chart_type_ref stays blank until Fetch backfills it (see
+       backfill_chart_types_after_fetch, below).
 
     Returns:
     {
@@ -115,3 +118,24 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
         "new_urls_already_present": merge["already_present"],
         "running_order_rows": rows,
     }
+
+
+def backfill_chart_types_after_fetch(*, workfile_state) -> int:
+    """
+    Fill in chart_type_ref for any insert_chart Running Order row still
+    blank, now that Fetch has resolved each chart's shape_type. Called once,
+    at the end of the Fetch action (Imports tab) — this is the earliest
+    point shape_type is known; Running Order generation always runs before
+    Fetch, so generation time can never resolve this itself.
+
+    Silent by design — no user-facing message. Never overwrites a
+    chart_type_ref that's already set, whether from a prior backfill or a
+    manual edit made between Process Template and Fetch.
+
+    Returns the number of rows backfilled.
+    """
+    manifest = load_manifest(workfile_state)
+    backfilled = backfill_default_chart_types(workfile_state.running_order_rows, manifest)
+    if backfilled:
+        workfile_state.dirty = True
+    return backfilled

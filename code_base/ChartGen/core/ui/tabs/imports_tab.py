@@ -16,7 +16,7 @@ import tempfile
 
 import streamlit as st
 
-from core.acquisition.import_flow import process_template
+from core.acquisition.import_flow import process_template, backfill_chart_types_after_fetch
 from core.acquisition.fetch_dispatch import fetch_all
 from core.acquisition.manifest_table import (
     write_manifest_xlsx, read_manifest_xlsx, apply_manifest_import,
@@ -253,6 +253,8 @@ def _render_fetch_section():
                 on_progress=on_progress,
                 workfile_state=ws(),
             )
+        # Silent — no user-facing message; see import_flow.backfill_chart_types_after_fetch.
+        backfill_chart_types_after_fetch(workfile_state=ws())
         status_text.empty()
         progress_bar.empty()
 

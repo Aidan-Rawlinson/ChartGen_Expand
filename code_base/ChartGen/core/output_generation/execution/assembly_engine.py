@@ -95,7 +95,7 @@ def set_default_populations(ctx: AssemblyContext, row: dict, settings: dict) -> 
 
 
 def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
-    """Render a Base Chart from cached data and insert it at the placeholder position."""
+    """Render a Base Chart from cached data and insert it at the row's position."""
     if ctx.prs is None:
         return err_result(row, "insert_chart: no open presentation (create_ppt not called?).")
 
@@ -104,7 +104,6 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         cache_file = ""
     chart_type_ref = str(row.get("chart_type_ref", "")).strip()
     slide_index = _int_or_none(row.get("slide_index"))
-    placeholder = str(row.get("placeholder", "")).strip()
 
     # Position / size from the Running Order row (written from template at generation time)
     left_emu = _int_or_none(row.get("left_emu"))
@@ -192,8 +191,11 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     except Exception as e:
         return err_result(row, f"insert_chart: render failed for '{chart_type_ref}': {e}")
 
-    # Store autotable stats keyed by placeholder name
-    ctx.autotable_stats[placeholder] = autotable_stats
+    # Store autotable stats keyed by row_id — placeholder name is only
+    # unique per slide, not across the whole Running Order, so it can't be
+    # used as a key here (two slides may both have a placeholder named
+    # "Chart 1"). row_id is the row's real identity (Architecture Decision 11).
+    ctx.autotable_stats[row.get("row_id")] = autotable_stats
 
     # --- Insert into slide ---
     try:
@@ -204,13 +206,12 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     except Exception as e:
         return err_result(row, f"insert_chart: failed to insert image on slide {slide_index}: {e}")
 
-    return ok_result(row, f"Chart '{chart_type_ref}' inserted at '{placeholder}' (slide {slide_index + 1})")
+    return ok_result(row, f"Chart '{chart_type_ref}' inserted (slide {slide_index + 1})")
 
 
 def empty_placeholder(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     """No-op. Placeholder has no content assigned."""
-    ph = row.get("placeholder", "")
-    return ok_result(row, f"empty_placeholder: '{ph}' skipped (no content assigned)")
+    return ok_result(row, f"empty_placeholder: row {row.get('row_id')} skipped (no content assigned)")
 
 
 def save_ppt(ctx: AssemblyContext, row: dict, settings: dict) -> dict:

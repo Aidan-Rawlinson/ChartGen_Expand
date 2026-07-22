@@ -10,7 +10,6 @@ COLUMNS = [
     "scope",
     "function",
     "slide_index",
-    "placeholder",
     "chart_type_ref",
     "cache_file",
     "populations",

@@ -114,8 +114,15 @@ def render_outputs_tab():
                 st.markdown(f'<p style="font-size:0.81em;color:#888;margin:0;">Queue complete — all {total} reports run.</p>', unsafe_allow_html=True)
             sl_col, rs_col = st.columns([3, 2])
             with sl_col:
-                batch_size = st.slider("Batch size", min_value=1, max_value=min(50, max(remaining, 1)),
-                    value=min(10, max(remaining, 1)), key="batch_size_slider", label_visibility="collapsed")
+                if remaining <= 1:
+                    batch_size = max(remaining, 1)
+                    st.markdown(
+                        f'<p style="font-size:0.8em;color:#888;margin:6px 0;">Batch size: {batch_size}</p>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    batch_size = st.slider("Batch size", min_value=1, max_value=min(50, remaining),
+                        value=min(10, remaining), key="batch_size_slider", label_visibility="collapsed")
             with rs_col:
                 if st.button("↺  Reset queue", key="btn_reset_queue"):
                     s["batch_cursor"] = "0"

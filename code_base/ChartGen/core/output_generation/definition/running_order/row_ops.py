@@ -20,8 +20,7 @@ def renumber_row_ids(rows: list[dict]):
 def overwrite_row_fields(rows: list[dict], target_index: int, field_values: dict):
     """
     Overwrite the given fields on rows[target_index] in place. Every other
-    column on that row (position, placeholder, scope, notes, etc.) is left
-    untouched.
+    column on that row (position, scope, notes, etc.) is left untouched.
     """
     rows[target_index].update(field_values)
 

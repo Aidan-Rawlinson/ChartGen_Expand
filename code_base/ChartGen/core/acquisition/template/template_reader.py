@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER, MSO_SHAPE_TYPE
+from pptx.opc.constants import RELATIONSHIP_TYPE
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +50,10 @@ EXCEL_PATH_RE = re.compile(
 
 @dataclass
 class PlaceholderInfo:
-    """Describes a single named placeholder on a slide."""
+    """Describes a single named placeholder on a slide, OR a free-floating
+    yellow box being used in its place (see read_template Step 3)."""
     slide_index: int          # 0-based
-    name: str                 # e.g. "Chart 1"
+    name: str                 # e.g. "Chart 1" (placeholder) or the yellow box's own shape name (free-floating)
     left: int                 # EMU
     top: int                  # EMU
     width: int                # EMU
@@ -106,22 +108,62 @@ def _is_yellow(rgb) -> bool:
 
 
 def _get_shape_fill_rgb(shape):
-    """Return the solid fill RGBColor of a shape, or None if not determinable."""
-    import re as _re
+    """Return the effective solid fill RGBColor of a shape, or None if not
+    determinable.
+
+    Checked in order:
+      1. An explicit <a:noFill/> on the shape itself — no fill, full stop;
+         the shape's style reference (below) is not consulted.
+      2. An explicit solid fill on the shape itself — literal RGB
+         (<a:srgbClr>) or a theme colour reference (<a:schemeClr>).
+      3. If the shape defines no fill of its own at all: its style's fill
+         reference (<p:style><a:fillRef><a:schemeClr>) — the "Shape Styles"
+         gallery mechanism, where the shape stores no colour, only a pointer
+         to a theme colour slot. See Architecture, Decision 14.
+      4. Fallback: python-pptx's native fill accessor, for anything the
+         above didn't catch.
+    """
     try:
         xml = shape._element.xml
-        # Look for explicit sRGB values anywhere in the shape XML
-        matches = _re.findall(r'<a:srgbClr\s+val="([0-9A-Fa-f]{6})"', xml)
-        if matches:
-            hex_val = matches[0].upper()
-            r = int(hex_val[0:2], 16)
-            g = int(hex_val[2:4], 16)
-            b = int(hex_val[4:6], 16)
-            from pptx.dml.color import RGBColor
-            return RGBColor(r, g, b)
     except Exception:
-        pass
-    # Fallback: try python-pptx native accessor
+        return None
+
+    spPr_m = re.search(r"<p:spPr>.*?</p:spPr>", xml, re.DOTALL)
+    spPr_xml = spPr_m.group(0) if spPr_m else ""
+
+    # --- 1. Explicit no-fill on the shape itself ---
+    if re.search(r"<a:noFill\s*/>", spPr_xml):
+        return None
+
+    # --- 2a. Explicit literal RGB fill on the shape itself ---
+    m = re.search(r'<a:solidFill>\s*<a:srgbClr\s+val="([0-9A-Fa-f]{6})"', spPr_xml)
+    if m:
+        hex_val = m.group(1).upper()
+        from pptx.dml.color import RGBColor
+        return RGBColor(int(hex_val[0:2], 16), int(hex_val[2:4], 16), int(hex_val[4:6], 16))
+
+    # --- 2b. Explicit theme-colour fill on the shape itself ---
+    m = re.search(r'<a:solidFill>\s*<a:schemeClr\s+val="(\w+)"', spPr_xml)
+    if m:
+        clr_map, clr_scheme = _get_theme_context(shape)
+        rgb = _resolve_scheme_colour(m.group(1), clr_map, clr_scheme)
+        if rgb:
+            from pptx.dml.color import RGBColor
+            return RGBColor(*rgb)
+
+    # --- 3. No fill defined on the shape at all: fall back to its style's fillRef ---
+    if "<a:solidFill" not in spPr_xml:
+        style_m = re.search(r"<p:style>.*?</p:style>", xml, re.DOTALL)
+        if style_m:
+            fillref_m = re.search(r'<a:fillRef[^>]*>\s*<a:schemeClr\s+val="(\w+)"', style_m.group(0))
+            if fillref_m:
+                clr_map, clr_scheme = _get_theme_context(shape)
+                rgb = _resolve_scheme_colour(fillref_m.group(1), clr_map, clr_scheme)
+                if rgb:
+                    from pptx.dml.color import RGBColor
+                    return RGBColor(*rgb)
+
+    # --- 4. Fallback: python-pptx's native accessor ---
     try:
         fill = shape.fill
         if str(fill.type) == "SOLID (1)":
@@ -129,6 +171,109 @@ def _get_shape_fill_rgb(shape):
     except Exception:
         pass
     return None
+
+
+# ---------------------------------------------------------------------------
+# Theme colour resolution
+# ---------------------------------------------------------------------------
+
+# The 12 base colour slots every theme's <a:clrScheme> defines.
+_THEME_SLOTS = ("dk1", "lt1", "dk2", "lt2",
+                "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
+                "hlink", "folHlink")
+
+# Slot names a slide's/master's <p:clrMap> (or a slide's <p:clrMapOvr>) can remap.
+_CLR_MAP_ATTRS = ("bg1", "tx1", "bg2", "tx2",
+                   "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
+                   "hlink", "folHlink")
+
+# Cache: slide master id -> (clr_map: dict, clr_scheme: dict), avoids re-parsing
+# the master's colour map and its theme's colour scheme for every shape.
+_theme_context_cache: dict = {}
+
+
+def _parse_clr_scheme(theme_xml_bytes: bytes) -> dict:
+    """Parse a theme part's <a:clrScheme> into {slot_name: (r, g, b)}."""
+    scheme = {}
+    text = theme_xml_bytes.decode("utf-8", errors="ignore")
+    m = re.search(r"<a:clrScheme[^>]*>(.*?)</a:clrScheme>", text, re.DOTALL)
+    if not m:
+        return scheme
+    body = m.group(1)
+    for slot in _THEME_SLOTS:
+        sm = re.search(rf'<a:{slot}>\s*<a:srgbClr val="([0-9A-Fa-f]{{6}})"', body)
+        if not sm:
+            # A theme colour can also be tied to a system colour (rare, e.g. window/windowText)
+            sm = re.search(rf'<a:{slot}>\s*<a:sysClr[^>]*lastClr="([0-9A-Fa-f]{{6}})"', body)
+        if sm:
+            hex_val = sm.group(1)
+            scheme[slot] = (int(hex_val[0:2], 16), int(hex_val[2:4], 16), int(hex_val[4:6], 16))
+    return scheme
+
+
+def _parse_clr_map(clr_map_element_xml: str) -> dict:
+    """Parse a <p:clrMap .../> or <a:overrideClrMapping .../> element's
+    attributes into {attribute_name: resolved_theme_slot_name}."""
+    clr_map = {}
+    for attr in _CLR_MAP_ATTRS:
+        m = re.search(rf'\b{attr}="(\w+)"', clr_map_element_xml)
+        if m:
+            clr_map[attr] = m.group(1)
+    return clr_map
+
+
+def _get_theme_context(shape):
+    """Return (clr_map, clr_scheme) for the slide a shape sits on: the
+    colour-name remapping in effect (slide-level override if present, else
+    the slide master's own map) and the theme colour scheme belonging to
+    that master. Cached per master to avoid repeated XML parsing."""
+    try:
+        slide = shape.part.slide
+        master = slide.slide_layout.slide_master
+    except Exception:
+        return {}, {}
+
+    cache_key = id(master)
+    if cache_key not in _theme_context_cache:
+        master_xml = master._element.xml
+
+        map_m = re.search(r"<p:clrMap\b[^/]*/>", master_xml)
+        base_clr_map = _parse_clr_map(map_m.group(0)) if map_m else {}
+
+        clr_scheme = {}
+        try:
+            theme_part = master.part.part_related_by(RELATIONSHIP_TYPE.THEME)
+            clr_scheme = _parse_clr_scheme(theme_part.blob)
+        except Exception:
+            pass
+
+        _theme_context_cache[cache_key] = (base_clr_map, clr_scheme)
+
+    base_clr_map, clr_scheme = _theme_context_cache[cache_key]
+
+    # A slide can override its master's colour map wholesale via <p:clrMapOvr>.
+    try:
+        slide_xml = slide._element.xml
+    except Exception:
+        slide_xml = ""
+    ovr_m = re.search(r"<p:clrMapOvr>.*?</p:clrMapOvr>", slide_xml, re.DOTALL)
+    if ovr_m and "overrideClrMapping" in ovr_m.group(0):
+        override_m = re.search(r"<a:overrideClrMapping\b[^/]*/>", ovr_m.group(0))
+        clr_map = _parse_clr_map(override_m.group(0)) if override_m else base_clr_map
+    else:
+        clr_map = base_clr_map
+
+    return clr_map, clr_scheme
+
+
+def _resolve_scheme_colour(scheme_name: str, clr_map: dict, clr_scheme: dict):
+    """Resolve a <a:schemeClr val="..."/> name to an (r, g, b) tuple, or None
+    if it can't be resolved (e.g. "phClr" — a contextual placeholder colour
+    with no fixed value outside the effect/style definition referencing it)."""
+    if scheme_name == "phClr":
+        return None
+    resolved_slot = clr_map.get(scheme_name, scheme_name)
+    return clr_scheme.get(resolved_slot)
 
 
 def _extract_url_from_text(text: str) -> str:
@@ -206,14 +351,32 @@ def _classify_yellow_box(text: str) -> dict:
 # Geometry helpers
 # ---------------------------------------------------------------------------
 
+# 1mm of tolerance on the "fully contained" check, to absorb sub-visible EMU
+# rounding drift (e.g. PowerPoint copy/paste introducing a 1 EMU discrepancy
+# on a duplicated shape) without treating it as a genuine partial overlap.
+# 914400 EMU = 1 inch = 25.4mm, so 36000 EMU = 1mm exactly.
+CONTAINMENT_TOLERANCE_EMU = 36000
+
 def _fully_contained(inner_left, inner_top, inner_right, inner_bottom,
-                     outer_left, outer_top, outer_right, outer_bottom) -> bool:
-    """Return True if inner rectangle is fully within outer rectangle."""
+                     outer_left, outer_top, outer_right, outer_bottom,
+                     tolerance=CONTAINMENT_TOLERANCE_EMU) -> bool:
+    """Return True if inner rectangle is within outer rectangle, allowing
+    up to `tolerance` EMU of drift on each edge."""
     return (
-        inner_left >= outer_left
-        and inner_top >= outer_top
-        and inner_right <= outer_right
-        and inner_bottom <= outer_bottom
+        inner_left   >= outer_left   - tolerance
+        and inner_top    >= outer_top    - tolerance
+        and inner_right  <= outer_right  + tolerance
+        and inner_bottom <= outer_bottom + tolerance
+    )
+
+
+def _rects_overlap(a_left, a_top, a_right, a_bottom,
+                    b_left, b_top, b_right, b_bottom) -> bool:
+    """Return True if two rectangles share any non-zero area. Touching edges
+    only (no interior overlap) do not count."""
+    return (
+        a_left < b_right and a_right > b_left
+        and a_top < b_bottom and a_bottom > b_top
     )
 
 
@@ -260,7 +423,18 @@ def _is_autoshape_with_text(shape) -> bool:
 # ---------------------------------------------------------------------------
 
 def read_template(pptx_path: str) -> TemplateReadResult:
-    """Read a .pptx template and return a TemplateReadResult."""
+    """Read a .pptx template and return a TemplateReadResult.
+
+    A yellow textbox is resolved against the slide's chart placeholders into
+    one of three outcomes (see Architecture, Decision 13):
+
+      1. Fully contained by a placeholder  — matched to it; the placeholder's
+         own position/size is used (the pre-existing behaviour).
+      2. No overlap with any placeholder   — free-floating; the yellow box's
+         own position/size is used directly, named after its own shape name.
+      3. Partial overlap with a placeholder, short of full containment —
+         ambiguous; left entirely untouched (not processed, not removed).
+    """
     prs = Presentation(pptx_path)
     result = TemplateReadResult(
         slide_width=int(prs.slide_width),
@@ -302,6 +476,21 @@ def read_template(pptx_path: str) -> TemplateReadResult:
             text = shape.text_frame.text
             classification = _classify_yellow_box(text)
             if not classification.get("content_type"):
+                # Unrecognised content — doesn't match any of the four
+                # supported types (NHS toolkit chart URL, Indicators toolkit
+                # chart URL, image path, Excel path+ranges). Stripped from
+                # the cleaned template as before (Functional Spec §6.3), but
+                # now flagged rather than silently dropped.
+                preview = text.strip()
+                if len(preview) > 80:
+                    preview = preview[:77] + "..."
+                result.warnings.append(
+                    f"Slide {slide_idx + 1}: yellow textbox content didn't match "
+                    f"a recognised type (NHS chart URL, Indicators chart URL, "
+                    f"picture path, or Excel path+ranges) — stripped, not processed. "
+                    f"Text: \"{preview}\""
+                )
+                elements_to_remove.append((slide, shape._element))
                 continue
             yellow_shapes.append({
                 "shape":  shape,
@@ -312,11 +501,13 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                 **classification,
             })
 
-        # --- Step 3: match yellow textboxes to placeholders ---
+        # --- Step 3: resolve each yellow textbox against the placeholders ---
         ph_matches: dict[str, list] = {ph.name: [] for ph in chart_placeholders}
+        free_floating = []   # list[PlaceholderInfo] — scenario 2, one per free-floating box
 
         for yshape in yellow_shapes:
-            matched = False
+            contained_by = None
+            overlaps_any = False
             for ph in chart_placeholders:
                 ph_right  = ph.left + ph.width
                 ph_bottom = ph.top  + ph.height
@@ -325,18 +516,47 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                     yshape["right"], yshape["bottom"],
                     ph.left, ph.top, ph_right, ph_bottom,
                 ):
-                    ph_matches[ph.name].append(yshape)
-                    matched = True
+                    contained_by = ph
                     break
+                if _rects_overlap(
+                    yshape["left"], yshape["top"],
+                    yshape["right"], yshape["bottom"],
+                    ph.left, ph.top, ph_right, ph_bottom,
+                ):
+                    overlaps_any = True
 
-            if not matched:
+            if contained_by is not None:
+                # Scenario 1 — fully contained.
+                ph_matches[contained_by.name].append(yshape)
+            elif overlaps_any:
+                # Scenario 3 — ambiguous partial overlap: not processed, not removed.
+                yshape["_skip"] = True
                 result.warnings.append(
-                    f"Slide {slide_idx + 1}: yellow textbox not inside any "
-                    f"chart placeholder — ignored. Content: "
-                    f"{yshape.get('url') or yshape.get('image_path') or yshape.get('excel_path', '')}"
+                    f"Slide {slide_idx + 1}: yellow textbox partially overlaps a "
+                    f"placeholder without being fully inside it — not processed. "
+                    f"Content: {yshape.get('url') or yshape.get('image_path') or yshape.get('excel_path', '')}"
+                )
+            else:
+                # Scenario 2 — free-floating: use the yellow box's own position/size.
+                free_floating.append(
+                    PlaceholderInfo(
+                        slide_index=slide_idx,
+                        name=yshape["shape"].name,
+                        left=yshape["left"],
+                        top=yshape["top"],
+                        width=yshape["right"]  - yshape["left"],
+                        height=yshape["bottom"] - yshape["top"],
+                        content_type=yshape.get("content_type", ""),
+                        url=yshape.get("url", ""),
+                        label=yshape.get("label", ""),
+                        image_path=yshape.get("image_path", ""),
+                        excel_path=yshape.get("excel_path", ""),
+                        excel_export_range=yshape.get("excel_export_range", ""),
+                        excel_driver_range=yshape.get("excel_driver_range", ""),
+                    )
                 )
 
-        # --- Step 4: assign content to placeholders ---
+        # --- Step 4: assign content to matched placeholders (scenario 1) ---
         for ph in chart_placeholders:
             matches = ph_matches[ph.name]
             if len(matches) == 0:
@@ -372,8 +592,13 @@ def read_template(pptx_path: str) -> TemplateReadResult:
 
             result.placeholders.append(ph)
 
-        # --- Step 5: mark all yellow textboxes on this slide for removal ---
+        # --- Step 4b: scenario 2 — free-floating boxes stand in as their own placeholders ---
+        result.placeholders.extend(free_floating)
+
+        # --- Step 5: mark yellow textboxes for removal (scenarios 1 & 2 only) ---
         for yshape in yellow_shapes:
+            if yshape.get("_skip"):
+                continue   # scenario 3 — ambiguous overlap, left in place untouched
             elements_to_remove.append((slide, yshape["shape"]._element))
 
     # --- Step 6: produce cleaned pptx bytes ---
@@ -387,5 +612,11 @@ def read_template(pptx_path: str) -> TemplateReadResult:
     buf = _io.BytesIO()
     prs.save(buf)
     result.cleaned_pptx_bytes = buf.getvalue()
+
+    if result.warnings:
+        result.warnings.insert(
+            0,
+            "One or more yellow boxes could not be processed — see details below."
+        )
 
     return result

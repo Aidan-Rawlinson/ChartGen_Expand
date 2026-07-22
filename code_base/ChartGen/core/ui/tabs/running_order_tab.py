@@ -55,7 +55,7 @@ def render_running_order_tab():
 
             st.caption(f"Row {row['row_id']}  ·  {func}")
             if is_content:
-                st.caption(f"Placeholder: **{row.get('placeholder', '')}**  ·  Slide: **{row.get('slide_index', '')}**")
+                st.caption(f"Slide: **{row.get('slide_index', '')}**")
 
             f_enabled = st.checkbox("Enabled", value=(row.get("enabled", 1) == 1))
             f_notes   = st.text_input("Notes", value=str(row.get("notes", "") or ""))
@@ -146,7 +146,6 @@ def render_running_order_tab():
             "On":          ["✓" if r["enabled"] == 1 else "–" for r in rows],
             "Function":    [_short_func(str(r.get("function", ""))) for r in rows],
             "Slide":       [r.get("slide_index", "") for r in rows],
-            "Placeholder": [r.get("placeholder", "") for r in rows],
             "Chart type":  [r.get("chart_type_ref", "") for r in rows],
             "Notes":       [r.get("notes", "") for r in rows],
         })
@@ -155,6 +154,11 @@ def render_running_order_tab():
             overview_df, use_container_width=True, hide_index=True,
             height=min(36 * len(rows) + 38, 540),
             on_select="rerun", selection_mode="single-row",
+            column_config={
+                "#":     st.column_config.Column(width="small"),
+                "On":    st.column_config.Column(width="small"),
+                "Slide": st.column_config.Column(width="small"),
+            },
         )
         selected_rows = selection.selection.get("rows", [])
         st.session_state["ro_selected_idx"] = selected_rows[0] if selected_rows else None

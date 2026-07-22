@@ -128,9 +128,11 @@ MyWorkfile.cgw  (ZIP)
 
 - **Cleaned template** — the version of a `.pptx` template with all yellow annotation textboxes stripped out. The Assembly Engine always runs from this version, never the original marked-up template.
 
-- **Placeholder** — a PowerPoint placeholder ChartGen recognises by its native type (Content, Picture, Chart, Clip Art, Table, SmartArt, or Media), not by its name. A native Text placeholder is not in this set — it is populated only by text tag replacement, never the yellow-box convention. The Running Order references it by name for display only. See Functional Spec, Section 6.2.
+- **Free-floating yellow box** — a yellow box with no overlap with any placeholder on its slide. Its own position and size stand in for a placeholder's. See Functional Spec, Section 6.3, and Architecture, Decision 13.
 
-- **Yellow textbox convention** — the template-authoring method of placing a yellow-filled textbox inside a placeholder to associate it with a data source (URL), image path, or Excel range.
+- **Placeholder** — a PowerPoint placeholder ChartGen recognises by its native type (Content, Picture, Chart, Clip Art, Table, SmartArt, or Media), not by its name. A native Text placeholder is not in this set — it is populated only by text tag replacement, never the yellow-box convention. See Functional Spec, Section 6.2.
+
+- **Yellow textbox convention** — the template-authoring method of placing a yellow-filled textbox to associate it with a data source (URL), image path, or Excel range. Resolved against the slide's placeholders into one of three outcomes — fully contained, free-floating, or ambiguous partial overlap. See Functional Spec, Section 6.3, and Architecture, Decision 13.
 
 ### Cluster 6 — TBN Toolkit structures
 

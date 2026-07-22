@@ -137,3 +137,13 @@
 - **Removed stale `"details"`/`"config"` keys from `GUIDANCE_URLS`** (dead code from an earlier session's tab removal) — confirmed with the user before applying.
 - **Sidebar has a guidance PDF page but no in-app guidance link** — no `"sidebar"` key added to `GUIDANCE_URLS`; user chose to leave it unlinked rather than add a new UI element for it.
 - **The guidance PDF's build script and output were not saved into the project folder** — user explicitly declined persistence; regenerating or updating the guide later will mean rebuilding it from scratch.
+
+---
+
+## Session — Chart-type default-population + Running Order `placeholder` column removal
+
+- **Chart-type backfill trigger point: end of Fetch, not Running Order generation.** Running Order generation always precedes Fetch (no code path exists where it doesn't), so `shape_type` can never be known at generation time. The default-population logic lives in `generation.py` but is invoked from a new `import_flow.backfill_chart_types_after_fetch`, called once at the end of the Fetch action. Silent — no user-facing message, even summarising how many rows were backfilled.
+- **Backfill never overwrites a set `chart_type_ref`.** Only genuinely blank cells are filled, whether the existing value came from a manual edit or a prior backfill. Idempotent on repeat fetches by construction.
+- **Running Order `placeholder` column removed entirely — not deprecated, not left blank, deleted from the schema and every reader/writer.** Decided after tracing that it was never a live reference at runtime (the named PowerPoint object is deleted from the cleaned template once matched) and after finding it carried a real collision risk as a dict key (`ctx.autotable_stats`), since placeholder names are only unique per slide. `ctx.autotable_stats` now keys on `row_id` instead — the Running Order's own real row identity (Architecture Decision 11), not a template-derived label.
+- **The per-row `ctx.log` mechanism (dead — no consumer anywhere in the UI) is deliberately left alone for now**, at the user's explicit request. This is a known, documented gap (see Current_State.md / Next_Session.md), not an oversight — revisit only when explicitly raised again.
+- **Column-width and other pure-formatting decisions in the Streamlit UI are out of scope for the five governed documents.** Confirmed explicitly by the user this session: the governed docs describe behaviour, structure, and readiness — not minor display/formatting choices. Applies going forward, not just to this session's column-width change.

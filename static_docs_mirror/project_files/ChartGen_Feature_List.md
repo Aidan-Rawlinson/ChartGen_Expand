@@ -106,7 +106,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 |---|---|---|
 | Template upload and processing pipeline | Complete | |
 | Named placeholder element slots | Complete | |
-| Yellow textbox convention (URL / picture / Excel) | Complete | Yellow boxes are classified by content: toolkit URL (chart), image path (picture), or Excel path with driver/export ranges. |
+| Yellow textbox convention (URL / picture / Excel) | Complete | Yellow boxes are classified by content: toolkit URL (chart), image path (picture), or Excel path with driver/export ranges. Detected by colour whether the fill is literal or theme-referenced (Architecture Decision 14). Resolved against the slide's placeholders into three outcomes: fully contained, with 1mm tolerance (placeholder's own position/size used), no overlap (free-floating — the box's own position/size used instead), partial overlap (ambiguous — left unclassified and unremoved, warned). Unrecognised content is also warned, not just silently stripped. See Architecture Decisions 13–14. |
 | Cleaned template production | Complete | |
 | Cleaned template as user-owned asset | Complete | Two edit tiers: cosmetic edits picked up silently on next run; structural edits require re-upload, which regenerates the Running Order. See Architecture Decision 2. |
 | Template validation on run (slide layout comparison) | Complete | Compares slide layout names between the `.cgw` reference copy and the live template; warns on mismatch, doesn't block. See Architecture Decision 3. |

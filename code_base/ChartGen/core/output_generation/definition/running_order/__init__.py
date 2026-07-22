@@ -30,6 +30,7 @@ from core.output_generation.definition.running_order.dialog_support import (
 )
 from core.output_generation.definition.running_order.generation import (
     generate_from_template,
+    backfill_default_chart_types,
 )
 from core.output_generation.definition.running_order.row_ops import (
     renumber_row_ids,
@@ -54,6 +55,7 @@ __all__ = [
     "parse_metric_periods_string",
     "build_metric_periods_string",
     "generate_from_template",
+    "backfill_default_chart_types",
     "renumber_row_ids",
     "overwrite_row_fields",
     "insert_new_row",

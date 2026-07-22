@@ -96,18 +96,17 @@ PowerPoint template files are produced separately from the ChartGen codebase —
 
 Each slide contains PowerPoint placeholders positioned and sized by the template designer. ChartGen recognises a placeholder by its native PowerPoint type — Content, Picture, Chart, Clip Art, Table, SmartArt, or Media — not by its name; no naming convention is required. A native Text placeholder is deliberately excluded from this set — it is populated only by text tag replacement (Section 12), never by the yellow-box convention below. ChartGen reads each placeholder's name, position, and size directly from the `.pptx` file via the Template Reader. No separate coordinate config file is required — the template is entirely self-contained.
 
-The Running Order references placeholders by name for display only; the system resolves coordinates from the template at generation time. A designer can reposition or resize a placeholder in the normal PowerPoint UI and the change is picked up automatically on next upload.
+The Running Order does not reference placeholders by name — only slide index and EMU position/size are stored; the system resolves coordinates from the template at generation time. A designer can reposition or resize a placeholder in the normal PowerPoint UI and the change is picked up automatically on next upload.
 
 For charts, pictures, and tables, ChartGen uses the placeholder's coordinates as the insertion target. The placeholder itself is not used as a PowerPoint content container — ChartGen inserts content at those coordinates via python-pptx.
 
 ### 6.3 Yellow Textbox Convention
 
-To associate content with a placeholder without editing any config file, the template designer places a yellow textbox fully inside the target placeholder. The Template Reader detects these textboxes and classifies each by its content.
+To associate content with a placeholder without editing any config file, the template designer places a yellow textbox on a slide. The Template Reader detects these textboxes by colour — distinguishing human-placed yellow from cream, off-white, or pale gold, and resolving a theme-referenced colour (a shape styled via PowerPoint's "Shape Styles" gallery, which stores no literal colour on the shape at all) to its actual RGB via the presentation's theme, same as an explicit fill (see Architecture, Decision 14) — and resolves each one against the slide's placeholders into one of three outcomes:
 
-Detection criteria — both must be true:
-
-- **Yellow fill** — detected by colour, distinguishing human-placed yellow from cream, off-white, or pale gold.
-- **Fully contained** — the textbox bounds lie entirely within a placeholder on the same slide.
+- **Fully contained within a placeholder** — matched to that placeholder; the placeholder's own position and size are used. A small tolerance (1mm) is allowed on each edge, to absorb sub-visible rounding drift rather than misclassifying a genuinely-intended-to-be-contained box as a partial overlap (see Architecture, Decision 14).
+- **No overlap with any placeholder** — free-floating; the box's own position and size are used directly, in place of a placeholder. This is the route for content added after a template's placeholders were fixed, where no suitable placeholder exists to hold it — placeholders themselves can only be added via PowerPoint's Slide Master/Layout system, not drawn onto an existing slide, so this is expected to be the common case for ad hoc additions, not an edge case. Its position/size are only as precise as the designer draws it; reaching pixel-perfect placement afterwards means editing `left_emu`/`top_emu`/`width_emu`/`height_emu` directly on the Running Order, or the equivalent percent-of-page fields on the Charts sheet (Section 9.3). See Architecture, Decision 13.
+- **Partial overlap with a placeholder, short of full containment** — ambiguous; the box is not classified, not added to the Running Order, and not removed from the cleaned template. A warning is raised.
 
 Classification by content — one of three types:
 
@@ -115,15 +114,17 @@ Classification by content — one of three types:
 - **Picture** — the text is a path to a supported image file; the path may contain `[code]`/`[id]` tokens.
 - **Excel** — the text is an Excel file path plus driver and export range names.
 
-Unrecognised content: the box is stripped with the others but otherwise ignored. One content source per placeholder is the contract. If multiple qualifying textboxes fall inside the same placeholder, the first is used and a warning is raised.
+Unrecognised content — text matching none of the three types — is stripped from the cleaned template like any other yellow box, and now raises a warning naming the slide and a text preview, rather than being silently ignored. One content source per placeholder is the contract. If multiple qualifying textboxes fall fully inside the same placeholder, the first is used and a warning is raised.
 
-URLs extracted from chart-type boxes are merged into the chart URL table (`manifest.csv`) — new URLs added, existing ones preserved, and a URL matching a previously deleted row restores that row under its original identity. Template extraction never removes rows. No data is fetched at this point: the Running Order is generated immediately against the table, with each chart row's cache reference assigned; chart-type options are constrained once the data has been fetched and its shape is known.
+Any template read producing at least one warning — unrecognised content, ambiguous overlap, or multiple boxes matched to one placeholder — is prefixed with a single summary line ("One or more yellow boxes could not be processed"), so a partial failure is visible without reading the full detail list.
+
+URLs extracted from chart-type boxes are merged into the chart URL table (`manifest.csv`) — new URLs added, existing ones preserved, and a URL matching a previously deleted row restores that row under its original identity. Template extraction never removes rows. No data is fetched at this point: the Running Order is generated immediately against the table, with each chart row's cache reference assigned and `chart_type_ref` left blank; chart-type options are constrained once the data has been fetched and its shape is known.
 
 ### 6.4 Cleaned Template
 
-After reading, the Template Reader strips all detected yellow textboxes from the template and saves a cleaned copy. The Assembly Engine works exclusively from the cleaned copy; the original is preserved. Yellow annotation boxes must never appear in output.
+After reading, the Template Reader strips detected yellow textboxes from the template and saves a cleaned copy — except boxes left unresolved by ambiguous partial overlap (Section 6.3), which remain in place, unprocessed. The Assembly Engine works exclusively from the cleaned copy; the original is preserved.
 
-Once a placeholder has been matched to a yellow box's content (chart, picture, or Excel), the placeholder itself is also removed from the cleaned template alongside its yellow box — its position and size are already captured in the Running Order, and content is inserted by coordinate at generation time, not via the placeholder object. An unmatched placeholder (destined for `empty_placeholder`) is left in place.
+Once a placeholder has been matched to a yellow box's content (chart, picture, or Excel), the placeholder itself is also removed from the cleaned template alongside its yellow box — its position and size are already captured in the Running Order, and content is inserted by coordinate at generation time, not via the placeholder object. An unmatched placeholder (destined for `empty_placeholder`) is left in place. A free-floating yellow box has no placeholder to remove — only the box itself is stripped.
 
 ### 6.5 Template Validation
 
@@ -142,6 +143,8 @@ Fetching is a single, explicit action on the Imports tab: a full refresh of ever
 Every URL entering the chart URL table — whether extracted from a template or entered directly — is also classified by database ("nhs" or "indicators") at that point, decided from the URL's own path shape alone (`/outputs/{id}` vs `/project/{id}/toolkit`). This determines which toolkit's fetch pipeline processes the row at Fetch. See Section 7.4 for the Indicators toolkit's own pipeline.
 
 Fetch requires a valid session token — guaranteed present by the sign-in gate (Section 3) before any tab is reachable, so this is a defensive check rather than a normal-operation path.
+
+Once Fetch completes, each Running Order `insert_chart` row still holding a blank `chart_type_ref` is silently defaulted to the first valid chart type for its now-known shape (`chart_type_map.csv` order) — no user-facing message. A row whose `chart_type_ref` is already set, whether from a prior fetch's backfill or a manual edit, is left untouched.
 
 ### 7.2 Population Tables
 
@@ -225,7 +228,7 @@ TimeSeries has three (`period_line_chart`, `median_comparison_linechart`, `full_
 The Running Order is the master script that drives report assembly — a sequential list of rows, each specifying:
 
 - **Function** — the name of the function to call
-- **Parameters** — placeholder name, chart type reference, cache file, EMU position/size, etc.
+- **Parameters** — chart type reference, cache file, EMU position/size, etc.
 - **Enabled column** — enables rows to be switched on/off without deletion
 
 Each row name maps in a strict 1:1 relationship to a single callable function. A row can never invoke multiple functions, and a given row name can never resolve to different functions. There is no conditional dispatch, no indirection. This is not a constraint — it is what makes the Running Order legible: any colleague can read it and know exactly what will happen, line by line.
@@ -242,11 +245,11 @@ An `.xlsx` version can be generated by the system as a human-editing format for 
 |----------|-------------|
 | `create_ppt` | Opens the cleaned template; sets the output path. Always the first per-report row. |
 | `set_default_populations` | Sets the workfile-default populations string, applied to any `insert_chart` row without a per-row override. |
-| `insert_chart` | Renders a Base Chart from cached data; inserts at the named placeholder position. Position and size come from the Running Order row, populated automatically from the template. |
+| `insert_chart` | Renders a Base Chart from cached data; inserts at the row's stored position. Position and size come from the Running Order row, populated automatically from the template. |
 | `empty_placeholder` | No-op. Placeholder has no content assigned. Explicit so every placeholder is accounted for. |
 | `save_ppt` | Saves the completed output as `.pptx`. |
 | `save_pdf` | Saves the completed output as `.pdf` via COM automation (requires PowerPoint on the user's machine). Disabled by default in generated Running Orders. |
-| `insert_picture` | Inserts an image at the named placeholder, with `[code]`/`[id]` token substitution in the source path and aspect ratio preserved. |
+| `insert_picture` | Inserts an image at the row's stored position, with `[code]`/`[id]` token substitution in the source path and aspect ratio preserved. |
 | `update_text` | Replaces text tags in template text with per-unit values, presentation-wide, single-pass. Partial — table cells (`shape.table`) are not yet covered. |
 | `open_excel` / `insert_from_excel` / `close_excel` | Excel COM capture: writes `unit_id` to the driver range, recalculates, and captures the export range as an image. Requires `pywin32`. |
 

@@ -167,7 +167,7 @@ chartgen/
 | `core/acquisition/manifest_table/` | Excel export/import round-trip for the manifest table (`data_cache/manifest.csv`) — the acquisition-side equivalent of the Running Order's xlsx pair. Schema ownership stays with `workfile_file` |
 | `core/acquisition/toolkit_nhs/` | Fetch → canonical data shapes (API client, transformers, peer-group menu-building), plus population table construction (`population_tables.py`) and table-naming convention (`table_naming.py`). Lives here, not in `workfile.setup`, because building population tables is a "pull and normalise NHS toolkit data" concern, the same kind of thing as the rest of this package — and because `fetch.py` (same package) needs to call it directly without acquisition code depending on `workfile.setup` (one-way dependency rule, Section 2) |
 | `core/acquisition/toolkit_indicators/` | The Indicators toolkit's own fetch pipeline — separate API, separate URL shape, separate population-table trigger model from `toolkit_nhs/` (build-once vs merge-every-fetch). Shares NHS's token (`toolkit_nhs.api_client.get_token`) and reuses `toolkit_nhs.api_client.get_organisations` for organisation enrichment, plus the shared `cache_writer` — see Decision 10 |
-| `core/acquisition/template/` | Reads `.pptx` placeholders; detects/strips yellow boxes; parses toolkit URLs |
+| `core/acquisition/template/` | Reads `.pptx` placeholders; detects yellow boxes and resolves each against the slide's placeholders into three outcomes — contained, free-floating, or ambiguous overlap (see Decision 13); parses toolkit URLs |
 | `core/output_generation/definition/running_order/` | Split by concern: schema (`schema.py`), row-edit dialog support (`dialog_support.py`), template-generation (`generation.py`), generic row insert/overwrite operations (`row_ops.py`, used by the Charts sheet's save-back control), and `.xlsx` export/import (`xlsx_writer.py`, `xlsx_reader.py`). Package `__init__.py` re-exports the full API, so external call sites are unaffected |
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
 | `core/output_generation/execution/batch_process.py` | Batch loop — splits enabled Running Order rows by scope (`batch_open`/`normal`/`batch_close`) and iterates `assembly_engine.run_running_order` across the units in a run |
@@ -238,7 +238,6 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `scope` | `normal` / `batch_open` / `batch_close` — when the row executes relative to a batch |
 | `function` | Function name to call |
 | `slide_index` | 0-based slide index (blank for structural functions) |
-| `placeholder` | Placeholder name, e.g. `Chart 1` (blank for structural functions) |
 | `chart_type_ref` | Base Chart function name, e.g. `ranked_column` (blank for non-chart rows) |
 | `cache_file` | JSON cache filename supplying data for this chart (blank for non-chart rows) |
 | `populations` | Per-row populations string, overriding the project default (blank to use the default) |
@@ -504,3 +503,33 @@ Two TimeSeries-only Running Order columns, both added this session: `start_perio
 **Excel dropdowns via a hidden list sheet, not an inline formula.** Excel's inline list validation (used for `function`/`chart_type_ref`/etc.) is capped at 255 characters — fine for a handful of options, not for a chart's full period history. A hidden sheet (`_period_lists`) holds each distinct cache_file's period options in its own column (consecutive — column 1 for the first cache_file encountered, and so on); `start_period`, `end_period`, and `metric_periods` all validate against the same column for a given cache_file, one shared `DataValidation` object per cache_file rather than a fresh list per row. The dropdown itself is always single-value (Excel has no multi-select list validation) — `metric_periods` is the one column where more than one may be wanted, so a cell already holding a `^`-delimited value (Charts sheet multi-select, or typed by hand) isn't blocked by the dropdown being there; it just makes adding or replacing one value easy without knowing a period_id.
 
 **Display format.** Cells show `period_label(period_id)` rather than a bare id (meaningless to the user) or a bare label (Excel risks reinterpreting e.g. "Jan 24" as a date). The parenthesised id is what `xlsx_reader.py` extracts back into canonical storage on import; a cell that doesn't match the pattern (blank, or free text typed over the dropdown) resolves to nothing, the same "unresolvable → nothing" rule as an unresolvable population token.
+
+### Decision 13 — Yellow Box Resolution Without Placeholder Containment
+
+The original yellow-box convention required a textbox to sit fully inside a placeholder. Placeholders exist only in PowerPoint's Slide Master/Layout system — a template designer cannot add one to an existing slide in normal edit view, only build or edit a layout in Slide Master view. This makes the placeholder-only route unusable for content added after a template's placeholders are already fixed, which is expected to be the common case for ad hoc additions, not an edge case.
+
+`template_reader.read_template` resolves each detected yellow box against the slide's placeholders into one of three outcomes, checked in this order:
+
+1. **Fully contained** — matched to the placeholder; the placeholder's own position/size are used, unchanged from the original convention. The placeholder is removed from the cleaned template alongside the box.
+2. **No overlap with any placeholder** — free-floating. The box's own position/size are used directly, and it is carried through as its own `PlaceholderInfo` entry, named after its own PowerPoint shape name (there being no placeholder name to use). Only the box itself is removed from the cleaned template.
+3. **Partial overlap with a placeholder, short of full containment** — ambiguous. Left entirely alone: not classified, not added to the Running Order, not removed from the cleaned template. A warning is raised.
+
+**Why partial overlap is rejected rather than resolved.** A box straddling a placeholder boundary could reasonably be read as intending either the placeholder's bounds or its own — there's no reliable signal for which, so the designer is asked to resolve the ambiguity themselves (move the box fully in, or fully out) rather than the system guessing.
+
+**Precision trade-off, accepted.** A contained box gets pixel-perfect position/size for free, from the placeholder. A free-floating box is only as precise as the designer draws it — the accepted cost of supporting ad hoc content addition without Slide Master skills. The Running Order's `left_emu`/`top_emu`/`width_emu`/`height_emu` columns, and the Charts sheet's percent-of-page fields, remain the route to pixel-perfect placement for a free-floating box, at the cost of the designer doing that adjustment manually.
+
+**Unrecognised content is now warned, not silent.** A yellow box whose text matches none of the three content types (chart URL, picture path, Excel path+ranges) is still stripped from the cleaned template, but now raises a warning naming the slide and a text preview, rather than being silently dropped.
+
+**Warning summary.** If a template read produces any warning at all — unrecognised content, ambiguous overlap, or multiple boxes matched to one placeholder — a single summary line is prepended to the warnings list, so a partial failure is visible without reading every individual entry.
+
+### Decision 14 — Theme-Referenced Fill Colour Resolution
+
+PowerPoint shapes can get their colour two different ways: an explicit literal fill on the shape itself (`<a:solidFill><a:srgbClr>`), or a "Shape Styles" gallery reference that stores no colour at all — only `<p:style><a:fillRef><a:schemeClr val="accentN"/></a:fillRef>`, resolved against the presentation's theme at render time. Yellow-box detection originally only checked for the former; a box styled via the latter route looked yellow on screen but was invisible to detection, since nothing on the shape itself said so.
+
+`_get_shape_fill_rgb` now resolves both, in order: an explicit fill on the shape (literal RGB, or a `schemeClr` theme reference resolved as below); failing that, if the shape defines no fill of its own at all, its style's `fillRef` — again resolved as below. An explicit `<a:noFill/>` on the shape is treated as no fill, full stop — the style reference is not consulted in that case.
+
+**Resolution walks the full chain, not just a name lookup.** A `schemeClr` name (e.g. `accent4`) isn't looked up directly against the theme — it first passes through the colour map in effect for that slide (a slide's own `<p:clrMapOvr>` if present, otherwise its slide master's `<p:clrMap>`), which can in principle redirect any of the twelve named slots to a different one. Only the redirected name is then looked up in the theme's `<a:clrScheme>` (via the slide → layout → master → theme relationship chain) for its literal RGB. This handles a non-identity colour map correctly rather than only the common (identity) case. Resolved master-level context (colour map and theme scheme) is cached per master to avoid re-parsing for every shape.
+
+**Simplification, accepted.** The theme's format scheme (`fillStyleLst`) can define a `fillRef` idx as a shaded or gradient variant of the base scheme colour rather than a flat solid. This is not modelled — the base scheme colour is used unmodified. Acceptable for yellow detection, where the hue/saturation/value thresholds already tolerate meaningful colour drift; not intended as a general-purpose theme-colour renderer.
+
+**Containment tolerance.** `_fully_contained` (Decision 13) allows 1mm (36,000 EMU) of drift on each edge, absorbing sub-visible rounding noise — observed in practice as a 1 EMU discrepancy on a shape duplicated via copy/paste — without misclassifying a genuinely-contained box as a partial overlap (Decision 13, scenario 3).
