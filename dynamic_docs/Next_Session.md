@@ -1,15 +1,18 @@
 <!-- Purpose: Claude's handoff note -- what to pick up, open questions, and suggested first steps for the next session. Written by Claude at session end. -->
 
-## Pick up here — verify this session's fixes live
+## Pick up here — confirm docs re-upload, then verify this session's fixes live
 
-Two changes went in this session but haven't been confirmed working end-to-end by the user yet:
+- **Docs re-upload.** Functional Spec, Feature List, Architecture, and Glossary were all updated in the mirror this session. Confirm at session start whether the user has re-uploaded them to Claude Desktop Project Files yet; if not, that's the first thing to close out.
+- **Yellow box detection.** Worth a fresh template read against `Presentation_Example_2_Projects.pptx` (or an equivalent real template) to reconfirm: all chart-URL boxes styled via the "Shape Styles" gallery now detect correctly, the paired left/right boxes on slides 5/6/8/9/11 both match their placeholders, and the two genuinely-empty boxes on slide 12 still correctly warn rather than silently vanish.
+- **Outputs tab.** Confirm the batch-size control behaves correctly in both states — before any fetch (or with `remaining` at 0 or 1), and with a genuine range to slide across — and that Reset queue still works in both.
 
-- **Chart-type default-population.** Process a template → run Fetch → check the Running Order: `insert_chart` rows should now show a real `chart_type_ref` instead of blank, for every chart whose shape resolved successfully. If any stay blank, check the chart's `shape_type` in the manifest actually resolved (an unmapped/unfetched chart, or one whose shape doesn't match any key in `chart_type_map.csv`, correctly stays blank — that's not a bug).
-- **Running Order `placeholder` column removal.** Worth a normal template-process → Fetch → Running Order → batch-run pass to confirm nothing else was quietly depending on the removed field. Code trace this session didn't find anything, but that trace wasn't a live test.
+## Worth a scoping conversation, not urgent
 
-## Still open — prototype-sharing plan (untouched this session)
+- **Detection edge cases not yet exercised for real:** a slide-level `clrMapOvr` override, a non-identity `clrMap`, or a `fillRef` pointing at a shaded/gradient theme variant (idx > 1) rather than a flat solid. The last one is a deliberate simplification (Architecture Decision 14) — revisit only if a real template surfaces a shape whose visible colour doesn't match its theme's base scheme colour.
 
-Carried forward unchanged from the previous session:
+## Still open — prototype-sharing plan (untouched again this session)
+
+Carried forward unchanged:
 
 - **Quick-start guide** — a walkthrough of using the tool end-to-end against the sample PowerPoint templates. Not started.
 - **Sample PowerPoint templates** — user's own task, two or three, varying complexity. Check status.
@@ -18,16 +21,17 @@ Carried forward unchanged from the previous session:
 
 ## This session's work, for context
 
-- **Chart-type default-population** moved from Running Order generation time (wrong — generation always precedes Fetch, so it never fired) to a proper post-Fetch backfill (`import_flow.backfill_chart_types_after_fetch`, called silently from the Imports tab's Fetch handler). Only fills genuinely blank `chart_type_ref` cells; never overwrites a set value. See `generation.py` (`default_chart_type_ref_for_shape`, `backfill_default_chart_types`) and `import_flow.py`.
-- **Running Order `placeholder` column removed entirely**, code and docs, after tracing its full lifecycle and confirming it was never a live reference — the PowerPoint object it named is deleted from the cleaned template once matched, and every insertion path works by EMU coordinate, never by name. Its one live (and risky) use — a dict key on `ctx.autotable_stats` — has been fixed to key on `row_id` instead, since placeholder names are only unique per slide, not across the whole Running Order (a real collision risk once Autotables get built, not yet triggered since nothing reads that dict today).
-- Along the way, confirmed the per-row `ctx.log` mechanism (built by every Running Order function's `ok_result`/`err_result`) has **no consumer anywhere** — `batch_process.py` only ever surfaces a per-unit summary, never per-row messages, even for Run Selected. Left alone this session at the user's request. **Worth raising again**: either give it a real consumer (e.g. surface it as a detailed per-row log in the Outputs tab) or strip the now-pointless message-building out of every function (`create_ppt`, `insert_chart`, `insert_picture`, `save_ppt`, etc. all build strings nobody sees).
-- Running Order overview table: `#`/`On`/`Slide` columns set to minimum width (`"small"`, 75px) — purely cosmetic, not written up in the governed docs, per explicit user instruction that formatting-level decisions don't belong there.
+- **Three-scenario yellow box resolution** replaces the old "must be fully inside a placeholder" rule (Architecture Decision 13): fully contained (matched to placeholder), no overlap (free-floating, box's own position/size used, named after its own shape name), partial overlap (ambiguous, left alone, warned). Unrecognised content now warns instead of silently stripping; a summary warning line is prepended whenever any warning exists.
+- **Theme-referenced fill colour resolution** (Architecture Decision 14) — `_get_shape_fill_rgb` now also resolves a shape's "Shape Styles" `fillRef` (a theme colour pointer, not a literal fill) through the slide's colour map and the theme's colour scheme. Found and fixed via live testing against a real uploaded template, which had most of its yellow boxes styled this way.
+- **1mm containment tolerance** — `_fully_contained` now allows 36,000 EMU of drift per edge, absorbing sub-visible PowerPoint copy/paste rounding (observed: a genuine 1 EMU discrepancy) that was misclassifying a contained box as a partial overlap.
+- **Outputs tab slider crash** — `st.slider` with `min_value == max_value == 1` whenever `remaining <= 1` (e.g. before any fetch). Fixed by showing a plain batch-size label instead of a slider in that case, keeping Reset queue always visible.
+- All four fixes this session were driven by live testing against a real uploaded `.pptx`, not just code review — worth continuing that pattern for any future detection-logic work.
 
 ## Open decisions from earlier sessions, don't relitigate
 
-- **Sidebar divider line — dropped**, after extensive attempts, root cause never identified. Plain spacer divs in place, confirmed looking good. Don't re-attempt the same techniques (native `st.divider()`, raw `<hr>` variants, dash-character text, absolute positioning) if this comes up again.
+- **Sidebar divider line — dropped**, after extensive attempts, root cause never identified. Plain spacer divs in place, confirmed looking good. Don't re-attempt the same techniques if this comes up again.
 - **Sidebar dirty marker (●) is gone**, not restored, not raised again since flagged once. Treat as accepted unless the user brings it up.
-- **Sidebar/main CSS spacing is "good enough,"** not chased further — user explicitly okay with the remainder.
+- **Sidebar/main CSS spacing is "good enough,"** not chased further.
 
 ## Worth remembering for any future UI/CSS work
 
@@ -35,11 +39,13 @@ Carried forward unchanged from the previous session:
 
 ## Secondary, lower priority
 
+- Not yet re-tested live (carried forward from before this session): the chart-type default-population backfill and the Running Order `placeholder`-column removal.
 - No live batch-run test yet for: Period Range / Convert Periods to Metrics, TimeSeries charts, or the Charts sheet round-trip more broadly, against a real workfile/template.
 - Tweaks (reference lines, axis control, conditional colouring, hook architecture) remain not built.
 
 ## Carried forward, not urgent
 
-- One-hop-only `soft_parents` resolution is a deliberate scope boundary, not a bug — revisit only once a genuine multi-level chain (more than two tables deep) is actually needed.
+- One-hop-only `soft_parents` resolution is a deliberate scope boundary, not a bug.
 - Table-wide `chart_type_ref`/`metric_periods` validation on Excel upload — still deferred; needs a fresh conversation about what "proper" validation means before scoping any build.
 - Population-table Excel edits still have no validation (a removed `unit_id` can leave a dangling `soft_parents` reference) — same deferral as above.
+- The per-row `ctx.log` mechanism has no consumer anywhere — either give it a real consumer or strip the now-pointless message-building out of every Running Order function.
