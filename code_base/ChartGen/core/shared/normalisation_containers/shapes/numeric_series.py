@@ -87,20 +87,24 @@ def compute_numeric_series_metric_stats(values: list) -> "NumericSeriesMetricSta
     )
 
 
-def _recalc_numeric_series_stats(units: list) -> list:
-    """Recalculate NumericSeriesMetricStats for a filtered unit list, one per Metric-Series."""
-    if not units:
-        return []
-    n_metrics = len(units[0].values)
+def _recalc_numeric_series_stats(units: list, n_metrics: int) -> list:
+    """
+    Recalculate NumericSeriesMetricStats for a filtered unit list, one per
+    Metric-Series. Always returns exactly n_metrics entries, even when
+    units is empty — an empty population layer (e.g. a peer group with no
+    matching data) still needs one stats entry per named metric-series, so
+    it can still be shown (as all-zero/blank) rather than the layer's
+    metric-series section disappearing entirely.
+    """
     return [
         compute_numeric_series_metric_stats([u.values[m] for u in units])
         for m in range(n_metrics)
     ]
 
 
-def numeric_series_autotable_stats(shape: "NumericSeries") -> dict:
+def numeric_series_summary_stats(shape: "NumericSeries") -> dict:
     """
-    Autotable statistics for a NumericSeries shape — everything on tap,
+    Summary statistics for a NumericSeries shape — everything on tap,
     independent of any visualisation. Keyed by Metric-Series name:
     {metric_name: {n, No data, Min, Lower Quartile, Mean, Median,
     Upper Quartile, Max}}.
@@ -124,7 +128,7 @@ def numeric_series_autotable_stats(shape: "NumericSeries") -> dict:
 def filter_numeric_series(shape: "NumericSeries", unit_ids: set) -> "NumericSeries":
     """Return a new NumericSeries filtered to unit_ids with stats recalculated."""
     filtered_units = [u for u in shape.units if u.unit_id in unit_ids]
-    new_stats = _recalc_numeric_series_stats(filtered_units)
+    new_stats = _recalc_numeric_series_stats(filtered_units, len(shape.metric_names))
     new_shape_stats = ShapeStats(
         count_metric_series=len(shape.metric_names),
         count_units=len(filtered_units),

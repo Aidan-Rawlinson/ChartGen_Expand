@@ -127,9 +127,9 @@ def _recalc_time_series_period_stats(units: list, n_periods: int) -> list:
     ]
 
 
-def time_series_autotable_stats(shape: "TimeSeries") -> dict:
+def time_series_summary_stats(shape: "TimeSeries") -> dict:
     """
-    Autotable statistics for a TimeSeries shape — keyed by Metric-Series
+    Summary statistics for a TimeSeries shape — keyed by Metric-Series
     name, then by period label:
     {metric_name: {period_label: {n, No data, Min, Lower Quartile, Mean,
     Median, Upper Quartile, Max}}}.

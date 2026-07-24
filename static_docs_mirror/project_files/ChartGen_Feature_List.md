@@ -138,6 +138,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `insert_slide` / `insert_section` / `delete_slide` | Not built | |
 | `submission_list` | Not built | |
 | Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
+| Charts sheet summary stats display | Complete | One table per (population layer × metric-series), with a short per-shape-type reference id (e.g. `Mn`, `1Mna`, `P2a`) alongside each statistic. See Functional Spec Section 9.4, Architecture Decision 15. |
+| Charts sheet unit list display | Complete | One table per population layer — unit id, code, name. See Functional Spec Section 9.4, Architecture Decision 15. |
 
 ---
 
@@ -157,7 +159,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Reporting unit highlighting — NumericCompositional | Not built | Per-unit values not currently in the data shape as returned from the API. |
 | Reporting unit highlighting — CategoricalCompositional | Not applicable | These charts show population aggregates only; no per-unit value exists. |
 | Reporting unit highlighting — TimeSeries | Complete | Selected unit(s) drawn as their own line(s); same one-to-many handling as other shapes. |
-| Selection identity in autotable stats (all 20 charts) | Complete | |
+| Selection identity in summary stats (all 20 charts) | Complete | |
 | Peer group as visualisation layer (peer token following `All`) | Complete | Full population retained; the peer group is rendered as an additional layer. Per-chart rendering of layers is prototype-level. |
 | Autotable populations (separate from chart populations) | Not built | No `table_populations` field exists on `insert_chart` rows. |
 | Multiple units from same org (distinct colour) | Not built | |
@@ -175,7 +177,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Feature | Readiness | Notes |
 |---|---|---|
 | Text-tag-based table population (basic tables) | Not built | Depends on text tag replacement, which is built. |
-| Autotables (statistics from chart construction) | Partial | Statistics are computed by the shape modules and collected at chart time, stored on `AssemblyContext` per `insert_chart`; the functions to populate a table from them are not yet implemented. |
+| Autotables (statistics from chart construction) | Partial | Statistics are computed by the shape modules — renamed Summary Stats this session, disentangled from this feature (see Glossary) — and collected at chart time, stored on `AssemblyContext` per `insert_chart`; the functions to populate a table from them are not yet implemented. |
 | Multi-unit table expansion | Not built | |
 
 ---

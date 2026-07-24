@@ -56,6 +56,7 @@ from core.output_generation.definition.running_order import (
     CHART_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
 )
 from core.output_generation.execution.charts.base_charts import render_chart
+from core.output_generation.execution.charts.base_charts.shared import _format_number
 from core.output_generation.execution.charts.chart_type_map import get_valid_chart_types
 from core.shared.infrastructure.page_sizing import (
     percent_to_emu, emu_to_percent, get_page_size_emu,
@@ -64,7 +65,7 @@ from core.shared.infrastructure.page_sizing import (
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.population_layers import build_population_layers
-from core.shared.normalisation_containers.shapes import apply_period_range
+from core.shared.normalisation_containers.shapes import apply_period_range, reference_rows_for_shape_type
 from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import settings, master_table, cached_files, manifest, load_shape_ps, ws
@@ -98,6 +99,22 @@ def _int_or_none(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _format_reference_value(value, kind, format_modifier):
+    """
+    Format one summary-stats row for display, per its "kind" (reference_ids
+    module): "count" is always a plain integer; "percent" is always shown
+    as a %, regardless of the shape's own format_modifier; "value" respects
+    format_modifier the same way the chart itself does (£, %, or plain).
+    """
+    if value is None:
+        return ""
+    if kind == "count":
+        return f"{value:,.0f}"
+    if kind == "percent":
+        return f"{value:,.1f}%"
+    return _format_number(value, format_modifier)
 
 
 def _clear_sandbox_state():
@@ -525,7 +542,7 @@ def render_charts_tab():
             pop_layers = [_replace(shape, population_label="All")]
 
         with st.spinner("Rendering…"):
-            image_bytes, autotable_stats = render_chart(
+            image_bytes, _base_summary_stats, layer_summary_stats, layer_units = render_chart(
                 chart_type_ref, pop_layers, width=width_pct, height=height_pct, report_context=rc
             )
 
@@ -535,12 +552,54 @@ def render_charts_tab():
             multiplier = ZOOM_MULTIPLIERS.get(zoom_choice, 1.0)
             px_width = max(50, int((width_emu / 914400) * 96 * multiplier))
             st.image(image_bytes, width=px_width)
-            if zoom_choice == DEFAULT_ZOOM:
-                st.caption(
-                    "Sized to approximate true print size — actual on-screen size depends on "
-                    "your monitor and OS display-scaling settings."
-                )
 
-        if autotable_stats:
-            st.caption("Autotable statistics")
-            st.json(autotable_stats)
+        # --- Summary stats and unit lists — one summary-stats table per
+        # (population layer x metric-series), then, in a separate labelled
+        # section, one unit-list table per population layer (units belong
+        # to the whole layer, not to an individual metric-series — every
+        # metric-series in a shape instance shares the same population).
+        # Both read what each layer's own shape instance already
+        # computes/holds for itself (layer_summary_stats, layer_units — see
+        # registry.render_chart); nothing here is recalculated. Ids are
+        # short, stable reference tags scoped to this shape type
+        # (Decisions.md), meant to eventually double as PowerPoint table
+        # replacement tags — not full Autotables, which will draw on this
+        # or on the shapes directly, but isn't built yet (Feature List).
+        # "Name" isn't on the shape's own unit records (unit_id/unit_code
+        # only) — resolved here from the population table already loaded
+        # for this chart.
+        # ---
+        name_by_unit_id = {str(r.get("unit_id")): r.get("unit_name", "") for r in target_rows}
+
+        if layer_summary_stats:
+            st.caption("Summary stats")
+            for layer_label, stats in layer_summary_stats.items():
+                rows_by_series = reference_rows_for_shape_type(effective_shape_type, stats)
+                for series_name, rows in rows_by_series.items():
+                    with st.expander(f"{layer_label} — {series_name}", expanded=False):
+                        display_rows = [
+                            {
+                                "Reference": r["id"],
+                                "Statistic": r["label"],
+                                "Value": _format_reference_value(r["value"], r["kind"], shape.format_modifier),
+                            }
+                            for r in rows
+                        ]
+                        st.table(display_rows)
+
+        if layer_units:
+            st.caption("Units included")
+            for layer_label, units in layer_units.items():
+                with st.expander(f"{layer_label} — Units", expanded=False):
+                    unit_rows = [
+                        {
+                            "ID": u.unit_id,
+                            "Code": u.unit_code,
+                            "Name": name_by_unit_id.get(str(u.unit_id), ""),
+                        }
+                        for u in units
+                    ]
+                    if unit_rows:
+                        st.table(unit_rows)
+                    else:
+                        st.caption("No units in this population layer.")

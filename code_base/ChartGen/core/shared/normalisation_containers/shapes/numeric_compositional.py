@@ -70,20 +70,31 @@ def compute_numeric_compositional_metric_stats(units: list) -> "NumericCompositi
     )
 
 
-def numeric_compositional_autotable_stats(shape: "NumericCompositional") -> dict:
+def numeric_compositional_summary_stats(shape: "NumericCompositional") -> dict:
     """
-    Autotable statistics for a NumericCompositional shape — everything on
+    Summary statistics for a NumericCompositional shape — everything on
     tap, independent of any visualisation: raw component values, their sum,
     and each component's share of that sum. Keyed by Metric-Series name:
     {metric_name: {Total, Components: {component: {Value, %}}}}.
+
+    Iterates component_names (structural, always present) rather than a
+    unit's own values list — an empty population layer (no units matched)
+    still needs one Components entry per named component, so the metric's
+    component breakdown is still shown (as blank/None), rather than
+    disappearing entirely along with the (empty) unit list.
     """
     out = {}
     for metric in shape.metrics:
-        values = metric.units[0].values if metric.units else []
-        total = sum(v for v in values if v is not None)
+        raw_values = metric.units[0].values if metric.units else []
+        values = [
+            raw_values[i] if i < len(raw_values) else None
+            for i in range(len(metric.component_names))
+        ]
+        non_null = [v for v in values if v is not None]
+        total = sum(non_null) if non_null else None
         components = {}
-        for i, v in enumerate(values):
-            name = metric.component_names[i] if i < len(metric.component_names) else f"Component {i + 1}"
+        for i, name in enumerate(metric.component_names):
+            v = values[i]
             pct = round(v / total * 100, 4) if (v is not None and total) else None
             components[name] = {"Value": v, "%": pct}
         out[metric.name or "Metric"] = {"Total": total, "Components": components}

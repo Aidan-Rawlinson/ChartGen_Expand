@@ -10,11 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-from core.shared.normalisation_containers.shapes import autotable_stats
+from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, NAVY, PIE_COLOURS,
     _size_to_inches, _fig_to_bytes, _apply_spine_style, _format_number, _axis_formatter,
-    _autotable_with_selection,
+    _summary_stats_with_selection,
 )
 
 
@@ -44,7 +44,7 @@ def ugly_bar(population_layers: list, width=80, height=40, tweaks=[], report_con
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15),
               ncol=2, fontsize=7, frameon=False)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def radar_chart(population_layers: list, width=55, height=55, tweaks=[], report_context=None):
@@ -72,7 +72,7 @@ def radar_chart(population_layers: list, width=55, height=55, tweaks=[], report_
     ax.spines["polar"].set_visible(False)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def donut_component(population_layers: list, width=55, height=55, tweaks=[], report_context=None):
@@ -97,7 +97,7 @@ def donut_component(population_layers: list, width=55, height=55, tweaks=[], rep
               loc="upper center", bbox_to_anchor=(0.5, -0.02),
               fontsize=7, frameon=False, ncol=2)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def lollipop_chart(population_layers: list, width=70, height=40, tweaks=[], report_context=None):
@@ -122,7 +122,7 @@ def lollipop_chart(population_layers: list, width=70, height=40, tweaks=[], repo
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def waffle_chart(population_layers: list, width=60, height=50, tweaks=[], report_context=None):
@@ -156,4 +156,4 @@ def waffle_chart(population_layers: list, width=60, height=50, tweaks=[], report
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.02),
               fontsize=7, frameon=False, ncol=2)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)

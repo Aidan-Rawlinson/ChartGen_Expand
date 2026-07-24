@@ -132,7 +132,7 @@ def _selected_layer_value(population_layers: list):
                  for u in layer.units if u.values[0] is not None), None)
 
 
-def _autotable_with_selection(stats: dict, report_context, selected_value) -> dict:
+def _summary_stats_with_selection(stats: dict, report_context, selected_value) -> dict:
     if report_context is None:
         return stats
     out = dict(stats)

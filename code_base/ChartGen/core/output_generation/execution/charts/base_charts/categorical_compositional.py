@@ -11,11 +11,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
 
-from core.shared.normalisation_containers.shapes import autotable_stats
+from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     YES_COL, NO_COL, PIE_COLOURS,
     _size_to_inches, _fig_to_bytes, _apply_spine_style,
-    _autotable_with_selection,
+    _summary_stats_with_selection,
 )
 
 
@@ -48,7 +48,7 @@ def yn_bar(population_layers: list, width=80, height=55, tweaks=[], report_conte
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.03),
               ncol=2, fontsize=7, frameon=False)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def list_pie(population_layers: list, width=50, height=55, tweaks=[], report_context=None):
@@ -62,7 +62,7 @@ def list_pie(population_layers: list, width=50, height=55, tweaks=[], report_con
     total = sum(c for c in counts if c is not None)
     if total == 0:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
-        return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+        return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
     pcts = [c / total * 100 for c in counts]
     colours = PIE_COLOURS[:len(categories)]
     wedges, _, autotexts = ax.pie(pcts, colors=colours, startangle=90,
@@ -80,7 +80,7 @@ def list_pie(population_layers: list, width=50, height=55, tweaks=[], report_con
                     fontsize=7.5, ha="left" if x_o > 0 else "right", va="center",
                     arrowprops=dict(arrowstyle="-", color="#888888", lw=0.8))
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def diverging_bar(population_layers: list, width=80, height=55, tweaks=[], report_context=None):
@@ -110,7 +110,7 @@ def diverging_bar(population_layers: list, width=80, height=55, tweaks=[], repor
     ax.text( lim * 0.5,  -0.8, "Yes →", ha="center", va="center", fontsize=8, color=YES_COL, fontweight="bold")
     ax.text(-lim * 0.5,  -0.8, "← No",  ha="center", va="center", fontsize=8, color=NO_COL,  fontweight="bold")
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def dot_matrix(population_layers: list, width=80, height=55, tweaks=[], report_context=None):
@@ -157,7 +157,7 @@ def dot_matrix(population_layers: list, width=80, height=55, tweaks=[], report_c
     ax.yaxis.grid(False); ax.set_facecolor("white")
     ax.text(0, n_q + 0.3, "Each dot ≈ 10%", fontsize=6.5, color="#888888", style="italic")
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def donut_pie(population_layers: list, width=50, height=55, tweaks=[], report_context=None):
@@ -171,7 +171,7 @@ def donut_pie(population_layers: list, width=50, height=55, tweaks=[], report_co
     total = sum(c for c in counts if c is not None)
     if total == 0:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
-        return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+        return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
     pcts = [c / total * 100 for c in counts]
     colours = PIE_COLOURS[:len(categories)]
     wedges, _ = ax.pie(pcts, colors=colours, startangle=90,
@@ -185,7 +185,7 @@ def donut_pie(population_layers: list, width=50, height=55, tweaks=[], report_co
                     ha="left" if x_o > 0 else "right", va="center",
                     arrowprops=dict(arrowstyle="-", color="#AAAAAA", lw=0.6))
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
 
 
 def treemap(population_layers: list, width=65, height=45, tweaks=[], report_context=None):
@@ -215,4 +215,4 @@ def treemap(population_layers: list, width=65, height=45, tweaks=[], report_cont
         x_cursor += bw
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.axis("off")
     fig.tight_layout()
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, None)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)

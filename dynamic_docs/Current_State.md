@@ -26,21 +26,7 @@
 
 ### Known gaps / not yet done (carried forward)
 
-- **Docs not yet re-uploaded to Project Files** — mirror is ahead of what Claude Desktop shows; re-upload and confirm at next session start if not done before this close-down completes.
-- Detection has only been verified against one real template. Not yet exercised: a slide-level `clrMapOvr` override in practice, a non-identity `clrMap` (rare), or a `fillRef` idx pointing at a shaded/gradient theme variant rather than a flat solid (deliberately unmodelled — see above).
-- Not yet re-tested live: the chart-type default-population backfill and the Running Order `placeholder`-column removal from the previous session — still carried forward as an open verification item.
-- Prototype-sharing plan (quick-start guide, sample templates, installer check) — still open, untouched this session.
-- Guidance PDF and its build script exist only on SharePoint / a prior session's sandbox — not saved into the project folder.
-- Sidebar divider line — abandoned, root cause never identified. Don't relitigate without a genuinely different technique.
-- Sidebar/main CSS spacing — accepted as "good enough."
-- Sidebar dirty marker (●) — dropped, not raised again since. Treat as accepted unless the user brings it up.
-- Process-restart gotcha still applies: the `.bat`'s background Streamlit server survives closing the browser tab. Flag early in any UI/CSS session where changes appear not to take effect.
-- Table-wide `chart_type_ref`/`metric_periods` validation on Excel upload — still deferred.
-- Population-table Excel edits still unvalidated (dangling `soft_parents` possible) — same deferral.
-- No live batch-run test yet for Period Range / Convert Periods to Metrics, TimeSeries charts, or the Charts sheet round-trip more broadly, against a real template.
-- Tweaks (reference lines, axis control, conditional colouring, hook architecture) — not built.
-- One-hop-only `soft_parents` resolution — deliberate scope boundary, not a bug.
-- The per-row `ctx.log` mechanism has no consumer anywhere (noted previous session, still unactioned) — either give it a real consumer or strip the now-pointless message-building out of every Running Order function.
+None.
 
 ### Resolved / dropped this session
 

@@ -122,7 +122,8 @@ chartgen/
     │   ├── normalisation_containers/
     │   │   ├── shapes/
     │   │   │   ├── common.py, numeric_series.py, numeric_compositional.py,
-    │   │   │   └── categorical_compositional.py, timeseries.py, dispatch.py
+    │   │   │   └── categorical_compositional.py, timeseries.py, dispatch.py,
+    │   │   │   └── reference_ids.py
     │   │   ├── population_layers.py
     │   │   ├── peer_group_tokens.py
     │   │   └── shape_transforms.py
@@ -177,7 +178,7 @@ chartgen/
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
-| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and autotable statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base and `dispatch.py` for `filter_shape`/`autotable_stats`/`apply_period_range`); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12) |
+| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and summary statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base, `dispatch.py` for `filter_shape`/`summary_stats`/`summary_stats_by_layer`/`shape_units`/`units_by_layer`/`apply_period_range`, and `reference_ids.py` for converting a shape's summary stats into short id-tagged rows for display — see Decision 15); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12) |
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file`; also `SPINE_COLUMN_ORDER`, the population-table spine's display/authoring column order, shared between the UI and the Excel round-trip below |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
@@ -324,7 +325,7 @@ Streamlit process (st.session_state)
     │     output_path: str
     │     template_path: str
     │     log: list[dict]
-    │     autotable_stats: dict
+    │     summary_stats: dict
     │     report_context: ReportContext
     │     full_unit_set: dict — {table_name: list[dict]} for the current reporting unit
     │     default_populations: str
@@ -533,3 +534,31 @@ PowerPoint shapes can get their colour two different ways: an explicit literal f
 **Simplification, accepted.** The theme's format scheme (`fillStyleLst`) can define a `fillRef` idx as a shaded or gradient variant of the base scheme colour rather than a flat solid. This is not modelled — the base scheme colour is used unmodified. Acceptable for yellow detection, where the hue/saturation/value thresholds already tolerate meaningful colour drift; not intended as a general-purpose theme-colour renderer.
 
 **Containment tolerance.** `_fully_contained` (Decision 13) allows 1mm (36,000 EMU) of drift on each edge, absorbing sub-visible rounding noise — observed in practice as a 1 EMU discrepancy on a shape duplicated via copy/paste — without misclassifying a genuinely-contained box as a partial overlap (Decision 13, scenario 3).
+
+### Decision 15 — Summary Stats, Reference Ids, and the Always-Present Population Layer
+
+**Rename.** `autotable_stats` (dispatch function) and each shape's own `*_autotable_stats` function are renamed to `summary_stats`/`*_summary_stats` this session. The old name conflated two things: the stats a shape computes for itself (a property of the data), and Autotables (Feature List: Not built), the future PowerPoint-table-population feature that will consume them. `_autotable_with_selection` (base_charts/shared.py) is renamed `_summary_stats_with_selection` for the same reason. `AssemblyContext.autotable_stats` is renamed `AssemblyContext.summary_stats`.
+
+**`render_chart` now returns a 4-tuple**, not 2: `(image_bytes, base_summary_stats, layer_summary_stats, layer_units)`. `base_summary_stats` is unchanged — the scope layer's own stats plus the selected-unit bolt-on fields, exactly as each Base Chart function already built it. `layer_summary_stats` and `layer_units` are new — computed once in `render_chart` itself via `summary_stats_by_layer`/`units_by_layer` (`shapes/dispatch.py`), reading every population layer passed in, not just the scope layer. This corrects a real gap: every Base Chart function only ever read stats off `population_layers[0]`; every other layer's own stats were never read at all. `assembly_engine._render_chart_image` unpacks all four values but currently discards the last two — Autotables is the intended future consumer, not yet built.
+
+**`shape_units`** (`shapes/dispatch.py`) returns the list of Unit-like objects making up a shape's actual population, dispatching per shape type: `shape.units` for NumericSeries; `shape.metrics[0].units` for the other three (every metric-series in one shape instance shares the same population — the existing `ShapeStats` counts already assume this).
+
+**Reference ids** (`shapes/reference_ids.py`) convert a shape's summary stats into short, PowerPoint-tag-safe id-tagged rows (`{"id", "label", "kind", "value"}`), one function per shape type (`numeric_series_reference_rows`, `time_series_reference_rows`, `categorical_reference_rows`, `numeric_compositional_reference_rows`), dispatched via `reference_rows_for_shape_type(shape_type: str, stats: dict)` — keyed by the same shape_type strings already used by `chart_type_map.csv` and `cache_reader.DESERIALISE_MAP`. Scope is per shape type, not global: an id like `Mn` means the same statistic in every NumericSeries table, since every NumericSeries shape shares an identical fixed stat set; compositional shapes carry a running component/category number instead, since component count varies per metric-series but is identical across every metric-series within one shape instance (a valid compositional shape requires this).
+
+Id construction, by shape type:
+- **NumericSeries / TimeSeries** — fixed stat-letter prefixes (`C`, `Nd`, `Mn`, `Md`, `Q1`, `Q3`, `Mi`, `Ma`). TimeSeries prefixes a 1-based period number ahead of the stat letter (in `shape.periods` order), since a period axis exists on top of the same fixed stat set.
+- **CategoricalCompositional / NumericCompositional** — `C`/`Nr` (categorical) or `T` (numeric) for the fixed part; a 1-based running number identifies each component/category, with a `P`-prefixed twin for its percentage share.
+- **All four** — a series letter (`a`, `b`, `c`, ...) is appended last, only when a shape carries more than one metric-series, restarting at `a` for each shape instance (not persistent across shapes). Deliberately no digit-adjacent-to-digit case can arise (e.g. TimeSeries never has components, so a period number is never adjacent to a component number).
+
+Each row also carries a `kind` (`"value"` / `"count"` / `"percent"`) governing display formatting, not calculation: `"value"` respects the shape's own `format_modifier`; `"count"` is always a plain integer; `"percent"` is always shown as a %, independent of `format_modifier` (extending CategoricalCompositional's existing chart-rendering convention — Functional Spec Section 10.2 — to NumericCompositional's component-share figures for the same reason).
+
+**Accepted trade-off.** An id's meaning is not fixed at authoring time — it depends on the shape's current series/component count. A tag typed into a PowerPoint table referencing e.g. `Mn` (no series letter, one series) would mean something different, or break, if a second metric-series were later added to that chart. Accepted deliberately: the alternative (always carrying a series letter, even for a single series) was considered and rejected in favour of shorter ids in the common single-series case.
+
+**Every population-string token now always produces a layer.** `build_population_layers` (`shared/normalisation_containers/population_layers.py`) previously returned `[]` entirely if the first token failed to resolve, and silently skipped (`continue`) any later token that failed to resolve — e.g. no unit currently selected, or the selected unit's own peer-group value blank/unset. This meant a chart's requested populations string (`All^Region()^Selected`) could silently render with only one or two of its three intended layers, with no visible indication anything was missing. `_resolve` (the token-resolution helper) now never returns `None`: an unresolvable token returns an empty id set with its own best-available label (the raw token text, where no resolved value exists) instead. The scope token (first in the string) may now resolve to an empty set; every subsequent token then also resolves empty against it, correctly, rather than the whole layer list disappearing. This holds regardless of whether the currently selected reporting unit has data in this particular chart — resolution depends only on the population table, never on chart data presence.
+
+**Two shape modules needed a matching fix, so an empty layer still displays correctly rather than losing its own structure:**
+- **NumericSeries** — `_recalc_numeric_series_stats` previously derived its metric-series count from `units[0].values`, collapsing to `[]` (losing every metric-series name) when the filtered unit list was empty. Now takes an explicit `n_metrics` parameter (`len(shape.metric_names)`), so a zero-unit layer still returns one (all-null) stats entry per metric-series.
+- **NumericCompositional** — `numeric_compositional_summary_stats` previously derived its component list from a unit's own `values`, so a zero-unit metric-series produced an empty `Components` dict, losing every component name. Now iterates `metric.component_names` (structural, always present) instead.
+- CategoricalCompositional and TimeSeries already handled the zero-unit case correctly (both already iterate structural fields — `shape.metrics`/`category_names` and `shape.metrics`/`shape.periods` respectively — rather than deriving counts from unit data) and needed no change.
+
+**Charts sheet display** (`ui/tabs/charts_tab.py`) replaces the previous single `st.json(autotable_stats)` block with two labelled sections, read from `render_chart`'s new third and fourth return values: "Summary stats" (one collapsed expander per population layer × metric-series, columns Reference/Statistic/Value) and "Units included" (one collapsed expander per population layer, columns ID/Code/Name — "Name" resolved from the population table already loaded for the chart, since a shape's own unit records carry only id and code). Both sections always show one entry per population layer actually passed to the chart, including an empty one — the Units included table previously skipped a layer with zero units entirely; it now shows the expander with an explicit "No units in this population layer" note instead.

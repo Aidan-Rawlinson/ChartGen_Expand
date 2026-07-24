@@ -68,9 +68,9 @@ def compute_categorical_metric_stats(units: list, category_names: list) -> "Cate
     )
 
 
-def categorical_autotable_stats(shape: "CategoricalCompositional") -> dict:
+def categorical_summary_stats(shape: "CategoricalCompositional") -> dict:
     """
-    Autotable statistics for a CategoricalCompositional shape — everything on
+    Summary statistics for a CategoricalCompositional shape — everything on
     tap, independent of any visualisation: response counts and each
     category's share of responses. Keyed by Metric-Series (question) name:
     {question: {n, No response, Categories: {category: {Count, %}}}}.

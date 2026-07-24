@@ -37,7 +37,18 @@ def build_population_layers(data_shape, populations_str: str,
     token defines the scope (the full set being compared); each subsequent token
     is an independent subset of that scope. Tokens: 'All' (every unit), 'Selected'
     (see below), 'Name()' (selected unit's own group), 'Name(Value)' (the named
-    group). Returns [] if populations_str is blank or the scope resolves empty.
+    group). Returns [] only if populations_str itself is blank.
+
+    Every non-blank token in populations_str always produces exactly one
+    layer in the result, in order — never silently dropped. A token that
+    can't be resolved (no selected unit, the selected unit's own group is
+    blank/unset, the scope itself resolves to nothing) still produces a
+    layer with an empty unit set, so the chart — and the Charts sheet's own
+    summary-stats/units display — always shows what was actually passed in,
+    not just whatever happened to have data. Whether the reporting unit
+    itself has data for this particular chart must never be why a token
+    disappears from the output altogether.
+
     Unit ids are compared as strings throughout.
 
     units and selected_ids must both belong to the same table as data_shape's
@@ -53,8 +64,6 @@ def build_population_layers(data_shape, populations_str: str,
         return []
 
     shape_ids = {u.unit_id for u in _get_shape_units(data_shape)}
-    if not shape_ids:
-        return []
 
     unit_lookup = {r["unit_id"]: r for r in units}
     selected_ids = set(selected_ids) if selected_ids else set()
@@ -66,14 +75,18 @@ def build_population_layers(data_shape, populations_str: str,
     representative_id = next(iter(selected_ids), None)
 
     def _resolve(token: str, scope_ids: set):
-        """Resolve one token to (unit_ids, label) within scope_ids, or None."""
+        """
+        Resolve one token to (unit_ids, label) within scope_ids. Never
+        returns None — an unresolvable token still returns an empty id set
+        with its own best-available label (the raw token text, when no
+        better label is available), so the token is never silently dropped
+        by the caller.
+        """
         if token == "All":
             return set(scope_ids), "All"
 
         if token == "Selected":
-            if not selected_ids:
-                return None
-            ids = selected_ids & set(scope_ids)
+            ids = (selected_ids & set(scope_ids)) if selected_ids else set()
             return ids, "Selected"
 
         parsed = parse_peer_token(token)
@@ -81,10 +94,10 @@ def build_population_layers(data_shape, populations_str: str,
             col, value = parsed
             if not value:  # Name() — selected unit's own group
                 if not representative_id or representative_id not in unit_lookup:
-                    return None
+                    return set(), token
                 value = unit_lookup[representative_id].get(col, "")
                 if is_no_group_value(value):
-                    return None
+                    return set(), token
             ids = {
                 r["unit_id"] for r in units
                 if r.get(col) == value
@@ -92,7 +105,9 @@ def build_population_layers(data_shape, populations_str: str,
             }
             return ids, value
 
-        return None
+        # Unrecognised token shape — still produce an empty layer rather
+        # than dropping it.
+        return set(), token
 
     results = []
     scope_ids = set(shape_ids)
@@ -101,16 +116,13 @@ def build_population_layers(data_shape, populations_str: str,
         if not token:
             continue
 
-        resolved = _resolve(token, scope_ids)
-        if resolved is None:
-            if i == 0:
-                return []
-            continue
-        token_ids, label = resolved
+        token_ids, label = _resolve(token, scope_ids)
 
         if i == 0:
-            if not token_ids:
-                return []
+            # The scope itself may resolve empty (e.g. no selected unit at
+            # all) — every subsequent token then also resolves empty
+            # against it, correctly, rather than the whole chart losing its
+            # population layers.
             scope_ids = token_ids
 
         filtered = filter_shape(data_shape, token_ids)

@@ -46,8 +46,13 @@ class AssemblyContext:
         self.prs: Presentation = None
         self.output_path: str = ""
         self.template_path: str = ""
+        # No consumer reads this list today — batch_process.py only pulls the
+        # first error message out of it, then discards the rest. Left in
+        # deliberately rather than stripped: a full per-row (function/status/
+        # message) log of one report's run could be genuinely useful for
+        # future debugging/diagnostics, if a real consumer is ever built.
         self.log: list[dict] = []
-        self.autotable_stats: dict = {}
+        self.summary_stats: dict = {}
         self.report_context = None      # set by run_running_order
         self.full_unit_set: dict = {}   # {table_name: [row, ...]} for the current reporting unit, set by run_running_order
         self.default_populations: str = ""  # set by set_default_populations row
@@ -185,17 +190,17 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
 
     # --- Render chart image ---
     try:
-        image_bytes, autotable_stats = _render_chart_image(
+        image_bytes, summary_stats = _render_chart_image(
             chart_type_ref, population_layers, width_emu, height_emu, render_context
         )
     except Exception as e:
         return err_result(row, f"insert_chart: render failed for '{chart_type_ref}': {e}")
 
-    # Store autotable stats keyed by row_id — placeholder name is only
+    # Store summary stats keyed by row_id — placeholder name is only
     # unique per slide, not across the whole Running Order, so it can't be
     # used as a key here (two slides may both have a placeholder named
     # "Chart 1"). row_id is the row's real identity (Architecture Decision 11).
-    ctx.autotable_stats[row.get("row_id")] = autotable_stats
+    ctx.summary_stats[row.get("row_id")] = summary_stats
 
     # --- Insert into slide ---
     try:
@@ -366,18 +371,20 @@ def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu:
                         report_context=None):
     """
     Render a Matplotlib chart to PNG bytes sized to the placeholder.
-    Sub-step of insert_chart.
+    Sub-step of insert_chart. render_chart also returns a per-layer summary
+    stats breakdown and a per-layer unit list; neither is consumed here yet
+    — Autotables (Feature List: Not built) is the intended future consumer.
     """
     NARROWER_EMU = 6858000
     width_pct  = max(10, int(min(100, (width_emu  / NARROWER_EMU) * 100)))
     height_pct = max(10, int(min(100, (height_emu / NARROWER_EMU) * 100)))
 
-    image_bytes, autotable_stats = render_chart(
+    image_bytes, summary_stats, _layer_summary_stats, _layer_units = render_chart(
         chart_type_ref, population_layers,
         width=width_pct, height=height_pct,
         report_context=report_context,
     )
-    return image_bytes, autotable_stats
+    return image_bytes, summary_stats
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,

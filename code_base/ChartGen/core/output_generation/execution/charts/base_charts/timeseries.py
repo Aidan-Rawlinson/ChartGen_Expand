@@ -35,11 +35,11 @@ Three chart types share this module:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from core.shared.normalisation_containers.shapes import autotable_stats
+from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, MEAN_COL, HIGHLIGHT, PEER_COLOURS, NAVY, GREY_LIGHT,
     _size_to_inches, _fig_to_bytes, _apply_spine_style, _axis_formatter,
-    _autotable_with_selection,
+    _summary_stats_with_selection,
 )
 
 
@@ -98,7 +98,7 @@ def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], r
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
 
 
 def median_comparison_linechart(population_layers: list, width=80, height=45, tweaks=[], report_context=None):
@@ -158,7 +158,7 @@ def median_comparison_linechart(population_layers: list, width=80, height=45, tw
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
 
 
 def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[], report_context=None):
@@ -218,4 +218,4 @@ def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[]
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _autotable_with_selection(autotable_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
