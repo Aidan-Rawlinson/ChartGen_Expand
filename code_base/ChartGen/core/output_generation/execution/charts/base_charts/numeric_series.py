@@ -9,16 +9,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
 
-from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, MEAN_COL, MEDIAN_COL, QUARTILE_COL, NAVY, ORANGE, HIGHLIGHT, PEER_COLOURS,
     _size_to_inches, _fig_to_bytes, _apply_spine_style, _format_number, _axis_formatter,
     _resolve_unit_colours, _population_legend_handles, _get_selected_unit,
-    _selected_layer_value, _summary_stats_with_selection,
 )
 
 
-def ranked_column(population_layers: list, width=80, height=50, tweaks=[], report_context=None):
+def ranked_column(population_layers: list, width=80, height=50, tweaks="", report_context=None):
     """Ranked descending column chart with mean/median/quartile reference lines."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -60,10 +58,10 @@ def ranked_column(population_layers: list, width=80, height=50, tweaks=[], repor
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.28),
               ncol=4, fontsize=7, frameon=False)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)
 
 
-def dot_strip(population_layers: list, width=80, height=40, tweaks=[], report_context=None):
+def dot_strip(population_layers: list, width=80, height=40, tweaks="", report_context=None):
     """Strip / dot plot — one dot per unit ranked left to right."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -104,10 +102,10 @@ def dot_strip(population_layers: list, width=80, height=40, tweaks=[], report_co
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.12),
               ncol=4, fontsize=7, frameon=False)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)
 
 
-def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_context=None):
+def box_whisker(population_layers: list, width=50, height=50, tweaks="", report_context=None):
     """Box and whisker — distribution from first shape, markers for subsequent layers."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -166,11 +164,10 @@ def box_whisker(population_layers: list, width=50, height=50, tweaks=[], report_
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.08),
               ncol=2, fontsize=7, frameon=False)
     fig.tight_layout()
-    sel_val = _selected_layer_value(population_layers)
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)
 
 
-def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[], report_context=None):
+def frequency_histogram(population_layers: list, width=60, height=45, tweaks="", report_context=None):
     """Frequency histogram — distribution from first shape, reference lines for subsequent layers."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -206,11 +203,10 @@ def frequency_histogram(population_layers: list, width=60, height=45, tweaks=[],
     _apply_spine_style(ax)
     ax.legend(fontsize=7, frameon=False)
     fig.tight_layout()
-    sel_val = _selected_layer_value(population_layers)
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)
 
 
-def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_context=None):
+def violin_plot(population_layers: list, width=50, height=50, tweaks="", report_context=None):
     """Violin plot — distribution from first shape, markers for subsequent layers."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -266,16 +262,15 @@ def violin_plot(population_layers: list, width=50, height=50, tweaks=[], report_
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.08),
               ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
-    sel_val = _selected_layer_value(population_layers)
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)
 
 
-def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[], report_context=None):
+def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks="", report_context=None):
     """Multi-tier bead-string dot plot — one tier per population layer."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     base = population_layers[0]
     ms   = base.metric_stats[0] if base.metric_stats else None
@@ -283,7 +278,7 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
     if not vals:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     COLOUR_ALL = (136/255, 135/255, 128/255, 0.38)
     STRING_ALL = (136/255, 135/255, 128/255, 0.25)
@@ -313,15 +308,14 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
     if not tiers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     # Visual-only de-duplication: a unit already shown in a more specific
     # (later-token) tier is suppressed from every broader (earlier-token)
     # tier's dots, so e.g. the Selected unit(s) only appear once, in
-    # Selected, rather than also as a dot in Region() and All. Stats (ms,
-    # summary stats) are computed from `base` and from the Selected tier's own
-    # values below, both untouched by this — it only affects which dots get
-    # drawn.
+    # Selected, rather than also as a dot in Region() and All. Stats (ms)
+    # are computed from `base` above, untouched by this — it only affects
+    # which dots get drawn.
     already_shown = set()
     for t in reversed(tiers):
         original_ids = list(t["ids"])
@@ -411,5 +405,4 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=[]
             (ax_pos.x0 - 0.030, y_fig), width=2*r_x, height=2*r_y,
             transform=fig.transFigure, facecolor=dot_c, edgecolor="none", alpha=0.75, zorder=5))
 
-    sel_val = tiers[-1]["vals"][0] if tiers[-1]["opaque"] and tiers[-1]["vals"] else None
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, sel_val)
+    return _fig_to_bytes(fig)

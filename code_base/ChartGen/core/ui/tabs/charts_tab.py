@@ -65,7 +65,10 @@ from core.shared.infrastructure.page_sizing import (
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.population_layers import build_population_layers
-from core.shared.normalisation_containers.shapes import apply_period_range, reference_rows_for_shape_type
+from core.shared.normalisation_containers.shapes import (
+    apply_period_range, reference_rows_for_shape_type,
+    summary_stats_by_layer, units_by_layer,
+)
 from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import settings, master_table, cached_files, manifest, load_shape_ps, ws
@@ -216,6 +219,7 @@ def render_charts_tab():
                     st.session_state["cs_pending_start_period"] = str(row.get("start_period", "") or "")
                     st.session_state["cs_pending_end_period"] = str(row.get("end_period", "") or "")
                     st.session_state["cs_pending_metric_periods_str"] = str(row.get("metric_periods", "") or "")
+                    st.session_state["cs_pending_tweaks_str"] = str(row.get("tweaks", "") or "")
                     st.session_state["cs_width_pct"] = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 50.0
                     st.session_state["cs_height_pct"] = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 50.0
                     st.session_state["cs_target_row_choice"] = ro_choice
@@ -429,6 +433,21 @@ def render_charts_tab():
                         preview_populations_str = default_pop
                     break
 
+        # --- Tweaks — a free-text string passed straight through to the
+        # Base Chart function's own `tweaks` parameter (Decisions.md),
+        # uninterpreted by anything in the Charts sheet or Running Order
+        # layer. Populates from the bound Running Order row's tweaks
+        # column when loaded that way; otherwise typed here directly. ---
+        if "cs_pending_tweaks_str" in st.session_state:
+            st.session_state["cs_tweaks_str"] = st.session_state.pop("cs_pending_tweaks_str")
+        st.session_state.setdefault("cs_tweaks_str", "")
+
+        with st.expander("Tweaks", expanded=False):
+            tweaks_str = st.text_area(
+                "Tweaks", key="cs_tweaks_str", label_visibility="collapsed",
+                help="Free text passed straight through to the Base Chart function's tweaks parameter.",
+            )
+
         # --- Sizing ---
         with st.expander("Sizing", expanded=False):
             if not has_known_template_page_size(the_settings):
@@ -500,6 +519,7 @@ def render_charts_tab():
                     "metric_periods": lambda: metric_periods_str,
                     "width_emu":      lambda: width_emu,
                     "height_emu":     lambda: height_emu,
+                    "tweaks":         lambda: tweaks_str,
                 }
                 field_values = {f: field_value_builders[f]() for f in CHART_SANDBOX_FIELDS}
 
@@ -542,9 +562,16 @@ def render_charts_tab():
             pop_layers = [_replace(shape, population_label="All")]
 
         with st.spinner("Rendering…"):
-            image_bytes, _base_summary_stats, layer_summary_stats, layer_units = render_chart(
-                chart_type_ref, pop_layers, width=width_pct, height=height_pct, report_context=rc
+            image_bytes = render_chart(
+                chart_type_ref, pop_layers, width=width_pct, height=height_pct,
+                tweaks=tweaks_str, report_context=rc
             )
+
+        # Stats and unit lists are a property of the data shape, read
+        # straight off pop_layers here — not relayed through render_chart,
+        # which only ever produces the image.
+        layer_summary_stats = summary_stats_by_layer(pop_layers)
+        layer_units = units_by_layer(pop_layers)
 
         if zoom_choice == "Fit to screen":
             st.image(image_bytes, use_container_width=True)
@@ -559,8 +586,10 @@ def render_charts_tab():
         # to the whole layer, not to an individual metric-series — every
         # metric-series in a shape instance shares the same population).
         # Both read what each layer's own shape instance already
-        # computes/holds for itself (layer_summary_stats, layer_units — see
-        # registry.render_chart); nothing here is recalculated. Ids are
+        # computes/holds for itself (summary_stats_by_layer, units_by_layer
+        # — core.shared.normalisation_containers.shapes), called directly
+        # against pop_layers above; nothing here is recalculated, and
+        # render_chart itself only ever produces the image. Ids are
         # short, stable reference tags scoped to this shape type
         # (Decisions.md), meant to eventually double as PowerPoint table
         # replacement tags — not full Autotables, which will draw on this

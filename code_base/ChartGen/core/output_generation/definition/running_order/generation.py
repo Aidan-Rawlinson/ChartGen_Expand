@@ -74,6 +74,7 @@ def generate_from_template(
             "metric_periods": "",
             "image_path": "", "excel_path": "", "export_range": "", "driver_range": "",
             "left_emu": "", "top_emu": "", "width_emu": "", "height_emu": "",
+            "tweaks": "",
             "notes": note,
         }
 
@@ -118,6 +119,7 @@ def generate_from_template(
             "image_path": "", "excel_path": "", "export_range": "", "driver_range": "",
             "left_emu": ph.left, "top_emu": ph.top,
             "width_emu": ph.width, "height_emu": ph.height,
+            "tweaks": "",
             "notes": "",
         }
 

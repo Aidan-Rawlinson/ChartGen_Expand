@@ -8,9 +8,9 @@ shared period axis. Renders the first Metric-Series (metrics[0]), the same
 A TimeSeries value is a vector indexed by period, not a scalar, so this
 module reads metric.units[...].values / period_stats directly rather than
 reusing the NumericSeries-shaped single-scalar helpers in shared.py
-(_get_selected_unit, _resolve_unit_colours, _selected_layer_value) — the
-same reason NumericCompositional/CategoricalCompositional charts don't use
-those helpers either.
+(_get_selected_unit, _resolve_unit_colours) — the same reason
+NumericCompositional/CategoricalCompositional charts don't use those
+helpers either.
 
 Population layers arrive as a list of filtered TimeSeries copies with the
 same population_label convention as every other shape. Follows the
@@ -35,27 +35,25 @@ Three chart types share this module:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, MEAN_COL, HIGHLIGHT, PEER_COLOURS, NAVY, GREY_LIGHT,
     _size_to_inches, _fig_to_bytes, _apply_spine_style, _axis_formatter,
-    _summary_stats_with_selection,
 )
 
 
-def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], report_context=None):
+def period_line_chart(population_layers: list, width=80, height=45, tweaks="", report_context=None):
     """Line chart of one Metric-Series across every period — population mean/IQR band, plus a highlighted line per subsequent layer (Selected or peer group)."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     base = population_layers[0]
     metric = base.metrics[0] if base.metrics else None
     if metric is None or not base.periods:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     w, h = _size_to_inches(width, height)
     fig, ax = plt.subplots(figsize=(w, h))
@@ -69,7 +67,6 @@ def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], r
     if q1 and q3 and all(v is not None for v in q1) and all(v is not None for v in q3):
         ax.fill_between(x, q1, q3, color=BAR_BLUE, alpha=0.25, zorder=1, label="IQR")
 
-    selected_value = None
     peer_colour_idx = 0
     for layer in population_layers[1:]:
         layer_metric = layer.metrics[0] if layer.metrics else None
@@ -81,7 +78,6 @@ def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], r
                 ax.plot(x, unit.values, color=HIGHLIGHT, linewidth=2, marker="o",
                         markersize=4, zorder=4,
                         label=report_context.unit_code if report_context else "Selected")
-                selected_value = next((v for v in reversed(unit.values) if v is not None), None)
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
@@ -98,29 +94,28 @@ def period_line_chart(population_layers: list, width=80, height=45, tweaks=[], r
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig)
 
 
-def median_comparison_linechart(population_layers: list, width=80, height=45, tweaks=[], report_context=None):
+def median_comparison_linechart(population_layers: list, width=80, height=45, tweaks="", report_context=None):
     """Line chart of one Metric-Series across every period — median line per population layer, except 'Selected', which charts the actual unit value(s) instead of a median."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     base = population_layers[0]
     metric = base.metrics[0] if base.metrics else None
     if metric is None or not base.periods:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     w, h = _size_to_inches(width, height)
     fig, ax = plt.subplots(figsize=(w, h))
     x = np.arange(len(base.periods))
     labels = [p.period_label for p in base.periods]
 
-    selected_value = None
     peer_colour_idx = 0
 
     for i, layer in enumerate(population_layers):
@@ -135,9 +130,6 @@ def median_comparison_linechart(population_layers: list, width=80, height=45, tw
             if layer_metric.units:
                 ax.plot([], [], color=HIGHLIGHT, linewidth=2, marker="o", markersize=4,
                         label=report_context.unit_code if report_context else "Selected")
-                selected_value = next(
-                    (v for v in reversed(layer_metric.units[0].values) if v is not None), None
-                )
         elif i == 0:
             medians = [ps.median for ps in layer_metric.period_stats]
             ax.plot(x, medians, color=NAVY, linewidth=2, zorder=2,
@@ -158,22 +150,22 @@ def median_comparison_linechart(population_layers: list, width=80, height=45, tw
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig)
 
 
-def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[], report_context=None):
+def full_lines_linechart(population_layers: list, width=80, height=45, tweaks="", report_context=None):
     """Line chart of one Metric-Series across every period — every individual unit in the largest population (population_layers[0], the scope) drawn as a light grey line; every subsequent population layer's own unit line(s) drawn on top, highlighted."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     base = population_layers[0]
     metric = base.metrics[0] if base.metrics else None
     if metric is None or not base.periods:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return _fig_to_bytes(fig), {}
+        return _fig_to_bytes(fig)
 
     w, h = _size_to_inches(width, height)
     fig, ax = plt.subplots(figsize=(w, h))
@@ -186,7 +178,6 @@ def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[]
         ax.plot([], [], color=GREY_LIGHT, linewidth=1.5,
                 label=base.population_label or "All units")
 
-    selected_value = None
     peer_colour_idx = 0
     for layer in population_layers[1:]:
         layer_metric = layer.metrics[0] if layer.metrics else None
@@ -199,9 +190,6 @@ def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[]
             if layer_metric.units:
                 ax.plot([], [], color=HIGHLIGHT, linewidth=2, marker="o", markersize=4,
                         label=report_context.unit_code if report_context else "Selected")
-                selected_value = next(
-                    (v for v in reversed(layer_metric.units[0].values) if v is not None), None
-                )
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
@@ -218,4 +206,4 @@ def full_lines_linechart(population_layers: list, width=80, height=45, tweaks=[]
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
     fig.tight_layout()
 
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, selected_value)
+    return _fig_to_bytes(fig)

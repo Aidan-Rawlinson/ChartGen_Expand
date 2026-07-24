@@ -52,7 +52,6 @@ class AssemblyContext:
         # message) log of one report's run could be genuinely useful for
         # future debugging/diagnostics, if a real consumer is ever built.
         self.log: list[dict] = []
-        self.summary_stats: dict = {}
         self.report_context = None      # set by run_running_order
         self.full_unit_set: dict = {}   # {table_name: [row, ...]} for the current reporting unit, set by run_running_order
         self.default_populations: str = ""  # set by set_default_populations row
@@ -189,18 +188,13 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         population_layers = [replace(data_shape, population_label="All")]
 
     # --- Render chart image ---
+    tweaks = str(row.get("tweaks", "") or "").strip()
     try:
-        image_bytes, summary_stats = _render_chart_image(
-            chart_type_ref, population_layers, width_emu, height_emu, render_context
+        image_bytes = _render_chart_image(
+            chart_type_ref, population_layers, width_emu, height_emu, render_context, tweaks
         )
     except Exception as e:
         return err_result(row, f"insert_chart: render failed for '{chart_type_ref}': {e}")
-
-    # Store summary stats keyed by row_id — placeholder name is only
-    # unique per slide, not across the whole Running Order, so it can't be
-    # used as a key here (two slides may both have a placeholder named
-    # "Chart 1"). row_id is the row's real identity (Architecture Decision 11).
-    ctx.summary_stats[row.get("row_id")] = summary_stats
 
     # --- Insert into slide ---
     try:
@@ -368,23 +362,26 @@ def _load_chart_data(cache_file: str, workfile_state=None):
 
 
 def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu: int, height_emu: int,
-                        report_context=None):
+                        report_context=None, tweaks=""):
     """
     Render a Matplotlib chart to PNG bytes sized to the placeholder.
-    Sub-step of insert_chart. render_chart also returns a per-layer summary
-    stats breakdown and a per-layer unit list; neither is consumed here yet
-    — Autotables (Feature List: Not built) is the intended future consumer.
+    Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
+    only job. Statistics/unit lists are read directly off population_layers
+    (already in scope here) by whatever needs them, e.g. Autotables
+    (Feature List: Not built), rather than being relayed through render_chart.
+
+    tweaks is the row's own tweaks column, passed straight through to the
+    Base Chart function's tweaks parameter, uninterpreted here.
     """
     NARROWER_EMU = 6858000
     width_pct  = max(10, int(min(100, (width_emu  / NARROWER_EMU) * 100)))
     height_pct = max(10, int(min(100, (height_emu / NARROWER_EMU) * 100)))
 
-    image_bytes, summary_stats, _layer_summary_stats, _layer_units = render_chart(
+    return render_chart(
         chart_type_ref, population_layers,
         width=width_pct, height=height_pct,
-        report_context=report_context,
+        tweaks=tweaks, report_context=report_context,
     )
-    return image_bytes, summary_stats
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,

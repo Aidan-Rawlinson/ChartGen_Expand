@@ -154,7 +154,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Populations string** — the `^`-delimited ordered list of tokens (e.g. `All^Region()^Selected`) that specifies which population layers are sent to the chart engine. Every non-blank token always produces its own population layer, even one that resolves to zero units — a token is never dropped for lacking data. See Functional Spec, Section 10.4.
 
-- **Summary stats** — the statistics a data shape computes for itself, independent of any visualisation (e.g. `numeric_series_summary_stats`); read per population layer via `summary_stats_by_layer` and displayed in the Charts sheet with a Reference id alongside each figure. Renamed from Autotable stats this session, to disentangle it from the (separate, not yet built) Autotables feature — see Autotable, below — which will eventually draw on this data, or on the shapes directly. Distinct from the general "Summary statistics" concept above; this is the specific technical term for the data itself. See Functional Spec, Section 9.4, and Architecture, Decision 15.
+- **Summary stats** — the statistics a data shape computes for itself, independent of any visualisation (e.g. `numeric_series_summary_stats`); read per population layer via `summary_stats_by_layer`, called directly against the relevant population layers by whichever consumer needs it (the Charts sheet display being the only current one), and displayed there with a Reference id alongside each figure. Distinct from the general "Summary statistics" concept above; this is the specific technical term for the data itself. See Functional Spec, Section 9.4, and Architecture, Decisions 15 and 17.
 
 - **Period (`period_id`, `period_label`)** — a single point on a TimeSeries shape's period axis, shared across every Metric-Series in that shape. See Functional Spec, Section 8.2.
 
@@ -162,7 +162,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Batch** — processing multiple outputs in a single run.
 
-- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`. See Architecture, Decision 11.
+- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`, `tweaks`. See Architecture, Decision 11.
 
 - **Enabled column** — the per-row on/off switch in the Running Order. Stored as an integer `1`/`0` at runtime.
 
@@ -176,7 +176,7 @@ MyWorkfile.cgw  (ZIP)
 
 ### Cluster 9 — Runtime objects
 
-- **AssemblyContext** — the in-memory object the Assembly Engine builds once per batch run, carrying the open `Presentation` object, output path, run log, summary stats, the current `ReportContext`, the current `Full Unit Set`, default populations string, and any open Excel COM workbook references. See the Architecture document, Section 5.
+- **AssemblyContext** — the in-memory object the Assembly Engine builds once per batch run, carrying the open `Presentation` object, output path, run log, the current `ReportContext`, the current `Full Unit Set`, default populations string, and any open Excel COM workbook references. See the Architecture document, Section 5.
 
 - **Full Unit Set** — for the current reporting unit, its own row plus every row related to it one hop out (via `soft_parents`, both directions), keyed by table name — `{table_name: [row, ...]}`. Rebuilt once per report, alongside `ReportContext`. `insert_chart` looks up a chart's own `population_table` in the Full Unit Set to find the correct rows/selected unit(s) for that specific chart, rather than assuming the master table applies to every chart. A table entry can hold more than one row — e.g. an organisation supporting two ICBs — which is expected, not a case to collapse. See Functional Spec, Section 10.4.
 
@@ -192,13 +192,13 @@ MyWorkfile.cgw  (ZIP)
 
 ### Cluster 10 — Chart construction
 
-- **Autotable** — a table populated from statistics computed by the shape modules and collected at chart time (plus the value(s) for the selected unit(s)), rather than from text tag replacement. Draws on Summary stats (see Cluster 7) or on the shapes directly. Distinct from text-tag-based tables. Not yet built. See Functional Spec, Section 10.5.
+- **Autotable** — a table populated from statistics computed by the shape modules (plus the value(s) for the selected unit(s)), read directly from the shapes on demand, rather than from text tag replacement. Draws on Summary stats (see Cluster 7) or on the shapes directly. Distinct from text-tag-based tables. Not yet built. See Functional Spec, Section 10.5.
 
 - **Base Chart** — one of ChartGen's chart-rendering functions, each handling one canonical data shape.
 
 - **Reference id** — a short, stable id tag (e.g. `Mn`, `1Mna`, `P2a`) identifying one statistic in a Summary stats table, generated by `reference_rows_for_shape_type`. Scoped per shape type, not global — the same id means the same statistic in every table of that type. Deliberately short: intended to eventually serve as a literal PowerPoint table replacement tag, where a wider tag would change the table's own cell size. Stat-letter prefix (e.g. `Mn` = Mean); period number prefixed for TimeSeries; series letter suffixed only when a shape carries more than one metric-series, restarting at "a" per shape instance. See Functional Spec, Section 9.4, and Architecture, Decision 15.
 
-- **Tweak** — a chart-rendering customisation (reference lines, axis control, conditional colouring, etc.)
+- **Tweak** — a chart-rendering customisation (reference lines, axis control, conditional colouring, etc.). A free-text `tweaks` Running Order column and matching Base Chart parameter exist and round-trip end to end (Architecture, Decision 16); no specific tweak behaviour is built yet — no Base Chart function reads the value.
 
 ### Cluster 11 — Excel integration
 

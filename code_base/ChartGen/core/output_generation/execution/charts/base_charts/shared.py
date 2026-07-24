@@ -123,21 +123,3 @@ def _get_selected_unit(units: list, report_context) -> tuple:
         if u.unit_id == report_context.unit_id:
             return i, u.values[0], u
     return None, None, None
-
-
-def _selected_layer_value(population_layers: list):
-    """Return the Selected layer's first non-null value across the population layers, or None."""
-    return next((u.values[0] for layer in population_layers
-                 if layer.population_label == "Selected"
-                 for u in layer.units if u.values[0] is not None), None)
-
-
-def _summary_stats_with_selection(stats: dict, report_context, selected_value) -> dict:
-    if report_context is None:
-        return stats
-    out = dict(stats)
-    out["Selected ID"]    = report_context.unit_id
-    out["Selected code"]  = report_context.unit_code
-    out["Selected name"]  = report_context.unit_name
-    out["Selected value"] = round(selected_value, 1) if selected_value is not None else None
-    return out

@@ -228,3 +228,16 @@ Docs updated: Architecture (Running Order column schema table — row removed), 
 **Verification method.** All four fixes this session were tested by running the actual updated `template_reader.py` against the user's real uploaded `.pptx` in a sandboxed environment (not just code review) — theme colours, containment geometry, and warning output were all confirmed against real shape XML and real coordinates before being called fixed.
 
 **Docs.** Functional Spec, Feature List, Architecture (Decisions 13 and 14), and Glossary updated in the static docs mirror. Not yet re-uploaded to Project Files as of this session's close.
+
+
+## Session — Tweaks column and Base Chart statistics ownership reversal
+
+Added a `tweaks` Running Order column and Charts sheet control, retyping every Base Chart function's `tweaks` parameter from an unused `list` default to a wired-through `string` (Architecture Decision 16).
+
+User then questioned why Base Chart functions — whose job is producing a visual — were computing and returning statistics at all. Traced every consumer of the existing 4-tuple `render_chart` return (`base_summary_stats`/`layer_summary_stats`/`layer_units`) and found none of it was load-bearing: the Charts sheet preview already discarded `base_summary_stats`, and `AssemblyContext.summary_stats` was written once per chart in `assembly_engine.py` and never read back anywhere in the codebase. Also surfaced a genuine inconsistency: two different "Selected value" computation methods existed across NumericSeries chart functions of the same shape type, meaning the same unit/data could show a different Selected value purely depending on which chart type was picked.
+
+Agreed direction: data shapes already passed to a chart are the source of truth for any statistics or unit lists needed; no intermediate transformation before use; the assembly engine's own copy of `population_layers` should be the source if that data is ever needed later (e.g. Autotables); Charts sheet stats/unit-list display should read directly from the data shapes with no transformation layer.
+
+Implemented in full: all 20 Base Chart functions (four shape modules) now return `image_bytes` only; `_summary_stats_with_selection`/`_selected_layer_value` deleted from `base_charts/shared.py` (zero remaining callers); `registry.render_chart` simplified to a plain dispatch-and-return; `AssemblyContext.summary_stats` removed; `assembly_engine._render_chart_image` returns bytes only; `charts_tab.py`'s preview now calls `summary_stats_by_layer`/`units_by_layer` directly against `pop_layers` rather than via `render_chart`'s return value (Architecture Decision 17).
+
+All six governed documents updated in the mirror to reflect both changes — Architecture (schema table, Decision 11, AssemblyContext diagram, Decision 15 trimmed, Decisions 16–17 added), Functional Spec (§9.3, §10.3, §10.5), Feature List (Charts sheet round-trip row, Autotables row), Glossary (AssemblyContext, CHART_SANDBOX_FIELDS, Autotable, Summary stats, Tweak entries). Primer and Docs Maintenance Guide unaffected. Re-upload to Claude Desktop Project Files confirmed pending at Close-down.

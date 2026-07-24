@@ -24,6 +24,8 @@ COLUMNS = [
     "top_emu",
     "width_emu",
     "height_emu",
+    "tweaks",
+    "tweaks",
     "notes",
 ]
 
@@ -64,6 +66,11 @@ BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 # per source Metric-Series x selected period. Blank means no conversion —
 # the row renders as an ordinary TimeSeries chart, same as before this
 # field existed.
+# tweaks is a free-text string passed straight through to the Base Chart
+# function's own `tweaks` parameter (Decisions.md), uninterpreted by
+# anything in the Running Order/assembly layer. Blank means "no tweaks" —
+# a nil-length string is what a Base Chart receives when the row's tweaks
+# column is empty.
 CHART_SANDBOX_FIELDS = ["chart_type_ref", "cache_file", "populations",
                         "start_period", "end_period", "metric_periods",
-                        "width_emu", "height_emu"]
+                        "width_emu", "height_emu", "tweaks"]

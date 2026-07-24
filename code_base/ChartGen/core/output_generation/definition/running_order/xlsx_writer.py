@@ -130,6 +130,7 @@ def write_xlsx(rows: list[dict], output_path: str,
         "top_emu":       12,
         "width_emu":     12,
         "height_emu":    12,
+        "tweaks":        30,
         "notes":         40,
     }
 

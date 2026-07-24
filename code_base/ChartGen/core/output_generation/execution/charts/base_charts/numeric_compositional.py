@@ -10,15 +10,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-from core.shared.normalisation_containers.shapes import summary_stats
 from core.output_generation.execution.charts.base_charts.shared import (
     BAR_BLUE, NAVY, PIE_COLOURS,
     _size_to_inches, _fig_to_bytes, _apply_spine_style, _format_number, _axis_formatter,
-    _summary_stats_with_selection,
 )
 
 
-def ugly_bar(population_layers: list, width=80, height=40, tweaks=[], report_context=None):
+def ugly_bar(population_layers: list, width=80, height=40, tweaks="", report_context=None):
     """Horizontal bar — component breakdown (sample average)."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -44,10 +42,10 @@ def ugly_bar(population_layers: list, width=80, height=40, tweaks=[], report_con
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15),
               ncol=2, fontsize=7, frameon=False)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
+    return _fig_to_bytes(fig)
 
 
-def radar_chart(population_layers: list, width=55, height=55, tweaks=[], report_context=None):
+def radar_chart(population_layers: list, width=55, height=55, tweaks="", report_context=None):
     """Radar / spider chart — component values on radial axes."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -72,10 +70,10 @@ def radar_chart(population_layers: list, width=55, height=55, tweaks=[], report_
     ax.spines["polar"].set_visible(False)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
+    return _fig_to_bytes(fig)
 
 
-def donut_component(population_layers: list, width=55, height=55, tweaks=[], report_context=None):
+def donut_component(population_layers: list, width=55, height=55, tweaks="", report_context=None):
     """Donut chart showing component proportions."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -97,10 +95,10 @@ def donut_component(population_layers: list, width=55, height=55, tweaks=[], rep
               loc="upper center", bbox_to_anchor=(0.5, -0.02),
               fontsize=7, frameon=False, ncol=2)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
+    return _fig_to_bytes(fig)
 
 
-def lollipop_chart(population_layers: list, width=70, height=40, tweaks=[], report_context=None):
+def lollipop_chart(population_layers: list, width=70, height=40, tweaks="", report_context=None):
     """Lollipop chart — stem and dot per component."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -122,10 +120,10 @@ def lollipop_chart(population_layers: list, width=70, height=40, tweaks=[], repo
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
     _apply_spine_style(ax)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
+    return _fig_to_bytes(fig)
 
 
-def waffle_chart(population_layers: list, width=60, height=50, tweaks=[], report_context=None):
+def waffle_chart(population_layers: list, width=60, height=50, tweaks="", report_context=None):
     """Waffle chart — 10×10 grid, each cell ≈ 1%."""
     base = population_layers[0]
     w, h = _size_to_inches(width, height)
@@ -156,4 +154,4 @@ def waffle_chart(population_layers: list, width=60, height=50, tweaks=[], report
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.02),
               fontsize=7, frameon=False, ncol=2)
     fig.tight_layout()
-    return _fig_to_bytes(fig), _summary_stats_with_selection(summary_stats(base), report_context, None)
+    return _fig_to_bytes(fig)

@@ -17,7 +17,6 @@ from core.output_generation.execution.charts.base_charts.categorical_composition
 from core.output_generation.execution.charts.base_charts.timeseries import (
     period_line_chart, median_comparison_linechart, full_lines_linechart,
 )
-from core.shared.normalisation_containers.shapes import summary_stats_by_layer, units_by_layer
 
 CHART_REGISTRY = {
     "ranked_column":        ranked_column,
@@ -44,26 +43,18 @@ CHART_REGISTRY = {
 
 
 def render_chart(chart_type_ref: str, population_layers: list,
-                 width: int, height: int, tweaks=[], report_context=None):
+                 width: int, height: int, tweaks="", report_context=None):
     """
-    Returns (image_bytes, base_summary_stats, layer_summary_stats, layer_units).
-
-    base_summary_stats is unchanged from before — the scope layer's own
-    stats plus the selected-unit bolt-on fields, as each Base Chart function
-    already builds it.
-
-    layer_summary_stats and layer_units are the correction: every population
-    layer passed in gets its own stats and its own unit list read
-    (population_label -> that layer's own existing data), not just the
-    scope layer. Computed here, once, regardless of chart type, rather than
-    inside each of the 20 Base Chart functions.
+    Returns image_bytes only — a Base Chart function's sole job is
+    producing the visual. Statistics and unit lists are a property of the
+    data shape (core.shared.normalisation_containers.shapes), not something
+    the charting layer computes or relays: a caller that needs them already
+    has population_layers in scope and calls summary_stats_by_layer /
+    units_by_layer directly, rather than routing through here.
     """
     if chart_type_ref not in CHART_REGISTRY:
         raise ValueError(f"Unknown chart_type_ref: {chart_type_ref}")
-    image_bytes, base_summary_stats = CHART_REGISTRY[chart_type_ref](
+    return CHART_REGISTRY[chart_type_ref](
         population_layers, width=width, height=height,
         tweaks=tweaks, report_context=report_context,
     )
-    layer_summary_stats = summary_stats_by_layer(population_layers)
-    layer_units = units_by_layer(population_layers)
-    return image_bytes, base_summary_stats, layer_summary_stats, layer_units

@@ -137,9 +137,9 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Conditional Running Order logic (insert/delete slides per unit) | Not built | Needed for algorithmic reports. |
 | `insert_slide` / `insert_section` / `delete_slide` | Not built | |
 | `submission_list` | Not built | |
-| Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
-| Charts sheet summary stats display | Complete | One table per (population layer × metric-series), with a short per-shape-type reference id (e.g. `Mn`, `1Mna`, `P2a`) alongside each statistic. See Functional Spec Section 9.4, Architecture Decision 15. |
-| Charts sheet unit list display | Complete | One table per population layer — unit id, code, name. See Functional Spec Section 9.4, Architecture Decision 15. |
+| Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`, `tweaks` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
+| Charts sheet summary stats display | Complete | One table per (population layer × metric-series), with a short per-shape-type reference id (e.g. `Mn`, `1Mna`, `P2a`) alongside each statistic, read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
+| Charts sheet unit list display | Complete | One table per population layer — unit id, code, name — read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
 
 ---
 
@@ -177,7 +177,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Feature | Readiness | Notes |
 |---|---|---|
 | Text-tag-based table population (basic tables) | Not built | Depends on text tag replacement, which is built. |
-| Autotables (statistics from chart construction) | Partial | Statistics are computed by the shape modules — renamed Summary Stats this session, disentangled from this feature (see Glossary) — and collected at chart time, stored on `AssemblyContext` per `insert_chart`; the functions to populate a table from them are not yet implemented. |
+| Autotables (statistics from chart construction) | Not built | Summary stats are computed by the shape modules (see Glossary) and read directly, on demand, by any consumer that needs them — the Charts sheet preview being the only current one. Nothing collects or stores chart statistics ahead of a consumer needing them; a `AssemblyContext`-based collection step existed briefly and was removed as unused (Architecture Decision 17). The functions to populate a table from shape statistics are not yet implemented. |
 | Multi-unit table expansion | Not built | |
 
 ---
