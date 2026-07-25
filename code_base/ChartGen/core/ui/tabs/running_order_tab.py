@@ -63,7 +63,9 @@ def render_running_order_tab():
             if is_insert_chart:
                 cache_file = str(row.get("cache_file", "") or "")
                 converts_to_metrics = bool(str(row.get("metric_periods", "") or "").strip())
-                valid_refs = get_valid_chart_refs_for_cache_file(cache_file, the_manifest, converts_to_metrics)
+                valid_refs = get_valid_chart_refs_for_cache_file(
+                    cache_file, the_manifest, converts_to_metrics, custom_chart_rows=ws_ro.custom_chart_rows
+                )
                 shape_type = the_manifest.get(cache_file, {}).get("shape_type", "")
                 label_hint = cache_to_label.get(cache_file, cache_file)
                 shape_hint = f"  ·  {shape_type}" if shape_type else ""
@@ -183,7 +185,8 @@ def render_running_order_tab():
                 cf = str(r.get("cache_file") or "").strip()
                 if cf and cf not in periods_by_cache_file:
                     periods_by_cache_file[cf] = periods_for_cache_file(cf, ws_ro)
-        write_xlsx(rows, ro_buffer, manifest=the_manifest, periods_by_cache_file=periods_by_cache_file)
+        write_xlsx(rows, ro_buffer, manifest=the_manifest, periods_by_cache_file=periods_by_cache_file,
+                  custom_chart_rows=ws_ro.custom_chart_rows)
         col_dl.download_button(
             label="⬇  Download Running Order", data=ro_buffer.getvalue(),
             file_name="running_order.xlsx",

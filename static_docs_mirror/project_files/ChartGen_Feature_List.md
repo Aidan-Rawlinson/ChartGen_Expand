@@ -125,7 +125,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Running Order Streamlit tab (master/detail UI) | Complete | Shape-filtered chart type dropdown. |
 | Control flag (row on/off) | Complete | |
 | `create_ppt` | Complete | |
-| `insert_chart` | Complete | Passes `ReportContext` for highlighting. |
+| `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `chart_type_ref` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. See Chart construction, Part 5. |
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders. |
@@ -149,7 +149,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Base Chart library (20 charts across 4 data shapes) | Complete | No chart type renders a title. |
+| Base Chart library (20 charts across 4 data shapes) | Complete | No chart type renders a title. Each is a standalone artefact with no shared internal helpers — see Custom Charts, below. |
+| Custom Charts (download bundle, AI edit, paste-back validation, live preview, save) | Complete | User- or AI-authored Base Charts saved into a workfile via a self-contained download/paste-back flow. Validation is static only — checks imports and function signature, not what the function returns — no runtime sandboxing. A saved Custom Chart behaves identically to a built-in everywhere a chart type is listed or resolved. See Functional Spec Section 10.9, Architecture Decision 18. |
 | TimeSeries chart rendering | Complete | Three chart types: `period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`. Renders the first Metric-Series only. |
 | Period selection / cutting (TimeSeries) | Complete | Running Order `start_period`/`end_period` columns (period_id, blank = full range) trim the shape before population-layer filtering. Authored via the Charts sheet's Period Range box. See Functional Spec Section 10.7. |
 | Convert periods to metrics (TimeSeries → NumericSeries snapshot) | Complete | Running Order `metric_periods` column (one or more period_ids) converts a TimeSeries row into a NumericSeries snapshot before rendering — one metric per source Metric-Series × period. Feeds any NumericSeries chart type. See Functional Spec Section 10.8. |

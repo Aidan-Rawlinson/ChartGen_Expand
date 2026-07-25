@@ -25,11 +25,18 @@ except ImportError:
 
 
 def write_xlsx(rows: list[dict], output_path: str,
-               manifest: dict = None, periods_by_cache_file: dict = None):
+               manifest: dict = None, periods_by_cache_file: dict = None,
+               custom_chart_rows: list = None):
     """
     Write Running Order rows to a formatted .xlsx file with dropdown
     validation on function, chart_type_ref, enabled, and (for TimeSeries
     rows) start_period/end_period.
+
+    custom_chart_rows: this workfile's saved custom charts (WorkfileState.
+    custom_chart_rows) — merged into the per-row chart_type_ref dropdown
+    for the row's own shape, the same as the Charts sheet and Running
+    Order edit dialog. Omit or pass None/[] to offer built-in chart types
+    only.
 
     periods_by_cache_file: {cache_file: [(period_id, period_label), ...]},
     in the shape's own trusted-chronological order — built by the caller
@@ -251,7 +258,9 @@ def write_xlsx(rows: list[dict], output_path: str,
             if cache_file.lower() == "none":
                 cache_file = ""
             converts_to_metrics = bool(str(row.get("metric_periods") or "").strip())
-            chart_refs = get_valid_chart_refs_for_cache_file(cache_file, manifest or {}, converts_to_metrics)
+            chart_refs = get_valid_chart_refs_for_cache_file(
+                cache_file, manifest or {}, converts_to_metrics, custom_chart_rows=custom_chart_rows
+            )
 
             if chart_refs:
                 ref_formula = '"' + ",".join(chart_refs) + '"'

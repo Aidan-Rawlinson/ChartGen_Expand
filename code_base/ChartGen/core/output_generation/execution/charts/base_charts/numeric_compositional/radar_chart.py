@@ -1,0 +1,82 @@
+"""
+radar_chart.py
+Base Chart — NumericCompositional. Radar / spider chart of component values
+on radial axes. Population layers not applicable — renders aggregated
+sample averages.
+
+Standalone artefact: no imports from ChartGen's own code, third-party
+libraries only. Receives chart_inputs only (population_layers, width,
+height, tweaks).
+"""
+
+import io
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+
+BAR_BLUE = "#7CB9E8"
+NAVY     = "#1F4E79"
+
+DPI = 300
+NARROWER_DIM_INCHES = 7.5
+
+
+def _size_to_inches(width, height):
+    s = NARROWER_DIM_INCHES / 100
+    return width * s, height * s
+
+
+def _fig_to_bytes(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight",
+                facecolor="white", edgecolor="none")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _format_number(value, format_modifier):
+    if value is None:
+        return ""
+    if format_modifier == "P":
+        return f"{value:,.0f}%"
+    if format_modifier == "C":
+        return f"£{value:,.0f}"
+    return f"{value:,.0f}"
+
+
+def _axis_formatter(format_modifier):
+    return mticker.FuncFormatter(lambda v, _: _format_number(v, format_modifier))
+
+
+def radar_chart(population_layers: list, width=55, height=55, tweaks=""):
+    """Radar / spider chart — component values on radial axes."""
+    base = population_layers[0]
+    w, h = _size_to_inches(width, height)
+    fig = plt.figure(figsize=(w, h))
+    metric = base.metrics[0]
+    components = metric.component_names
+    values = [v if v is not None else 0 for v in metric.units[0].values]
+    N = len(components)
+    angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+    values_plot = values + [values[0]]
+    angles_plot = angles + [angles[0]]
+    ax = fig.add_subplot(111, polar=True)
+    ax.plot(angles_plot, values_plot, color=NAVY, linewidth=2, zorder=3)
+    ax.fill(angles_plot, values_plot, color=BAR_BLUE, alpha=0.35, zorder=2)
+    ax.scatter(angles, values, color=NAVY, s=40, zorder=4)
+    ax.set_xticks(angles)
+    labels = [c if len(c) <= 18 else c[:16] + "…" for c in components]
+    ax.set_xticklabels(labels, fontsize=7.5)
+    ax.tick_params(axis="y", labelsize=7, colors="#888888")
+    ax.yaxis.grid(True, color="#DDDDDD", linewidth=0.7)
+    ax.xaxis.grid(True, color="#DDDDDD", linewidth=0.7)
+    ax.spines["polar"].set_visible(False)
+    ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
+    fig.tight_layout()
+    return _fig_to_bytes(fig)

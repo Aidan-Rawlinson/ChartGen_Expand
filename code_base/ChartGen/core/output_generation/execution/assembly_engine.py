@@ -21,7 +21,7 @@ from pptx import Presentation
 from pptx.util import Emu
 
 from core.output_generation.execution.charts.cache_reader import load_shape
-from core.output_generation.execution.charts.base_charts import render_chart
+from core.output_generation.execution.charts.custom_charts import get_chart_callable
 from core.output_generation.execution.text.text_engine import update_text
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
@@ -191,7 +191,8 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     tweaks = str(row.get("tweaks", "") or "").strip()
     try:
         image_bytes = _render_chart_image(
-            chart_type_ref, population_layers, width_emu, height_emu, render_context, tweaks
+            chart_type_ref, population_layers, width_emu, height_emu, tweaks,
+            settings.get("workfile_state").custom_chart_code,
         )
     except Exception as e:
         return err_result(row, f"insert_chart: render failed for '{chart_type_ref}': {e}")
@@ -362,7 +363,7 @@ def _load_chart_data(cache_file: str, workfile_state=None):
 
 
 def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu: int, height_emu: int,
-                        report_context=None, tweaks=""):
+                        tweaks="", custom_chart_code=None):
     """
     Render a Matplotlib chart to PNG bytes sized to the placeholder.
     Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
@@ -372,16 +373,21 @@ def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu:
 
     tweaks is the row's own tweaks column, passed straight through to the
     Base Chart function's tweaks parameter, uninterpreted here.
+
+    chart_type_ref is resolved built-in first, then against this workfile's
+    own saved custom charts (get_chart_callable) — a custom chart behaves
+    identically to a built-in from this point on. No report_context or any
+    other runtime object is passed to a Base Chart function (Architecture,
+    chart_inputs contract) — Selected-unit identity is already carried on
+    the "Selected"-labelled entry in population_layers by the time this is
+    called.
     """
     NARROWER_EMU = 6858000
     width_pct  = max(10, int(min(100, (width_emu  / NARROWER_EMU) * 100)))
     height_pct = max(10, int(min(100, (height_emu / NARROWER_EMU) * 100)))
 
-    return render_chart(
-        chart_type_ref, population_layers,
-        width=width_pct, height=height_pct,
-        tweaks=tweaks, report_context=report_context,
-    )
+    chart_func = get_chart_callable(chart_type_ref, custom_chart_code)
+    return chart_func(population_layers, width=width_pct, height=height_pct, tweaks=tweaks)
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,

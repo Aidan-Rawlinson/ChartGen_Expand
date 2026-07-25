@@ -108,8 +108,11 @@ chartgen/
     │       ├── results.py
     │       ├── charts/
     │       │   ├── base_charts/
-    │       │   │   ├── shared.py, numeric_series.py, numeric_compositional.py,
-    │       │   │   └── categorical_compositional.py, timeseries.py, registry.py
+    │       │   │   ├── numeric_series/, numeric_compositional/,
+    │       │   │   ├── categorical_compositional/, timeseries/
+    │       │   │   └── registry.py
+    │       │   ├── custom_charts/
+    │       │   │   ├── contract.py, gate.py, resolve.py, bundle.py
     │       │   ├── cache_reader.py
     │       │   └── chart_type_map.py
     │       ├── pictures/
@@ -173,7 +176,9 @@ chartgen/
 | `core/output_generation/execution/assembly_engine.py` | Executes one report's normal-scope Running Order rows via dispatch table. Not the only module touching `python-pptx` — `insert_picture` and `insert_from_excel` also do |
 | `core/output_generation/execution/batch_process.py` | Batch loop — splits enabled Running Order rows by scope (`batch_open`/`normal`/`batch_close`) and iterates `assembly_engine.run_running_order` across the units in a run |
 | `core/output_generation/execution/results.py` | `ok_result` / `err_result` — kept local to `execution`, not shared globally |
-| `core/output_generation/execution/charts/` | 20 Base Charts, split into `base_charts/` by canonical data shape (`numeric_series.py`, `numeric_compositional.py`, `categorical_compositional.py`, `timeseries.py`), with shared palette/helpers in `shared.py` and dispatch in `registry.py`; cache reading |
+| `core/output_generation/execution/charts/base_charts/` | 20 built-in Base Charts, one standalone file per chart_type_ref, grouped into a folder per canonical data shape. No shared helpers module — each file is fully self-contained, so it can be handed whole to an external AI for editing (Decision 18); dispatch in `registry.py` |
+| `core/output_generation/execution/charts/custom_charts/` | Custom Charts — user- or AI-authored Base Charts saved into a workfile. Static validation and compilation (`gate.py`), built-in-then-custom resolution (`resolve.py`), the AI-facing download bundle (`bundle.py`), and the shared contract both enforce and explain (`contract.py`). See Decision 18 |
+| `core/output_generation/execution/charts/` (remainder) | Cache reading; `chart_type_map.py` |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
@@ -199,7 +204,11 @@ MyWorkfile.cgw  (ZIP)
 │   ├── settings.csv
 │   ├── tables/
 │   │   └── {table_name}.csv
-│   └── running_order.csv
+│   ├── running_order.csv
+│   └── custom_charts/
+│       ├── custom_charts.csv
+│       └── {shape_type}/
+│           └── {chart_type_ref}.py
 ├── data_cache/
 │   ├── manifest.csv
 │   └── {hex_id}.json
@@ -213,6 +222,7 @@ MyWorkfile.cgw  (ZIP)
 | `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, `template_page_width_emu`/`template_page_height_emu` (captured once at template processing — see Decision 11), etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
 | `workfile_config/tables/{table_name}.csv` | ★ One file per population-level table (e.g. `nhs_organisations.csv`, `submissions_2026_123.csv`) — any number of them, added and removed freely. No single fixed column schema at this layer; each is written using its own rows' keys. `table_order` (in `settings.csv`, `\|`-delimited) is the only record of display order — whichever table name is listed first is the master table, driving the reporting unit picker and the batch loop. No separate "master" flag exists; position is the only source of truth |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
+| `workfile_config/custom_charts/` | Custom Charts saved into this workfile (Decision 18) — `custom_charts.csv` is the index (`chart_type_ref`, `shape_type`, `added_at`, `notes`); one `.py` per row, under a folder named for its `shape_type`, mirroring the built-in Base Charts' own folder-per-shape layout |
 | `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
 | `data_cache/{hex_id}.json` | One file per fetched chart — serialised data shape, named by the owning manifest row's `hex_id` |
 | `template/MyWorkfile.pptx` | Reference copy of the cleaned template — validation only. Never run from. Compared against the live sibling `.pptx` (below) to warn on structural drift |
@@ -309,6 +319,8 @@ Streamlit process (st.session_state)
 │     running_order_rows: list[dict]
 │     manifest_rows: list[dict]
 │     cache: dict — {filename: json_string}
+│     custom_chart_rows: list[dict]
+│     custom_chart_code: dict — {chart_type_ref: source_text}
 │     template_pptx_bytes: bytes | None
 │     last_saved_by
 │     last_saved_at
@@ -350,6 +362,7 @@ Streamlit process (st.session_state)
 | `WorkfileState.running_order_rows: list[dict]` | ★ Sole live copy — see Section 5 note |
 | `WorkfileState.manifest_rows: list[dict]` | Mirrors `data_cache/manifest.csv` — the manifest table |
 | `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
+| `WorkfileState.custom_chart_rows` / `.custom_chart_code` | Mirror `workfile_config/custom_charts/` (index + one `.py` per row) the same way `manifest_rows`/`cache` mirror the manifest/cache pair — see Decision 18 |
 | `WorkfileState.dirty: bool` | Not persisted — session-only flag |
 | `WorkfileState.read_only: bool` | Not persisted — session-only. True only for a session opened via Open Read-Only; such a session never writes or clears the lock. |
 | `st.session_state["token"]` | API session token (Decision 7) — never the password |
@@ -584,3 +597,9 @@ Every Base Chart function's `tweaks` parameter was typed as a list default (`twe
 **Consumers updated accordingly.** `AssemblyContext.summary_stats` (Section 6) is removed — `insert_chart` no longer stores anything; if Autotables is ever built, `data_shape`/`population_layers` are already in scope at that point in `insert_chart` for it to read directly. The Charts sheet preview (`ui/tabs/charts_tab.py`) now calls `summary_stats_by_layer`/`units_by_layer` itself, directly against `pop_layers`, right next to where the "Summary stats"/"Units included" display already consumed them — same on-screen output, one fewer hop, no detour through the charting layer.
 
 **Effect on the two-methods inconsistency.** Resolved as a side effect, not by choosing one of the two prior methods — the question of "which Selected-value rule is correct" no longer arises, since no Base Chart function computes or returns a Selected value at all.
+
+### Decision 18 — Base Charts as Standalone Artefacts, and Custom Charts
+
+Base Charts are now treated the way an Excel `.crtx` chart-type template is treated — a rendering artefact, not application logic. Each of the 20 built-ins was rewritten into its own standalone file (`base_charts/{shape}/{chart_type_ref}.py`), carrying its own copy of whatever helpers it needs; `shared.py` is deleted. Every Base Chart now takes a fixed, minimal call — `population_layers`, `width`, `height`, `tweaks` (the **chart_inputs** contract, Functional Spec Section 10.0) — and returns image bytes only. `report_context` is no longer passed in; Selected-unit identity is read from the `"Selected"`-labelled `population_layers` entry instead, the same convention every chart now uses consistently. A chart file's self-containment is what makes it safe to hand whole to an external AI for editing.
+
+**Custom Charts** extends the same idea: a user, typically via an AI, can save a new Base Chart into the workfile itself rather than the software (`custom_charts/`, Sections 5–6). A static check (`gate.py`) — allowed imports only, a few banned builtins disallowed, exactly one function matching the chart_inputs signature — runs before anything is compiled or executed; there is no sandboxing beyond this, and no check on what the function actually returns (only discoverable by running it). `resolve.py` looks up a `chart_type_ref` against the built-in registry first, then a workfile's saved Custom Charts, so a saved one behaves identically to a built-in everywhere. `bundle.py` builds the document handed to an AI — the chart_inputs contract, a chart's complete current file (the whole module, not just the function, so nothing it depends on is silently dropped), and its live data.

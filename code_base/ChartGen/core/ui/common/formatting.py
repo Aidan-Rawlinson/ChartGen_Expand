@@ -107,3 +107,25 @@ def population_table_columns(rows: list) -> list:
 def display_column_labels(cols: list) -> list:
     """Map internal column names to their display labels (e.g. soft_parents -> Parents)."""
     return [DISPLAY_COLUMN_NAMES.get(c, c) for c in cols]
+
+
+def format_number(value, format_modifier):
+    """
+    Format a scalar value per a data shape's format_modifier, Excel-style:
+    no modifier -> comma-thousands, no decimals ("#,###"); "P" -> the same
+    plus a "%" suffix ("#,##0%"); "C" -> the same with a "£" prefix
+    ("£#,##0"). Values are not rescaled — this only controls display.
+    Returns "" for None.
+
+    UI-side formatting only (Charts sheet stats display etc.) — Base Chart
+    functions carry their own independent copy of this logic, since they
+    are standalone artefacts with no import from ChartGen's own code
+    (see core/output_generation/execution/charts/base_charts/__init__.py).
+    """
+    if value is None:
+        return ""
+    if format_modifier == "P":
+        return f"{value:,.0f}%"
+    if format_modifier == "C":
+        return f"£{value:,.0f}"
+    return f"{value:,.0f}"

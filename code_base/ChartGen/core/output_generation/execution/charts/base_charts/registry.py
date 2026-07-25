@@ -2,21 +2,38 @@
 registry.py
 Chart registry and dispatch — maps chart_type_ref to its Base Chart function
 across all four data shapes.
+
+Each Base Chart function is a standalone artefact (its own module, no
+imports from ChartGen's own code) — this is the one place in the codebase
+that treats them as a set. render_chart's signature is the chart_inputs
+contract every Base Chart, built-in or custom, must accept:
+population_layers, width, height, tweaks. No report_context or any other
+runtime object is passed through.
 """
 
-from core.output_generation.execution.charts.base_charts.numeric_series import (
-    ranked_column, dot_strip, box_whisker, frequency_histogram, violin_plot,
-    bead_string_dot_plot,
-)
-from core.output_generation.execution.charts.base_charts.numeric_compositional import (
-    ugly_bar, radar_chart, donut_component, lollipop_chart, waffle_chart,
-)
-from core.output_generation.execution.charts.base_charts.categorical_compositional import (
-    yn_bar, list_pie, diverging_bar, dot_matrix, donut_pie, treemap,
-)
-from core.output_generation.execution.charts.base_charts.timeseries import (
-    period_line_chart, median_comparison_linechart, full_lines_linechart,
-)
+from core.output_generation.execution.charts.base_charts.numeric_series.ranked_column import ranked_column
+from core.output_generation.execution.charts.base_charts.numeric_series.dot_strip import dot_strip
+from core.output_generation.execution.charts.base_charts.numeric_series.box_whisker import box_whisker
+from core.output_generation.execution.charts.base_charts.numeric_series.frequency_histogram import frequency_histogram
+from core.output_generation.execution.charts.base_charts.numeric_series.violin_plot import violin_plot
+from core.output_generation.execution.charts.base_charts.numeric_series.bead_string_dot_plot import bead_string_dot_plot
+
+from core.output_generation.execution.charts.base_charts.numeric_compositional.ugly_bar import ugly_bar
+from core.output_generation.execution.charts.base_charts.numeric_compositional.radar_chart import radar_chart
+from core.output_generation.execution.charts.base_charts.numeric_compositional.donut_component import donut_component
+from core.output_generation.execution.charts.base_charts.numeric_compositional.lollipop_chart import lollipop_chart
+from core.output_generation.execution.charts.base_charts.numeric_compositional.waffle_chart import waffle_chart
+
+from core.output_generation.execution.charts.base_charts.categorical_compositional.yn_bar import yn_bar
+from core.output_generation.execution.charts.base_charts.categorical_compositional.list_pie import list_pie
+from core.output_generation.execution.charts.base_charts.categorical_compositional.diverging_bar import diverging_bar
+from core.output_generation.execution.charts.base_charts.categorical_compositional.dot_matrix import dot_matrix
+from core.output_generation.execution.charts.base_charts.categorical_compositional.donut_pie import donut_pie
+from core.output_generation.execution.charts.base_charts.categorical_compositional.treemap import treemap
+
+from core.output_generation.execution.charts.base_charts.timeseries.period_line_chart import period_line_chart
+from core.output_generation.execution.charts.base_charts.timeseries.median_comparison_linechart import median_comparison_linechart
+from core.output_generation.execution.charts.base_charts.timeseries.full_lines_linechart import full_lines_linechart
 
 CHART_REGISTRY = {
     "ranked_column":        ranked_column,
@@ -43,7 +60,7 @@ CHART_REGISTRY = {
 
 
 def render_chart(chart_type_ref: str, population_layers: list,
-                 width: int, height: int, tweaks="", report_context=None):
+                 width: int, height: int, tweaks=""):
     """
     Returns image_bytes only — a Base Chart function's sole job is
     producing the visual. Statistics and unit lists are a property of the
@@ -51,10 +68,15 @@ def render_chart(chart_type_ref: str, population_layers: list,
     the charting layer computes or relays: a caller that needs them already
     has population_layers in scope and calls summary_stats_by_layer /
     units_by_layer directly, rather than routing through here.
+
+    chart_inputs contract: population_layers, width, height, tweaks. No
+    report_context or any other ChartGen runtime object is passed to a
+    Base Chart function — Selected-unit identity is read from the
+    "Selected"-labelled entry in population_layers by whichever chart
+    needs it.
     """
     if chart_type_ref not in CHART_REGISTRY:
         raise ValueError(f"Unknown chart_type_ref: {chart_type_ref}")
     return CHART_REGISTRY[chart_type_ref](
-        population_layers, width=width, height=height,
-        tweaks=tweaks, report_context=report_context,
+        population_layers, width=width, height=height, tweaks=tweaks,
     )

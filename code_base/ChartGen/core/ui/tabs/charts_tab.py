@@ -55,9 +55,13 @@ from core.output_generation.definition.running_order import (
     parse_metric_periods_string, build_metric_periods_string,
     CHART_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
 )
-from core.output_generation.execution.charts.base_charts import render_chart
-from core.output_generation.execution.charts.base_charts.shared import _format_number
+from core.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from core.output_generation.execution.charts.chart_type_map import get_valid_chart_types
+from core.output_generation.execution.charts.custom_charts import (
+    validate_custom_chart_code, compile_custom_chart, CustomChartError,
+    get_chart_callable, merge_custom_refs_for_shape, custom_chart_descriptions,
+    build_bundle,
+)
 from core.shared.infrastructure.page_sizing import (
     percent_to_emu, emu_to_percent, get_page_size_emu,
     has_known_template_page_size, STANDARD_PAGE_SIZES_EMU, DEFAULT_STANDARD_PAGE_SIZE,
@@ -70,6 +74,7 @@ from core.shared.normalisation_containers.shapes import (
     summary_stats_by_layer, units_by_layer,
 )
 from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
+from core.ui.common.formatting import format_number
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import settings, master_table, cached_files, manifest, load_shape_ps, ws
 
@@ -117,7 +122,7 @@ def _format_reference_value(value, kind, format_modifier):
         return f"{value:,.0f}"
     if kind == "percent":
         return f"{value:,.1f}%"
-    return _format_number(value, format_modifier)
+    return format_number(value, format_modifier)
 
 
 def _clear_sandbox_state():
@@ -360,12 +365,15 @@ def render_charts_tab():
         # --- Chart type — filtered to this shape (or, if metric_periods
         # converted it, to NumericSeries instead), clamped before rendering ---
         effective_shape_type = "NumericSeries" if converts_to_metrics else shape_type
-        valid_types = get_valid_chart_types(effective_shape_type)
+        valid_types = get_valid_chart_types(effective_shape_type) + custom_chart_descriptions(
+            effective_shape_type, workfile_state.custom_chart_rows
+        )
         if not valid_types:
             st.warning(f"No Base Charts defined for shape type '{effective_shape_type}'.")
             return
         valid_refs = get_valid_chart_refs_for_cache_file(
-            selected_file, the_manifest, converts_to_metrics=converts_to_metrics
+            selected_file, the_manifest, converts_to_metrics=converts_to_metrics,
+            custom_chart_rows=workfile_state.custom_chart_rows,
         )
         type_desc_by_ref = {ref: desc for ref, desc in valid_types}
 
@@ -478,6 +486,16 @@ def render_charts_tab():
         width_emu = percent_to_emu(width_pct, page_w, page_h)
         height_emu = percent_to_emu(height_pct, page_w, page_h)
 
+        # --- Population layers for this preview — built once here, reused
+        # by both the Custom Charts download bundle and the render call in
+        # the right-hand column below. ---
+        try:
+            pop_layers = build_population_layers(shape, preview_populations_str, target_rows, selected_ids)
+        except Exception:
+            pop_layers = []
+        if not pop_layers:
+            pop_layers = [_replace(shape, population_label="All")]
+
         # --- Save to Running Order ---
         target_default = ro_choice if ro_choice in chart_row_ids else TARGET_PLACEHOLDER
         current_target = st.session_state.get("cs_target_row_choice", target_default)
@@ -537,6 +555,76 @@ def render_charts_tab():
                 st.success("Saved to Running Order.")
                 st.rerun()
 
+        with st.expander("Custom Charts", expanded=False):
+            st.caption(
+                "Download a self-contained bundle for the chart currently selected, "
+                "hand it to an AI to modify or replace, then paste the result back in "
+                "to preview and, if you're happy with it, save as a new chart."
+            )
+
+            if not chart_type_ref:
+                st.caption("Select a chart type above first.")
+            else:
+                bundle_text = build_bundle(
+                    chart_type_ref, effective_shape_type, pop_layers,
+                    width_pct, height_pct, tweaks_str, workfile_state.custom_chart_code,
+                )
+                st.download_button(
+                    "⬇  Download bundle for this chart", data=bundle_text,
+                    file_name=f"{chart_type_ref}_custom_chart_bundle.md",
+                    mime="text/markdown", use_container_width=True,
+                )
+
+            st.session_state.setdefault("cs_custom_code_input", "")
+            custom_code_input = st.text_area(
+                "Paste updated chart code", key="cs_custom_code_input", height=200,
+                help="Paste the complete function returned by the AI — one function, ready to run as-is.",
+            )
+
+            if st.button("Validate && Preview", use_container_width=True):
+                try:
+                    validate_custom_chart_code(custom_code_input)
+                    st.session_state["cs_temp_custom_code"] = custom_code_input
+                    st.session_state["cs_temp_custom_for_chart"] = chart_type_ref
+                    st.success("Valid — previewing below.")
+                except CustomChartError as e:
+                    st.session_state.pop("cs_temp_custom_code", None)
+                    st.session_state.pop("cs_temp_custom_for_chart", None)
+                    st.error(str(e))
+
+            temp_active = (
+                st.session_state.get("cs_temp_custom_code")
+                and st.session_state.get("cs_temp_custom_for_chart") == chart_type_ref
+            )
+            if temp_active:
+                st.caption("Save this as a new custom chart")
+                save_name = st.text_input("New chart name", key="cs_custom_save_name",
+                                          label_visibility="collapsed", placeholder="New chart name")
+                if st.button("💾  Save as custom chart", use_container_width=True):
+                    name = save_name.strip()
+                    existing_custom_refs = {r["chart_type_ref"] for r in workfile_state.custom_chart_rows}
+                    if not name:
+                        st.error("Enter a name for the new chart.")
+                    elif name == "temp":
+                        st.error("'temp' is reserved and can't be used as a chart name.")
+                    elif name in CHART_REGISTRY or name in existing_custom_refs:
+                        st.error(f"'{name}' is already in use by another chart. Choose a different name.")
+                    else:
+                        from datetime import datetime, timezone
+                        workfile_state.custom_chart_rows.append({
+                            "chart_type_ref": name,
+                            "shape_type": effective_shape_type,
+                            "added_at": datetime.now(timezone.utc).isoformat(),
+                            "notes": "",
+                        })
+                        workfile_state.custom_chart_code[name] = st.session_state["cs_temp_custom_code"]
+                        workfile_state.dirty = True
+                        st.session_state.pop("cs_temp_custom_code", None)
+                        st.session_state.pop("cs_temp_custom_for_chart", None)
+                        st.session_state.pop("cs_custom_code_input", None)
+                        st.success(f"Saved as '{name}' — now available in Select Visualisation.")
+                        st.rerun()
+
         with st.expander("Zoom", expanded=False):
             st.session_state.setdefault("cs_zoom", DEFAULT_ZOOM)
             zoom_choice = st.selectbox(
@@ -554,18 +642,24 @@ def render_charts_tab():
         if not chart_type_ref:
             return
 
-        try:
-            pop_layers = build_population_layers(shape, preview_populations_str, target_rows, selected_ids)
-        except Exception:
-            pop_layers = []
-        if not pop_layers:
-            pop_layers = [_replace(shape, population_label="All")]
+        # A validated-but-not-yet-saved custom chart, staged in the Custom
+        # Charts expander, takes over the preview for the chart_type_ref it
+        # was validated against only — switching to a different chart type
+        # falls straight back to that chart's own resolved callable, rather
+        # than carrying a stale override across.
+        temp_code = st.session_state.get("cs_temp_custom_code")
+        temp_for_chart = st.session_state.get("cs_temp_custom_for_chart")
 
         with st.spinner("Rendering…"):
-            image_bytes = render_chart(
-                chart_type_ref, pop_layers, width=width_pct, height=height_pct,
-                tweaks=tweaks_str, report_context=rc
-            )
+            try:
+                if temp_code and temp_for_chart == chart_type_ref:
+                    chart_func = compile_custom_chart(temp_code)
+                else:
+                    chart_func = get_chart_callable(chart_type_ref, workfile_state.custom_chart_code)
+                image_bytes = chart_func(pop_layers, width=width_pct, height=height_pct, tweaks=tweaks_str)
+            except Exception as e:
+                st.error(f"Chart failed to render: {e}")
+                return
 
         # Stats and unit lists are a property of the data shape, read
         # straight off pop_layers here — not relayed through render_chart,
@@ -588,8 +682,8 @@ def render_charts_tab():
         # Both read what each layer's own shape instance already
         # computes/holds for itself (summary_stats_by_layer, units_by_layer
         # — core.shared.normalisation_containers.shapes), called directly
-        # against pop_layers above; nothing here is recalculated, and
-        # render_chart itself only ever produces the image. Ids are
+        # against pop_layers above; nothing here is recalculated, and the
+        # chart function itself only ever produces the image. Ids are
         # short, stable reference tags scoped to this shape type
         # (Decisions.md), meant to eventually double as PowerPoint table
         # replacement tags — not full Autotables, which will draw on this

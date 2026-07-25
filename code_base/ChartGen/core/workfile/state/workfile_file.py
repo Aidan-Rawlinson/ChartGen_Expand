@@ -49,6 +49,15 @@ MANIFEST_FIELDNAMES = [
 
 PLACEHOLDER = "..."
 
+# workfile_config/custom_charts/custom_charts.csv column schema — the index
+# of every custom Base Chart saved into this workfile. Source code itself
+# lives alongside it, one file per row, at
+# workfile_config/custom_charts/{shape_type}/{chart_type_ref}.py — the same
+# folder-per-shape convention the built-in Base Charts use (Architecture,
+# base_charts/{shape}/). Mirrors the manifest/cache split: this file is the
+# index, the .py files are the payload.
+CUSTOM_CHART_FIELDNAMES = ["chart_type_ref", "shape_type", "added_at", "notes"]
+
 
 def generate_hex_id(existing_rows: list) -> str:
     """
@@ -122,6 +131,14 @@ class WorkfileState:
     # data_cache/
     manifest_rows: list = field(default_factory=list)  # the URL/chart table (manifest.csv), MANIFEST_FIELDNAMES
     cache: dict = field(default_factory=dict)         # keyed by filename ({hex_id}.json) -> json string
+
+    # workfile_config/custom_charts/ — user- or AI-authored Base Charts,
+    # saved into this workfile. custom_chart_rows mirrors manifest_rows
+    # (the index); custom_chart_code mirrors cache (the payload, keyed by
+    # chart_type_ref rather than filename since that's this store's own
+    # stable identity — see Decisions.md).
+    custom_chart_rows: list = field(default_factory=list)  # CUSTOM_CHART_FIELDNAMES rows
+    custom_chart_code: dict = field(default_factory=dict)  # {chart_type_ref: source_text}
 
     # template/
     template_pptx_bytes: Optional[bytes] = None       # reference copy bytes
@@ -234,6 +251,18 @@ def open_workfile(workfile_path: str) -> WorkfileState:
             if name.startswith("data_cache/") and name.endswith(".json"):
                 fname = name.split("/")[-1]
                 state.cache[fname] = zf.read(name).decode("utf-8")
+
+        # workfile_config/custom_charts/ — index plus one .py per row,
+        # under workfile_config/custom_charts/{shape_type}/{chart_type_ref}.py
+        state.custom_chart_rows = _csv_to_rows(
+            _read("workfile_config/custom_charts/custom_charts.csv")
+        )
+        for row in state.custom_chart_rows:
+            ref = row.get("chart_type_ref", "")
+            shape = row.get("shape_type", "")
+            py_path = f"workfile_config/custom_charts/{shape}/{ref}.py"
+            if ref and py_path in names:
+                state.custom_chart_code[ref] = _read(py_path)
 
         # template/
         for name in names:
@@ -349,6 +378,18 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
                _rows_to_csv(state.manifest_rows, MANIFEST_FIELDNAMES))
         for fname, json_str in state.cache.items():
             zf.writestr(f"data_cache/{fname}", json_str.encode("utf-8"))
+
+        # workfile_config/custom_charts/ — index plus one .py per row, one
+        # folder per shape_type, mirroring the built-in Base Charts' own
+        # folder-per-shape layout.
+        _write("workfile_config/custom_charts/custom_charts.csv",
+               _rows_to_csv(state.custom_chart_rows, CUSTOM_CHART_FIELDNAMES))
+        for row in state.custom_chart_rows:
+            ref = row.get("chart_type_ref", "")
+            shape = row.get("shape_type", "")
+            code = state.custom_chart_code.get(ref, "")
+            if ref:
+                _write(f"workfile_config/custom_charts/{shape}/{ref}.py", code)
 
         # template/
         if state.template_pptx_bytes:
