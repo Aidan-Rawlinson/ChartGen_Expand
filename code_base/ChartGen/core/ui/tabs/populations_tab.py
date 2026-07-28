@@ -16,6 +16,7 @@ import io
 
 import streamlit as st
 
+from core.ui.common.compact_layout import tight_divider, tight_caption
 from core.ui.common.formatting import population_table_columns, display_column_labels
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws
@@ -26,8 +27,8 @@ from core.shared.infrastructure.population_table_xlsx import (
 
 def render_populations_tab():
     render_tab_header("Populations", "populations")
-    st.caption("This sheet contains the populations we wish to compare in our analysis, charts, and tables.")
-    st.divider()
+    tight_caption("This sheet contains the populations we wish to compare in our analysis, charts, and tables.")
+    tight_divider()
 
     workfile_state = ws()
     table_order = workfile_state.table_order
@@ -76,7 +77,7 @@ def render_populations_tab():
                 df = pd.DataFrame(rows)[cols]
                 df.columns = display_column_labels(cols)
                 st.dataframe(df, use_container_width=True, hide_index=True)
-                st.caption(f"{len(rows)} row(s)")
+                tight_caption(f"{len(rows)} row(s)")
 
             col_dl, col_ul = st.columns(2)
 
@@ -114,7 +115,7 @@ def render_populations_tab():
                     st.rerun()
 
         if i < len(table_order) - 1:
-            st.divider()
+            tight_divider()
 
 
 def _report_import_result(result: dict):

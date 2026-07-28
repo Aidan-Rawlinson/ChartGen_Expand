@@ -92,3 +92,19 @@ def shape_units(shape) -> list:
 def units_by_layer(population_layers: list) -> dict:
     """Units for every population layer passed to a chart, keyed by each layer's own population_label."""
     return {layer.population_label: shape_units(layer) for layer in population_layers}
+
+
+def unit_has_data(unit) -> bool:
+    """
+    Whether a unit has actual data for this chart, rather than being a
+    "no data" submission — the same distinction count_units_with_any_data
+    already makes at shape level, exposed here per unit. NumericSeries,
+    NumericCompositional, and TimeSeries units carry a `values` list (any
+    entry present counts as data); CategoricalCompositionalUnit carries a
+    single `response` field instead.
+    """
+    if hasattr(unit, "values"):
+        return any(v is not None for v in unit.values)
+    if hasattr(unit, "response"):
+        return unit.response is not None
+    return False

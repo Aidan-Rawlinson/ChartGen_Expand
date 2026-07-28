@@ -10,6 +10,7 @@ import os
 import streamlit as st
 
 from core.ui.common.formatting import format_uk_time
+from core.ui.tabs.charts_tab import capture_charts_sheet_state
 from core.workfile.state.session_state import ws, clear_workfile_session_state
 from core.workfile.state.workfile_file import save_workfile, close_workfile
 
@@ -50,7 +51,13 @@ def render_sidebar():
                 st.write(workfile_label)
 
                 st.caption("Description")
-                st.write(description or "—")
+                new_description = st.text_input(
+                    "Description", value=description, key="sb_description_input",
+                    label_visibility="collapsed",
+                )
+                if new_description != description:
+                    w.settings["description"] = new_description
+                    w.dirty = True
 
                 st.caption("Full file path")
                 st.write(w.workfile_path)
@@ -77,6 +84,7 @@ def render_sidebar():
         # Save / Save and Close are unavailable in a read-only session; Save As
         # remains available so a read-only session can become a normal one.
         if st.button("Save", use_container_width=True, disabled=not has_workfile or read_only):
+            capture_charts_sheet_state(w)
             save_workfile(w, st.session_state.get("username", ""))
             st.rerun()
 
@@ -85,6 +93,7 @@ def render_sidebar():
             st.rerun()
 
         if st.button("Save and close", use_container_width=True, disabled=not has_workfile or read_only):
+            capture_charts_sheet_state(w)
             save_workfile(w, st.session_state.get("username", ""))
             close_workfile(w)
             st.session_state.pop("workfile_state", None)

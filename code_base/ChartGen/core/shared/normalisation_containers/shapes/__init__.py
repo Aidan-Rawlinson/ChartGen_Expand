@@ -57,6 +57,7 @@ from core.shared.normalisation_containers.shapes.dispatch import (
     summary_stats_by_layer,
     shape_units,
     units_by_layer,
+    unit_has_data,
     apply_period_range,
 )
 from core.shared.normalisation_containers.shapes.timeseries import (
@@ -111,6 +112,7 @@ __all__ = [
     "summary_stats_by_layer",
     "shape_units",
     "units_by_layer",
+    "unit_has_data",
     "apply_period_range",
     "reference_rows_for_shape_type",
 ]

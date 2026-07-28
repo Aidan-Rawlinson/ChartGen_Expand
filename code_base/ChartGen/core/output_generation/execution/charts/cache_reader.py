@@ -4,6 +4,7 @@ Loads a canonical data shape from WorkfileState's cache by filename.
 """
 
 import json
+import re
 
 from core.shared.normalisation_containers.shapes import (
     NumericSeries, NumericSeriesUnit, NumericSeriesMetricStats, ShapeStats,
@@ -155,6 +156,31 @@ def load_shape(filename, workfile_state):
 def list_cached_files(workfile_state):
     """Return sorted list of cache filenames from WorkfileState.cache."""
     return sorted(workfile_state.cache.keys())
+
+
+def cache_files_sorted_by_chart_ref(cached_file_list: list, manifest_dict: dict) -> list:
+    """
+    Reorder a list of cache filenames ({hex_id}.json) into chart_ref order
+    (Chart_0001, Chart_0002, ...), lowest to highest, rather than
+    list_cached_files' own hex_id-alphabetical order. Used wherever a
+    dropdown lists charts by their human-facing name (the Charts sheet,
+    stat tags) — hex_id is the right sort for a stable, permanent
+    identity, but not for what a person reading the list expects.
+
+    Sorts on the trailing number itself, not the chart_ref string —
+    string comparison only gives correct numeric order while every ref
+    shares the same digit-width (e.g. "Chart_10000" would sort before
+    "Chart_2000" as plain text). A cache_file with no parseable number
+    (missing from manifest_dict — a stale cache entry with no matching
+    manifest row) sorts after every numbered one, by filename.
+    """
+    def _sort_key(f):
+        chart_ref = manifest_dict.get(f, {}).get("chart_ref", "") or ""
+        m = re.search(r"(\d+)\s*$", chart_ref)
+        if m:
+            return (0, int(m.group(1)))
+        return (1, f)
+    return sorted(cached_file_list, key=_sort_key)
 
 
 def load_manifest(workfile_state):

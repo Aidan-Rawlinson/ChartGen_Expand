@@ -25,10 +25,8 @@ from core.output_generation.execution.charts.custom_charts import get_chart_call
 from core.output_generation.execution.text.text_engine import update_text
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
+from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from core.shared.normalisation_containers.population_layers import build_population_layers
-from core.shared.normalisation_containers.shapes import apply_period_range
-from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
-from core.output_generation.definition.running_order.dialog_support import parse_metric_periods_string
 from core.output_generation.execution.pictures.insert_picture import insert_picture
 from core.output_generation.execution.excel.insert_from_excel import (
     open_excel, close_excel, insert_from_excel
@@ -137,45 +135,29 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     except Exception as e:
         return err_result(row, f"insert_chart: failed to load cache '{cache_file}': {e}")
 
-    # --- Trim to the row's period range (TimeSeries only; no-op otherwise) ---
-    # A normalisation step at the boundary, ahead of population-layer
-    # filtering, so the charting side sees a shape that already only spans
-    # the periods in scope — nothing downstream needs to know a range was
-    # ever set (Functional Spec §10.4 filters units the same way).
+    # --- Resolve this row's own cut of the data shape. Period-range trim,
+    # metric-periods conversion, and population-table/target-rows/
+    # selected-ids resolution are all composed in
+    # cut_resolution.prepare_chart_cut, shared with the Charts sheet and
+    # stat tags — see that module. data_shape comes back trimmed/converted
+    # regardless of whether any layers are actually resolved below, so the
+    # "no populations" fallback reflects those same trims rather than
+    # reverting to the untrimmed shape. ---
     start_period = str(row.get("start_period", "") or "").strip()
     end_period = str(row.get("end_period", "") or "").strip()
-    if start_period or end_period:
-        data_shape = apply_period_range(data_shape, start_period, end_period)
+    metric_periods_str = str(row.get("metric_periods", "") or "").strip()
+    workfile_state = settings.get("workfile_state")
 
-    # --- Convert selected periods into a metric snapshot (TimeSeries only;
-    # no-op if metric_periods is blank). Applied after the range trim, so a
-    # metric_periods id that fell outside a start_period/end_period range on
-    # the same row correctly surfaces as the same "not found" error below,
-    # rather than silently succeeding against the untrimmed shape. ---
-    metric_period_ids = parse_metric_periods_string(str(row.get("metric_periods", "") or ""))
-    if metric_period_ids:
-        try:
-            data_shape = maybe_convert_periods_to_metrics(data_shape, metric_period_ids)
-        except ValueError as e:
-            return err_result(row, f"insert_chart: metric_periods conversion failed: {e}")
+    try:
+        data_shape, _, target_rows, selected_ids = prepare_chart_cut(
+            data_shape, shape_type, start_period, end_period, metric_periods_str,
+            workfile_state.tables, workfile_state.table_order, ctx.full_unit_set,
+        )
+    except ValueError as e:
+        return err_result(row, f"insert_chart: metric_periods conversion failed: {e}")
 
-    # --- Build population layers ---
     population_layers = []
     if render_context is not None and populations_str:
-        workfile_state = settings.get("workfile_state")
-        # A chart's population lives in whichever table its data shape names
-        # (population_table) — not necessarily the current master table.
-        # Falls back to master for legacy cached data fetched before
-        # population_table existed.
-        target_table = data_shape.population_table or (
-            workfile_state.table_order[0] if workfile_state.table_order else ""
-        )
-        target_rows = workfile_state.tables.get(target_table, [])
-        # Selected can legitimately be more than one unit in this table —
-        # e.g. an organisation supporting two ICBs highlights both ICBs on
-        # an ICB-level chart. ctx.full_unit_set already resolved this per
-        # table for the current reporting unit; just look up its table.
-        selected_ids = {r["unit_id"] for r in ctx.full_unit_set.get(target_table, [])}
         try:
             population_layers = build_population_layers(
                 data_shape, populations_str, target_rows, selected_ids

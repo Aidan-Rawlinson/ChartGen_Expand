@@ -122,6 +122,8 @@ MyWorkfile.cgw  (ZIP)
 
 - **Software id** — the version identifier for an installed build of ChartGen itself, distinct from the file version id. See Functional Spec, Section 5.1.
 
+- **Stat tags table (`text_stats.csv`)** — the table indexing every Stat Tag (see Cluster 8) defined in a workfile, one row per tag, held at `workfile_config/text_stats.csv` inside the `.cgw`. Mirrored in memory by `WorkfileState.text_stats_rows` while the workfile is open. See Architecture, Section 5 and Decision 19.
+
 - **WorkfileState** — the in-memory Python object holding the complete working state of an open `.cgw`. The sole interface other packages use to read or write workfile data during a session. See the Architecture document, Section 5.
 
 ### Cluster 5 — Template & placeholders
@@ -171,6 +173,8 @@ MyWorkfile.cgw  (ZIP)
 - **Running Order** — the user-authored, row-based instruction table that defines report assembly: function, parameters, control flag. See Functional Spec, Section 9, and the Architecture document, Decision 1, for storage format.
 
 - **Scope (`normal` / `batch_open` / `batch_close`)** — the Running Order column controlling when a row executes relative to a batch: once per report (`normal`), once before the whole batch (`batch_open`, e.g. `open_excel`), or once after (`batch_close`, e.g. `close_excel`).
+
+- **Stat tag** — a short, permanent, system-issued id (base-36, e.g. `[3]`, `[a7]`) standing in for one summary-stats value from one chart's own independently-authored cut of its cached data — a single population token, optional TimeSeries period range/metric-periods conversion, and a Reference id (see Cluster 10). Defined and previewed on the Text tab; resolved by `update_text` at generation time, in ordinary text and PowerPoint table cells alike. Not tied to any Running Order row. Distinct from Text Tag (below) — a Reference id isn't globally unique, so a Stat Tag needs hex id + population + reference id to mean anything, where a Text Tag needs nothing beyond its own literal string. See Functional Spec, Section 12.1, and Architecture, Decision 19.
 
 - **Text Tag** — a placeholder string embedded in template text (e.g. `[selected-reporting-unit-name]`) replaced with a per-unit value at generation time by `update_text`.
 

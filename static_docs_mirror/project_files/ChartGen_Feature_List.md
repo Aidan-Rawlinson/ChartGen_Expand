@@ -51,7 +51,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Feature | Readiness | Notes |
 |---|---|---|
 | New Workfile flow (description → single native Save dialog) | Complete | See Functional Spec Section 4. Collects no project/year — creates a genuinely blank `.cgw`; no toolkit involvement at this step at all. |
-| Workfile description field | Complete | Free text, "what is this workfile for"; shown next to the ChartGen title in the app header for as long as the workfile is open. For the person, not the system — plays no part in naming the file or resolving anything. |
+| Workfile description field | Complete | Free text, "what is this workfile for"; shown next to the ChartGen title in the app header for as long as the workfile is open. For the person, not the system — plays no part in naming the file or resolving anything. Editable at any time via the Workfile Details expander in the sidebar, not just at creation. |
 | Native Save dialog (New Workfile and Save As) | Complete | One OS dialog for filename and location together; the OS itself handles overwrite confirmation, so neither flow has its own overwrite step. |
 | Workfile Details (sidebar expander) | Complete | Collapsed by default — file name, description, full file path, last-saved-by/at. No project identity shown — year/project_id/project_name are not workfile-level concepts (see Population tables, Part 3). |
 | Population tables — Excel download/upload round-trip | Partial | Per-table download/upload on the Populations tab, generic across any table. Identity is `unit_id`: unmatched id added, missing id removed (no soft-delete flag on these tables), blank id skipped. No validation of edited values — a removed `unit_id` can leave a dangling `soft_parents` reference elsewhere. See Functional Spec Section 7.2. |
@@ -130,7 +130,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders. |
 | `set_default_populations` | Complete | The Charts sheet no longer reads this row directly to default its own preview — see Charts sheet round-trip, below. |
-| `update_text` | Partial | See Text tag replacement, Part 5. |
+| `update_text` | Complete | Covers ordinary text frames and PowerPoint table cells alike, both tag families (per-unit tags and Stat Tags). See Text / variable content, Part 5, and Architecture Decision 20. |
 | `insert_picture` | Complete | `[code]`/`[id]` token substitution; aspect ratio preserved. |
 | Insert Content From Excel | Complete | Requires `pywin32`. Implemented via three functions: `open_excel`, `insert_from_excel`, `close_excel`. |
 | `table_data_lift` | Not built | |
@@ -138,6 +138,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | `insert_slide` / `insert_section` / `delete_slide` | Not built | |
 | `submission_list` | Not built | |
 | Charts sheet ↔ Running Order round-trip | Complete | Loads a Running Order chart row or a cached dataset directly; writes `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`, `tweaks` back via Overwrite, Insert above, or Insert below. See Functional Spec Section 9.3, Architecture Decision 11. |
+| Charts sheet sandbox state persistence (Save/reopen) | Complete | The sandbox's own current control values (bound row, cache file, chart type, populations, period range/metric-periods, tweaks, sizing, save-action/target) are captured into `settings["charts_sheet_state"]` on Save/Save As/Save and Close and restored once per Open — independent of whether they've been committed to a Running Order row via "Save to Running Order". Zoom (already screen-only) and an in-progress Custom Charts paste-back are excluded. See Architecture Decision 21. |
 | Charts sheet summary stats display | Complete | One table per (population layer × metric-series), with a short per-shape-type reference id (e.g. `Mn`, `1Mna`, `P2a`) alongside each statistic, read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
 | Charts sheet unit list display | Complete | One table per population layer — unit id, code, name — read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
 
@@ -177,8 +178,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Text-tag-based table population (basic tables) | Not built | Depends on text tag replacement, which is built. |
-| Autotables (statistics from chart construction) | Not built | Summary stats are computed by the shape modules (see Glossary) and read directly, on demand, by any consumer that needs them — the Charts sheet preview being the only current one. Nothing collects or stores chart statistics ahead of a consumer needing them; a `AssemblyContext`-based collection step existed briefly and was removed as unused (Architecture Decision 17). The functions to populate a table from shape statistics are not yet implemented. |
+| Text-tag-based table population (basic tables) | Complete | Achieved via Stat Tags placed in a table cell plus `update_text`'s table-cell coverage — no dedicated table-population mechanism of its own. Distinct from Autotables (below), which would populate a table automatically rather than via manually-placed tags. |
+| Autotables (statistics from chart construction) | Not built | Summary stats are computed by the shape modules (see Glossary) and read directly, on demand, by any consumer that needs them — the Charts sheet preview and Stat Tags being the current consumers. Nothing collects or stores chart statistics ahead of a consumer needing them; a `AssemblyContext`-based collection step existed briefly and was removed as unused (Architecture Decision 17). The functions to populate a table automatically from shape statistics are not yet implemented. |
 | Multi-unit table expansion | Not built | |
 
 ---
@@ -187,7 +188,8 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Text tag replacement (`[org]`, `[region]` etc.) | Partial | Presentation-wide, single-pass, handles tokens split across runs. Table cells are not yet covered — `shape.table` cells are currently skipped. |
+| Text tag replacement — per-unit tags (e.g. `[selected-reporting-unit-name]`) | Complete | Presentation-wide, single-pass, handles tokens split across runs, and PowerPoint table cells. One tag currently defined; the mechanism is general. See Functional Spec Section 12. |
+| Summary Stat Tags | Complete | Short, permanent, base-36 tag ids (e.g. `[3]`) each standing in for one summary-stats value from one chart's own independently-authored cut of its cached data — a single population token, optional TimeSeries period range/metric-periods conversion, and a Reference id. Defined and previewed on the Text tab; resolved by `update_text` at generation time, in ordinary text and table cells alike. Not tied to any Running Order row. Excel download/upload round-trip (full replace on upload, matching the Running Order xlsx's own pattern rather than the manifest table's identity-merge one). See Functional Spec Section 12.1, Architecture Decision 19. |
 | Pre-scan template for tag positions | Not built | Text tags are located per report by walking the presentation at generation time; no upfront scan or stored map exists. |
 | Conditional text (formula-driven tag values) | Not built | |
 

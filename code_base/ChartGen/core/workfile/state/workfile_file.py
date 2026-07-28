@@ -58,6 +58,25 @@ PLACEHOLDER = "..."
 # index, the .py files are the payload.
 CUSTOM_CHART_FIELDNAMES = ["chart_type_ref", "shape_type", "added_at", "notes"]
 
+# workfile_config/text_stats.csv column schema — "stat tags": short,
+# permanent tag ids (Decisions.md) standing in for one summary-stats value
+# from one chart's own independently-authored cut of its cached data, for
+# use in update_text (ordinary text frames and, as of this session, table
+# cells too). Anchored on hex_id — the manifest's stable identity — rather
+# than chart_ref, which renumbers whenever the manifest table changes.
+# Genuinely new state, not derived from any Running Order row: a stat tag
+# isn't tied to any specific insert_chart row.
+TEXT_STATS_FIELDNAMES = [
+    "tag",             # base-36 id, never reused — the literal [tag] template text
+    "hex_id",          # manifest hex_id this tag's data comes from
+    "populations",     # this tag's own single-token population (independent of any Running Order row)
+    "start_period",    # TimeSeries only
+    "end_period",      # TimeSeries only
+    "metric_periods",  # TimeSeries only
+    "reference_id",    # which Reference id (shapes/reference_ids.py) to read from that population
+    "description",     # optional free text, user reference only, ignored at resolution
+]
+
 
 def generate_hex_id(existing_rows: list) -> str:
     """
@@ -139,6 +158,9 @@ class WorkfileState:
     # stable identity — see Decisions.md).
     custom_chart_rows: list = field(default_factory=list)  # CUSTOM_CHART_FIELDNAMES rows
     custom_chart_code: dict = field(default_factory=dict)  # {chart_type_ref: source_text}
+
+    # workfile_config/text_stats.csv — "stat tags" (Decisions.md), TEXT_STATS_FIELDNAMES rows
+    text_stats_rows: list = field(default_factory=list)
 
     # template/
     template_pptx_bytes: Optional[bytes] = None       # reference copy bytes
@@ -244,6 +266,9 @@ def open_workfile(workfile_path: str) -> WorkfileState:
             if name.startswith("workfile_config/tables/") and name.endswith(".csv"):
                 table_name = name.split("/")[-1][:-4]
                 state.tables[table_name] = _csv_to_rows(_read(name))
+
+        # workfile_config/text_stats.csv — stat tags
+        state.text_stats_rows = _csv_to_rows(_read("workfile_config/text_stats.csv"))
 
         # data_cache/
         state.manifest_rows = _csv_to_rows(_read("data_cache/manifest.csv"))
@@ -372,6 +397,10 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
                    _rows_to_csv(state.running_order_rows, COLUMNS))
         else:
             _write("workfile_config/running_order.csv", "")
+
+        # workfile_config/text_stats.csv — stat tags
+        _write("workfile_config/text_stats.csv",
+               _rows_to_csv(state.text_stats_rows, TEXT_STATS_FIELDNAMES))
 
         # data_cache/
         _write("data_cache/manifest.csv",

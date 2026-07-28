@@ -120,7 +120,8 @@ chartgen/
     │       ├── excel/
     │       │   └── insert_from_excel.py
     │       └── text/
-    │           └── text_engine.py
+    │           ├── text_engine.py, stat_tags.py
+    │           └── stat_tags_xlsx.py
     ├── shared/
     │   ├── normalisation_containers/
     │   │   ├── shapes/
@@ -129,14 +130,17 @@ chartgen/
     │   │   │   └── reference_ids.py
     │   │   ├── population_layers.py
     │   │   ├── peer_group_tokens.py
-    │   │   └── shape_transforms.py
+    │   │   ├── shape_transforms.py
+    │   │   └── cut_resolution.py
     │   └── infrastructure/
     │       ├── constants.py
     │       ├── report_context.py
     │       ├── soft_parents.py
     │       ├── page_sizing.py
     │       ├── cache_writer.py
-    │       └── population_table_xlsx.py
+    │       ├── population_table_xlsx.py
+    │       ├── value_formatting.py
+    │       └── period_ids.py
     └── ui/
         ├── common/
         │   ├── formatting.py
@@ -181,15 +185,19 @@ chartgen/
 | `core/output_generation/execution/charts/` (remainder) | Cache reading; `chart_type_map.py` |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
-| `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — promoted out of `assembly_engine` to its own module |
+| `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — per-unit tags and Stat Tags alike, ordinary text frames and PowerPoint table cells alike. Promoted out of `assembly_engine` to its own module; the resolution logic for a Stat Tag itself lives in `stat_tags.py`, this module only builds the combined token dict and walks the presentation. See Decision 20 |
+| `core/output_generation/execution/text/stat_tags.py` | Stat Tags: `next_stat_tag` (base-36 counter), `layer_display_label`, `resolve_stat_cut`/`resolve_stat_tag_value` — resolves one `text_stats.csv` row to a value for the current reporting unit, via `cut_resolution.prepare_chart_cut`. See Decision 19 |
+| `core/output_generation/execution/text/stat_tags_xlsx.py` | Excel download/upload round-trip for `text_stats.csv` — full-replace on upload, the same pattern as the Running Order's own xlsx pair, not the manifest table's identity-merge one. See Decision 19 |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
-| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and summary statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base, `dispatch.py` for `filter_shape`/`summary_stats`/`summary_stats_by_layer`/`shape_units`/`units_by_layer`/`apply_period_range`, and `reference_ids.py` for converting a shape's summary stats into short id-tagged rows for display — see Decision 15); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12) |
+| `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and summary statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base, `dispatch.py` for `filter_shape`/`summary_stats`/`summary_stats_by_layer`/`shape_units`/`units_by_layer`/`apply_period_range`, and `reference_ids.py` for converting a shape's summary stats into short id-tagged rows for display — see Decision 15); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12); `cut_resolution.py` composing the shared middle of "resolve a chart's own cut" — period trim, metric-periods conversion, population-table/target-rows/selected-ids resolution — used by `insert_chart`, the Charts sheet, and Stat Tags alike (see Decision 22) |
 | `core/shared/infrastructure/constants.py` | `coerce_row` / `FIELD_TYPES` — generic CSV/WorkfileState field-type coercion, used by `api_client`, `running_order`, and `workfile_file`; also `SPINE_COLUMN_ORDER`, the population-table spine's display/authoring column order, shared between the UI and the Excel round-trip below |
 | `core/shared/infrastructure/report_context.py` | `ReportContext` + `build_report_context()` |
 | `core/shared/infrastructure/soft_parents.py` | `format_soft_parents` / `parse_soft_parents` / `resolve_related_rows` / `resolve_referencing_rows` / `resolve_all_related_rows` / `resolve_full_unit_set` — the `soft_parents` relationship format and its one-hop resolution, both directions. Generic across any population table, not NHS-specific |
 | `core/shared/infrastructure/page_sizing.py` | `percent_to_emu` / `emu_to_percent` / `get_page_size_emu` / `has_known_template_page_size` — conversion between EMU and a percent-of-shorter-page-dimension unit, and resolution of which page size to convert against (the real captured template size once known, a manual standard-size fallback otherwise). Used by the Charts sheet only; has no bearing on batch execution, which continues to work in raw EMU throughout |
 | `core/shared/infrastructure/cache_writer.py` | `save_chart` — serialises any canonical data shape into `WorkfileState.cache`. Moved here from `acquisition/toolkit_nhs/` this session: audited as having no NHS-specific logic at all, so it's shared by both toolkit packages rather than duplicated. See Decision 10 |
 | `core/shared/infrastructure/population_table_xlsx.py` | Excel export/import round-trip for any population-level table — the workfile-state equivalent of the manifest table's own xlsx pair (`acquisition/manifest_table/`). Generic across any table's own columns; identity is `unit_id`, not a system-generated key |
+| `core/shared/infrastructure/value_formatting.py` | `format_number` / `format_reference_value` — numeric display formatting, moved here from `ui/common/formatting.py` this session so execution-layer code (`update_text`/Stat Tags) can use the same logic without importing from `ui`. `ui/common/formatting.py` re-exports `format_number` for its existing callers. See Decision 22 |
+| `core/shared/infrastructure/period_ids.py` | `parse_metric_periods_string` / `build_metric_periods_string` — moved here from `output_generation/definition/running_order/dialog_support.py` this session for the same reason as `value_formatting.py`: `cut_resolution.py` needed them and shared code can't import from `output_generation.definition`. `dialog_support.py` re-exports both. See Decision 22 |
 | `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers, per-tab guidance links, layout CSS), `auth/` (the page-level sign-in gate), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the seven tab renderers). Business logic delegated to the owning module rather than living here |
 
 ---
@@ -205,6 +213,7 @@ MyWorkfile.cgw  (ZIP)
 │   ├── tables/
 │   │   └── {table_name}.csv
 │   ├── running_order.csv
+│   ├── text_stats.csv
 │   └── custom_charts/
 │       ├── custom_charts.csv
 │       └── {shape_type}/
@@ -219,9 +228,10 @@ MyWorkfile.cgw  (ZIP)
 
 | Path | Notes |
 |---|---|
-| `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, `template_page_width_emu`/`template_page_height_emu` (captured once at template processing — see Decision 11), etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
+| `workfile_config/settings.csv` | key,value — paths, `table_order`, `batch_cursor`, workfile description, `template_page_width_emu`/`template_page_height_emu` (captured once at template processing — see Decision 11), `charts_sheet_state` (a JSON blob of the Charts sheet sandbox's own current control values — see Decision 21), `next_stat_tag_id` (Stat Tags counter — see Decision 19), etc. Deliberately holds no project identity (no year, project_id, project_name) — a workfile can span more than one project, so none of those are workfile-level facts any more; see the shared spine below for where project/year identity actually lives |
 | `workfile_config/tables/{table_name}.csv` | ★ One file per population-level table (e.g. `nhs_organisations.csv`, `submissions_2026_123.csv`) — any number of them, added and removed freely. No single fixed column schema at this layer; each is written using its own rows' keys. `table_order` (in `settings.csv`, `\|`-delimited) is the only record of display order — whichever table name is listed first is the master table, driving the reporting unit picker and the batch loop. No separate "master" flag exists; position is the only source of truth |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
+| `workfile_config/text_stats.csv` | ★ Stat Tags (Decision 19) — one row per tag, keyed by its own `tag`. Column schema below |
 | `workfile_config/custom_charts/` | Custom Charts saved into this workfile (Decision 18) — `custom_charts.csv` is the index (`chart_type_ref`, `shape_type`, `added_at`, `notes`); one `.py` per row, under a folder named for its `shape_type`, mirroring the built-in Base Charts' own folder-per-shape layout |
 | `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
 | `data_cache/{hex_id}.json` | One file per fetched chart — serialised data shape, named by the owning manifest row's `hex_id` |
@@ -286,6 +296,19 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 
 Fetch-populated cells hold the placeholder `...` until the first fetch.
 
+**Stat tags table column schema** (`workfile_config/text_stats.csv`, Decision 19):
+
+| Column | Description |
+|--------|-------------|
+| `tag` | Base-36 id (`0`–`9` then `a`–`z`), never reused — the literal `[tag]` template text. Issued from a persisted counter (`settings["next_stat_tag_id"]`) |
+| `hex_id` | Manifest `hex_id` this tag's data comes from — not `chart_ref`, which renumbers |
+| `populations` | This tag's own single population token (`All`, `Selected`, `Region()`, `Region(Wales)`, etc.) — independent of any Running Order row |
+| `start_period` | Period_id, TimeSeries only |
+| `end_period` | Period_id, TimeSeries only |
+| `metric_periods` | `^`-delimited period_id(s), TimeSeries only |
+| `reference_id` | Which Reference id (Decision 15) to read from the resolved population |
+| `description` | Optional free text; user reference only, ignored at resolution |
+
 **Sitting alongside the `.cgw`, not inside it** — these are the only other artefacts a colleague sees on a shared drive:
 
 ```
@@ -321,6 +344,7 @@ Streamlit process (st.session_state)
 │     cache: dict — {filename: json_string}
 │     custom_chart_rows: list[dict]
 │     custom_chart_code: dict — {chart_type_ref: source_text}
+│     text_stats_rows: list[dict]
 │     template_pptx_bytes: bytes | None
 │     last_saved_by
 │     last_saved_at
@@ -363,6 +387,7 @@ Streamlit process (st.session_state)
 | `WorkfileState.manifest_rows: list[dict]` | Mirrors `data_cache/manifest.csv` — the manifest table |
 | `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
 | `WorkfileState.custom_chart_rows` / `.custom_chart_code` | Mirror `workfile_config/custom_charts/` (index + one `.py` per row) the same way `manifest_rows`/`cache` mirror the manifest/cache pair — see Decision 18 |
+| `WorkfileState.text_stats_rows: list[dict]` | Mirrors `workfile_config/text_stats.csv` — Stat Tags. See Decision 19 |
 | `WorkfileState.dirty: bool` | Not persisted — session-only flag |
 | `WorkfileState.read_only: bool` | Not persisted — session-only. True only for a session opened via Open Read-Only; such a session never writes or clears the lock. |
 | `st.session_state["token"]` | API session token (Decision 7) — never the password |
@@ -603,3 +628,45 @@ Every Base Chart function's `tweaks` parameter was typed as a list default (`twe
 Base Charts are now treated the way an Excel `.crtx` chart-type template is treated — a rendering artefact, not application logic. Each of the 20 built-ins was rewritten into its own standalone file (`base_charts/{shape}/{chart_type_ref}.py`), carrying its own copy of whatever helpers it needs; `shared.py` is deleted. Every Base Chart now takes a fixed, minimal call — `population_layers`, `width`, `height`, `tweaks` (the **chart_inputs** contract, Functional Spec Section 10.0) — and returns image bytes only. `report_context` is no longer passed in; Selected-unit identity is read from the `"Selected"`-labelled `population_layers` entry instead, the same convention every chart now uses consistently. A chart file's self-containment is what makes it safe to hand whole to an external AI for editing.
 
 **Custom Charts** extends the same idea: a user, typically via an AI, can save a new Base Chart into the workfile itself rather than the software (`custom_charts/`, Sections 5–6). A static check (`gate.py`) — allowed imports only, a few banned builtins disallowed, exactly one function matching the chart_inputs signature — runs before anything is compiled or executed; there is no sandboxing beyond this, and no check on what the function actually returns (only discoverable by running it). `resolve.py` looks up a `chart_type_ref` against the built-in registry first, then a workfile's saved Custom Charts, so a saved one behaves identically to a built-in everywhere. `bundle.py` builds the document handed to an AI — the chart_inputs contract, a chart's complete current file (the whole module, not just the function, so nothing it depends on is silently dropped), and its live data.
+
+### Decision 19 — Stat Tags: Anchor, Population Model, and Storage
+
+A Stat Tag is a short, permanent, system-issued id (base-36, e.g. `[3]`, `[a7]`) standing in for one summary-stats value from one chart's own independently-authored cut of its cached data — defined and previewed on the Text tab (`ui/tabs/text_tab.py`), resolved by `update_text` at generation time (Decision 20).
+
+**Anchor is `hex_id`, not `chart_ref`.** `chart_ref` (`Chart_0001` style) renumbers across non-deleted rows whenever the manifest table changes (delete, reimport) and is explicitly documented as never a storage key (Glossary). A tag typed into a template and anchored on `chart_ref` would silently start pointing at the wrong chart's data the first time the manifest renumbers, with nothing rewriting the already-placed template text. `hex_id` is the manifest's actual stable identity, so that's what a tag stores; `chart_ref`/title are resolved fresh, for display only, wherever the Text tab shows a chart picker.
+
+**Populations is a single token, not a populations string.** A chart's populations string (Section 10.4) is deliberately an ordered set — several layers, because a chart renders several at once. A Stat Tag resolves to exactly one value, so it only ever needs one population. The Text tab enforces this with a `st.selectbox` (single choice), not the multiselect a chart's own populations control uses. An earlier iteration of this feature stored a multi-token populations string plus a `layer_index` (a 0-based token position, since `build_population_layers` always produces one layer per token in order) to identify which of several resulting layers a tag read from; once populations was restricted to a single token, every layer_index would always be `0`, so the field was removed as pointless rather than left as dead weight.
+
+**Resolving `Region()`-style tokens dynamically, not by storing the resolved value.** An empty-bracket peer token (`Region()`, "the selected unit's own group") resolves to a concrete value (e.g. `"South East"`) only at the moment `build_population_layers` runs, for whichever unit is currently selected. Storing that resolved value as the tag's identity would freeze it — switching to an organisation in a different region would then fail to match anything, rather than correctly following the org's own, now-different, peer group. The token itself (`Region()`) is what's stored; resolution happens fresh every time, against the current reporting unit, via the same pipeline a chart uses (`cut_resolution.prepare_chart_cut` — Decision 22 — then `build_population_layers`). Display (`layer_display_label`, `stat_tags.py`) shows the token alongside its currently-resolved value for a dynamic token (`Region() — South East`), distinct from a genuinely static explicit-value token (`Region(Wales)`, shown as-is) — the two look different on screen precisely because they behave differently.
+
+**Tag ids are a persisted, monotonically increasing base-36 counter** (`settings["next_stat_tag_id"]`), never recomputed from the surviving rows. Recomputing "one more than the current highest surviving tag" would let a freshly-issued tag reuse an id some other, still-untouched piece of template text already points at, the moment an earlier tag were deleted — the same never-reused guarantee `hex_id` already gives the manifest, just shorter and sequential rather than pseudo-random.
+
+**Storage is a flat table, one row per tag** (`workfile_config/text_stats.csv`, Section 5) — `tag`, `hex_id`, `populations`, `start_period`/`end_period`/`metric_periods`, `reference_id`, `description`. No relational structure: several tags sharing the same underlying "cut" (same `hex_id`/populations/periods) each repeat those fields independently, the same way Running Order rows don't reference a shared "chart cut" object either. The Text tab's authoring form absorbs the repetition instead — a cut is defined once, then a checklist of that population's available Reference ids lets any number of tags be generated from it in one Add click, each still stored as its own independent row.
+
+**Excel round-trip is full-replace, not identity-merge.** `stat_tags_xlsx.py` mirrors the Running Order xlsx's own simple pattern (download the current rows, edit, upload replaces the whole list) rather than the manifest table's `hex_id`-keyed add/update/soft-delete round trip — a Stat Tag has no cached data of its own to preserve behind a "deleted" flag, so a row absent from the uploaded file is simply gone, matching the Text tab's own Delete button. A row read back with a blank `tag` is issued a fresh one (`assign_missing_tags`) rather than left blank, since a blank tag could never be matched to anything anyway.
+
+### Decision 20 — `update_text` Table-Cell Support
+
+The one gap the Feature List previously flagged for `update_text` — `shape.table` cells being skipped — is closed. A python-pptx table cell (`_Cell`) exposes the same `.text_frame` interface (`.paragraphs`, `.runs`) as any other shape, so the existing paragraph-walk-and-collapse logic needed no table-specific handling — it was extracted into `_replace_tags_in_text_frame` (`text_engine.py`) and called against both `shape.text_frame` (where `shape.has_text_frame`) and every cell's own text frame (where `shape.has_table`, iterating `shape.table.rows`/`.cells`).
+
+This closes the gap for every text tag, not just Stat Tags introduced this session — `[selected-reporting-unit-name]` in a table cell now resolves too, as a side effect of the same fix, since both tag families are folded into one combined token dict (`tokens`) before the presentation walk.
+
+### Decision 21 — Charts Sheet Sandbox State Persistence
+
+The Charts sheet's own control values (Section 9.3) previously lived only in `st.session_state`, discarded on every workfile Close, regardless of whether the workfile itself was saved — reopening always started from a blank sandbox, even for values never committed to a Running Order row via "Save to Running Order."
+
+`capture_charts_sheet_state`/`_restore_charts_sheet_state` (`ui/tabs/charts_tab.py`) snapshot the sandbox's own current fields (bound row, cache file, chart type, populations, period range/metric-periods, tweaks, sizing, save-action/target) into a single new settings key, `charts_sheet_state`, as a JSON blob — captured just before every Save/Save As/Save and Close (sidebar.py, save_as_form.py), restored once per Open. Zoom is excluded (already documented as screen-only, never saved); an in-progress Custom Charts paste-back is excluded too (unvalidated, unsaved code — persisting it implicitly felt like the wrong default).
+
+Restoration re-validates every field against what's actually available at Open time (rows, cache files, page sizes) rather than trusting it blindly — a Running Order regenerated by a template re-upload, or a chart deleted since, falls back cleanly instead of erroring. `clear_workfile_session_state` (`session_state.py`) now also wipes every `cs_`-prefixed session key on Open/Close, so a freshly opened workfile always restores from its own saved state (or starts blank) rather than inheriting a previous workfile's sandbox.
+
+### Decision 22 — Cut Resolution Consolidation
+
+Three call sites independently duplicated the same sequence — period-range trim, metric-periods conversion, population-table/target-rows/selected-ids resolution, then `build_population_layers` — against an already-loaded data shape: `insert_chart` (`assembly_engine.py`) against a Running Order row's own fields, the Charts sheet against its sandbox's own fields, and Stat Tags against a `text_stats.csv` row's own fields. Consolidated into `core/shared/normalisation_containers/cut_resolution.py`.
+
+**Split into two functions, not one.** `prepare_chart_cut` does everything except the final `build_population_layers` call: it returns the trimmed/converted shape, the effective shape type (`"NumericSeries"` rather than the shape's own `"TimeSeries"` once a metric_periods conversion has actually applied — Decision 12), and `target_rows`/`selected_ids` ready to pass straight through. Callers call `build_population_layers` themselves. This split exists because the Charts sheet needs `target_rows` (for its own populations widget's peer-group options) *before* it knows which populations string it wants to resolve — bundling the final call into the shared function would have forced an ordering that only fit two of the three callers.
+
+**Deliberately excludes loading the shape from cache.** That step differs meaningfully per caller (a Running Order row's `cache_file`; the Charts sheet's selected file; a Stat Tag's `hex_id`, translated to a cache filename) and each caller's own error-handling policy around it (`err_result`; a Streamlit warning; a silently skipped tag) — folding it in would have traded three clear call sites for one blurry one.
+
+**Lives in `shared/normalisation_containers`, not `output_generation`.** None of the composed pipeline touches pptx, Streamlit, or the cache — it's pure data-shape normalisation, one level up from `population_layers.py` and `shape_transforms.py` (this composes them), the same tier. This forced two smaller relocations, since `shared` must not import from a higher layer (Section 2, one-way dependencies): `parse_metric_periods_string`/`build_metric_periods_string` moved from `output_generation/definition/running_order/dialog_support.py` to `shared/infrastructure/period_ids.py` (re-exported from `dialog_support.py` for existing callers), and `format_number`/`format_reference_value` moved from `ui/common/formatting.py` to `shared/infrastructure/value_formatting.py` (re-exported from `ui/common/formatting.py`), since `update_text`/Stat Tags — execution-layer code — needed the same formatting logic and couldn't import it from `ui`.
+
+**Each caller keeps its own error-handling policy.** `prepare_chart_cut` raises `ValueError` (from the metric-periods conversion step) rather than swallowing it, so `insert_chart` still returns its own `err_result`, the Charts sheet still shows its own `st.error`, and Stat Tags still resolve to "unresolved" silently — behaviour identical to before the consolidation, only the duplicated code itself removed.

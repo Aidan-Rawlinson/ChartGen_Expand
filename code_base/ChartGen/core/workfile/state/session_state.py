@@ -54,5 +54,11 @@ def load_shape_ps(filename):
 
 def clear_workfile_session_state():
     for k in ["ro_selected_idx", "ro_show_uploader", "run_log_rows",
-              "pop_expander_open"]:
+              "pop_expander_open", "sb_description_input"]:
         st.session_state.pop(k, None)
+    # Charts sheet sandbox state ("cs_" prefix, charts_tab.py) — cleared
+    # wholesale on every Open/Close so a freshly opened workfile always
+    # restores from its own saved charts_sheet_state (or starts blank),
+    # never carrying over another workfile's in-progress sandbox values.
+    for k in [k for k in st.session_state if k.startswith("cs_")]:
+        del st.session_state[k]

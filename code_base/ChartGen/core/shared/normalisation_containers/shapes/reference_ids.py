@@ -84,19 +84,23 @@ def numeric_series_reference_rows(stats: dict) -> dict:
 def time_series_reference_rows(stats: dict) -> dict:
     """
     {metric_name: [{"id", "label", "kind", "value"}, ...]} from
-    time_series_summary_stats() output — one row per (period, stat)
-    combination. Period number (1-based, in shape.periods order) prefixes
-    the stat letter; series letter appended only if more than one
-    metric-series is present.
+    time_series_summary_stats() output — one row per (stat, period)
+    combination, grouped by stat type first so every period of one
+    statistic (e.g. every period's Mean) sits together, rather than every
+    statistic within one period. Period number (1-based, in shape.periods
+    order) prefixes the stat letter regardless of this grouping — ids are
+    unaffected, only row order changes. Series letter appended only if
+    more than one metric-series is present.
     """
     multi = len(stats) > 1
     out = {}
     for i, (metric_name, per_period) in enumerate(stats.items()):
         letter = _series_letter(i) if multi else ""
+        periods = list(per_period.items())
         rows = []
-        for p_idx, (period_label, period_stats) in enumerate(per_period.items(), start=1):
-            for label, id_prefix in _FIXED_STAT_IDS:
-                kind = "count" if label in ("n", "No data") else "value"
+        for label, id_prefix in _FIXED_STAT_IDS:
+            kind = "count" if label in ("n", "No data") else "value"
+            for p_idx, (period_label, period_stats) in enumerate(periods, start=1):
                 rows.append({
                     "id": f"{p_idx}{id_prefix}{letter}",
                     "label": f"{label} — {period_label}", "kind": kind,

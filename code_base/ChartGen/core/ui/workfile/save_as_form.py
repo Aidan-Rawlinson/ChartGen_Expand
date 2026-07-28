@@ -12,6 +12,7 @@ import os
 import streamlit as st
 
 from core.ui.common.pickers import pick_save_file
+from core.ui.tabs.charts_tab import capture_charts_sheet_state
 from core.workfile.setup.save_as import save_as, is_same_as_original_folder
 from core.workfile.state.session_state import ws
 
@@ -58,6 +59,7 @@ def render_save_as_form():
                 st.error(e)
         else:
             new_name = os.path.splitext(os.path.basename(save_path))[0]
+            capture_charts_sheet_state(ws_cur)
             save_as(ws_cur, save_path, new_name, st.session_state.get("username", ""))
             st.session_state.pop("show_save_as_form", None)
             st.session_state.pop("sa_save_path_val", None)

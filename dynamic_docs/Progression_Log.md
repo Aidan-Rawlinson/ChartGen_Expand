@@ -257,3 +257,29 @@ Updated Functional Spec (new §10.0 Data Visualisation philosophy, new §10.9 Cu
 
 
 **Addendum — same session, Feature List and Glossary review:** Extended the documentation review beyond Functional Spec/Architecture to Feature List and Glossary, at the user's prompt. Found two genuine staleness bugs, not just missing new content: Feature List's `insert_chart` row and Glossary's `ReportContext` entry both still claimed charts receive `report_context`, which this session's Base Charts rewrite removed entirely. Both corrected — `insert_chart` now describes built-in-then-custom resolution and `population_layers`-based highlighting; `ReportContext` now states it's passed to text replacement only. Added a new Feature List row for Custom Charts and new Glossary entries for `chart_inputs`/`Custom Chart`. All four affected documents re-uploaded and confirmed current; Primer and Docs Maintenance Guide needed no changes.
+
+
+---
+
+## Session: Summary Stat Tags, Cut Resolution Consolidation, Charts Sheet Persistence
+
+Built Summary Stat Tags end to end — a second table on the Text tab, short permanent base-36 tag ids each standing in for one summary-stats value from one chart's own independently-authored cut of its cached data (`hex_id`, a single population token, TimeSeries period/metric fields, a Reference id). New storage: `workfile_config/text_stats.csv`. Full authoring flow (define cut → tick statistics from a checklist → optional description → Add), live preview table (Data Source, Population, Statistic, Current value, Description columns), single-row delete, and an Excel download/upload round-trip (full-replace on upload).
+
+Iterated the feature live against real testing feedback, finding and fixing several genuine bugs in the process:
+- A `Region()`-style population token was being stored as its *resolved* value at creation time, freezing the tag to whatever peer group happened to be selected then — fixed by storing the token itself (re-resolved fresh against the current reporting unit on every use).
+- An interim `layer_index` mechanism (letting a tag read one of several layers from a multi-token populations string) was introduced, then removed again once the populations control was restricted to a single token — a tag resolves to one value, so it only ever needs one population.
+- The ticked-stats checklist and the Convert-to-Metrics period picker were both silently losing selections whenever they became momentarily unavailable (e.g. mid-way through switching to a different chart) — fixed by giving each field a persisted "record," reconciled against what was actually offered each render rather than filtered destructively.
+- Fixing the above initially introduced a worse bug: the widget's live value was being overwritten on every single render, including the render where the user had just ticked something — since Streamlit commits a fresh interaction to session state before rerunning, this silently discarded every tick. Fixed to only rescue a widget's value when its options have genuinely changed shape since the last render.
+- A `StreamlitAPIException` from writing to a widget's session-state key after that widget had already rendered in the same script pass — fixed with a pending-flag deferred-clear pattern.
+
+Closed `update_text`'s one remaining documented gap: PowerPoint table cells are now covered, for both tag families (per-unit tags and Stat Tags), by extracting the paragraph-walk-and-collapse logic into a shared helper applied to both ordinary text frames and table cells alike.
+
+Added Charts sheet sandbox-state persistence across Save/reopen (`settings["charts_sheet_state"]`), independent of the existing Running Order round-trip — the sandbox's current fields (bound row, cache file, chart type, populations, period range/metric-periods, tweaks, sizing, save-action/target) survive a Save and Open even if never explicitly committed to a Running Order row.
+
+Consolidated a three-way code duplication: `insert_chart`, the Charts sheet, and Stat Tags each independently reimplemented the same "resolve a chart's own cut" pipeline (period trim, metric-periods conversion, population-table/target-rows/selected-ids resolution). Extracted into `core/shared/normalisation_containers/cut_resolution.py` (`prepare_chart_cut`). This forced two small module relocations to respect the one-way dependency rule: `parse_metric_periods_string`/`build_metric_periods_string` to `shared/infrastructure/period_ids.py`; `format_number`/`format_reference_value` to `shared/infrastructure/value_formatting.py`.
+
+Made the workfile description field editable at any time (previously set only at New Workfile), and fixed chart dropdown ordering (Charts sheet, Stat Tags) to sort numerically by `chart_ref` rather than by cache filename (hex id) or plain string comparison.
+
+Some UI density and heading polish on the Imports, Populations, and Text tabs, matching the Outputs tab's existing compact style.
+
+All six governed documents reviewed; Feature List, Functional Spec, Architecture, and Glossary updated (Architecture Decisions 19–22). Primer and Docs Maintenance Guide needed no changes.

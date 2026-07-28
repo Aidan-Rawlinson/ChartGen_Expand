@@ -21,6 +21,7 @@ from core.acquisition.fetch_dispatch import fetch_all
 from core.acquisition.manifest_table import (
     write_manifest_xlsx, read_manifest_xlsx, apply_manifest_import,
 )
+from core.ui.common.compact_layout import tight_divider, tight_subheader, tight_caption
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, settings, save_settings
 
@@ -35,9 +36,9 @@ def render_imports_tab():
     render_tab_header("Import Project Data", "imports")
 
     _render_template_section()
-    st.divider()
+    tight_divider()
     _render_url_table_section()
-    st.divider()
+    tight_divider()
     _render_fetch_section()
 
 
@@ -46,16 +47,16 @@ def render_imports_tab():
 # ---------------------------------------------------------------------------
 
 def _render_template_section():
-    st.subheader("PowerPoint Template")
+    tight_subheader("PowerPoint Template")
 
     s = settings()
     current_ppt_path     = s.get("ppt_template_path", "")
     current_cleaned_path = s.get("cleaned_template_path", "")
 
     if current_ppt_path:
-        st.caption(f"Template: `{current_ppt_path}`")
+        tight_caption(f"Template: `{current_ppt_path}`")
     if current_cleaned_path:
-        st.caption(f"Cleaned template: `{current_cleaned_path}`")
+        tight_caption(f"Cleaned template: `{current_cleaned_path}`")
 
     uploaded_template = st.file_uploader(
         "Upload PowerPoint template (.pptx)", type=["pptx"],
@@ -124,7 +125,7 @@ def _render_template_section():
 # ---------------------------------------------------------------------------
 
 def _render_url_table_section():
-    st.subheader("Chart URLs")
+    tight_subheader("Chart URLs")
     ws_cur = ws()
 
     # Flash message from the previous run's table/Excel merge (set before rerun)
@@ -155,7 +156,7 @@ def _render_url_table_section():
         },
     )
 
-    st.caption("Add or remove charts via the Excel download/upload below — "
+    tight_caption("Add or remove charts via the Excel download/upload below — "
                "download, edit (add a row with just a URL to add a chart; "
                "delete a row to remove its chart), and upload. Cached data "
                "for removed charts is retained. System columns are populated "
@@ -214,8 +215,8 @@ def _report_merge_result(result: dict):
 # ---------------------------------------------------------------------------
 
 def _render_fetch_section():
-    st.subheader("Toolkit API — Fetch Chart Data")
-    st.caption("Full refresh of every chart in the table above.")
+    tight_subheader("Toolkit API — Fetch Chart Data")
+    tight_caption("Full refresh of every chart in the table above.")
 
     # Flash message from the previous run's fetch (set before rerun) — same
     # pattern as manifest_merge_result above. Without the rerun, tabs that
