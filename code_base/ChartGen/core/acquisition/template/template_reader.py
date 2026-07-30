@@ -44,15 +44,14 @@ EXCEL_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Output Table yellow box: [Table:tablename,Rows:X,Columns:Y] -- whitespace
-# is allowed around [ ] , : but otherwise this exact structure only
-# (Decisions.md). Matched against the whole box text (fullmatch), not
-# searched for within surrounding text, unlike the URL/Excel patterns above.
-TABLE_BOX_RE = re.compile(
-    r"^\s*\[\s*Table\s*:\s*(?P<name>[^,\]]+?)\s*,\s*Rows\s*:\s*(?P<rows>\d+)\s*,"
-    r"\s*Columns\s*:\s*(?P<cols>\d+)\s*\]\s*$",
-    re.IGNORECASE,
-)
+# Output Table yellow box: the literal word "Table", nothing else --
+# capitalisation and surrounding whitespace are the only tolerance
+# (Decisions.md). No name, no Rows/Columns -- every Output Table starts at
+# the same fixed size (grid_store.DEFAULT_TABLE_ROWS/DEFAULT_TABLE_COLUMNS)
+# and is auto-named at creation time
+# (import_flow.merge_output_tables_from_template), since the box itself
+# carries no identity to key off.
+TABLE_BOX_RE = re.compile(r"^\s*table\s*$", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -68,7 +67,7 @@ class PlaceholderInfo:
     top: int                  # EMU
     width: int                # EMU
     height: int                # EMU
-    # Yellow box classification — one of: "chart", "picture", "excel", ""
+    # Yellow box classification — one of: "chart", "picture", "excel", "table", ""
     content_type: str = ""
     # chart: toolkit URL
     url: str = ""
@@ -79,10 +78,10 @@ class PlaceholderInfo:
     excel_path: str = ""
     excel_export_range: str = ""
     excel_driver_range: str = ""
-    # table: [Table:name,Rows:X,Columns:Y] -- see TABLE_BOX_RE
-    table_name: str = ""
-    table_rows: int = 0
-    table_columns: int = 0
+    # table: TABLE_BOX_RE match -- table_id is set later, once
+    # import_flow.merge_output_tables_from_template has created the actual
+    # Output Table this placeholder resolves to; blank here at read time.
+    table_id: str = ""
 
 
 @dataclass
@@ -306,29 +305,23 @@ def _classify_yellow_box(text: str) -> dict:
     Classify the content of a yellow textbox and return a dict describing it.
 
     Returns a dict with key 'content_type' set to one of:
-      "table"   -- text matches [Table:name,Rows:X,Columns:Y] exactly
+      "table"   -- text is the literal word "Table" (TABLE_BOX_RE)
       "chart"   -- text contains a toolkit or HTTP URL
       "picture" -- text is a path to a supported image file
       "excel"   -- text matches the Excel path + range bracket syntax
       ""        -- unrecognised; yellow box will be stripped but ignored
 
     Additional keys depend on content_type:
-      table:   table_name, table_rows, table_columns
+      table:   none -- identity/size are resolved downstream, not here
       chart:   url, label
       picture: image_path
       excel:   excel_path, excel_export_range, excel_driver_range
     """
     text = text.strip()
 
-    # --- Table: [Table:name,Rows:X,Columns:Y] -- exact structure only ---
-    m = TABLE_BOX_RE.match(text)
-    if m:
-        return {
-            "content_type": "table",
-            "table_name":    m.group("name").strip(),
-            "table_rows":    int(m.group("rows")),
-            "table_columns": int(m.group("cols")),
-        }
+    # --- Table: the literal word "Table" -- see TABLE_BOX_RE ---
+    if TABLE_BOX_RE.match(text):
+        return {"content_type": "table"}
 
     # --- Excel: path.xlsx[driver:X,export:Y] ---
     m = EXCEL_PATH_RE.match(text)
@@ -513,7 +506,7 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                 result.warnings.append(
                     f"Slide {slide_idx + 1}: yellow textbox content didn't match "
                     f"a recognised type (NHS chart URL, Indicators chart URL, "
-                    f"picture path, Excel path+ranges, or [Table:name,Rows:X,Columns:Y]) "
+                    f"picture path, Excel path+ranges, or the word \"Table\") "
                     f"— stripped, not processed. "
                     f"Text: \"{preview}\""
                 )
@@ -561,7 +554,7 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                 result.warnings.append(
                     f"Slide {slide_idx + 1}: yellow textbox partially overlaps a "
                     f"placeholder without being fully inside it — not processed. "
-                    f"Content: {yshape.get('url') or yshape.get('image_path') or yshape.get('excel_path', '') or yshape.get('table_name', '')}"
+                    f"Content: {yshape.get('url') or yshape.get('image_path') or yshape.get('excel_path', '') or ('Table' if yshape.get('content_type') == 'table' else '')}"
                 )
             else:
                 # Scenario 2 — free-floating: use the yellow box's own position/size.
@@ -580,9 +573,6 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                         excel_path=yshape.get("excel_path", ""),
                         excel_export_range=yshape.get("excel_export_range", ""),
                         excel_driver_range=yshape.get("excel_driver_range", ""),
-                        table_name=yshape.get("table_name", ""),
-                        table_rows=yshape.get("table_rows", 0),
-                        table_columns=yshape.get("table_columns", 0),
                     )
                 )
 
@@ -609,10 +599,9 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                     ph.excel_path         = m.get("excel_path",         "")
                     ph.excel_export_range = m.get("excel_export_range", "")
                     ph.excel_driver_range = m.get("excel_driver_range", "")
-                elif ct == "table":
-                    ph.table_name    = m.get("table_name", "")
-                    ph.table_rows    = m.get("table_rows", 0)
-                    ph.table_columns = m.get("table_columns", 0)
+                # ct == "table": nothing to copy -- content_type is already
+                # set above; table_id is filled in downstream by
+                # import_flow.merge_output_tables_from_template.
 
                 # This placeholder is now fully captured (position/size in
                 # PlaceholderInfo, content assignment above) — content is

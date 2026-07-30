@@ -37,6 +37,7 @@ from core.output_generation.definition.running_order.row_ops import (
     renumber_row_ids,
     overwrite_row_fields,
     insert_new_row,
+    append_content_row_above_footer,
 )
 from core.output_generation.definition.running_order.xlsx_writer import write_xlsx
 from core.output_generation.definition.running_order.xlsx_reader import read_xlsx
@@ -61,6 +62,7 @@ __all__ = [
     "renumber_row_ids",
     "overwrite_row_fields",
     "insert_new_row",
+    "append_content_row_above_footer",
     "write_xlsx",
     "read_xlsx",
 ]

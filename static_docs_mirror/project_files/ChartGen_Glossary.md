@@ -165,7 +165,7 @@ MyWorkfile.cgw  (ZIP)
 
 - **Batch** — processing multiple outputs in a single run.
 
-- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `chart_type_ref`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`, `tweaks`. See Architecture, Decision 11.
+- **Charts sheet round-trip fields (`CHART_SANDBOX_FIELDS`)** — the maintained list of Running Order columns the Charts sheet reads from, and writes back to, a chart row: `base_chart_name`, `cache_file`, `populations`, `start_period`, `end_period`, `metric_periods`, `width_emu`, `height_emu`, `tweaks`. See Architecture, Decision 11.
 
 - **Enabled column** — the per-row on/off switch in the Running Order. Stored as an integer `1`/`0` at runtime.
 
@@ -223,4 +223,4 @@ MyWorkfile.cgw  (ZIP)
 
 - **Custom Table** — a Base Table saved into a workfile rather than shipped with ChartGen, typically authored with an AI's help. Behaves identically to a built-in from the point it's saved. See Functional Spec, Section 11.2, and Architecture, Decision 24.
 
-- **table_type_ref** — the identifier a Running Order `insert_table` row uses to select a Base Table function, e.g. `plain_grid`. The table equivalent of `chart_type_ref`; resolves built-in-then-custom the same way.
+- **table_type_ref** — the identifier a Running Order `insert_table` row uses to select a Base Table function, e.g. `plain_grid`. The table equivalent of `base_chart_name`; resolves built-in-then-custom the same way.

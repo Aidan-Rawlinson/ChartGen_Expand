@@ -9,8 +9,8 @@ surface, not an extension of the Charts sheet).
 One selection, at the top, always: a "Select Table" box holding both entry
 points side by side -- a Running Order row (bound mode, pre-fills
 table_type_ref/size/tweaks) and an Output Table by name (free-play; "+ New
-Output Table" sits last in that list and, when chosen, reveals inline
-Name/Rows/Columns/Create controls in the same box). Everything below --
+Output Table" sits last in that list and, when chosen, reveals an inline
+Name/Create control in the same box). Everything below --
 the Edit Grid / Preview mode toggle and its content -- acts on that one
 selection and is shown only once an actual table is selected; there is no
 second, independent selector anywhere else on the tab.
@@ -31,11 +31,15 @@ box above).
 Chart-component cells ("{n}") are recognised by the grid's own grammar
 (grid_store.py) but not resolved or rendered this session -- parked.
 
-Known gap, not built this session: an Output Table created here (as
-opposed to one extracted from a template's [Table:...] yellow box) has no
-route onto the Running Order except via Preview's own Save to Running
-Order (Insert above/below a target row) -- there is no template-driven
-placement for a manually created table.
+Every Output Table starts at the same fixed size
+(grid_store.DEFAULT_TABLE_ROWS x DEFAULT_TABLE_COLUMNS), whether created
+here or via a template's [Table] yellow box -- no user-configurable
+Rows/Columns at creation time either way (Decisions.md). Creating one here
+also appends an insert_table row to the Running Order automatically
+(immediately above save_ppt -- row_ops.append_content_row_above_footer),
+with no real slide/position yet; the user sorts that out afterwards via
+this tab's own Preview sandbox or the Running Order tab, the same as they
+would for any other row needing attention.
 """
 
 import io
@@ -47,6 +51,7 @@ import streamlit as st
 
 from core.output_generation.definition.running_order import (
     TABLE_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
+    append_content_row_above_footer,
 )
 from core.output_generation.execution.tables.base_tables import TABLE_REGISTRY
 from core.output_generation.execution.tables.custom_tables.bundle import build_bundle
@@ -58,6 +63,7 @@ from core.output_generation.execution.tables.custom_tables.resolve import (
 )
 from core.output_generation.execution.tables.grid_store import (
     next_table_id, new_grid, resize_grid, validate_grid,
+    DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLUMNS,
 )
 from core.output_generation.execution.tables.grid_xlsx import (
     write_output_table_xlsx, read_output_table_xlsx,
@@ -335,7 +341,7 @@ def render_output_tables_tab():
         )
 
         if table_choice == NEW_TABLE_OPTION:
-            _render_new_table_form(workfile_state, name_to_id)
+            _render_new_table_form(workfile_state, name_to_id, the_settings)
 
     if table_choice in (TABLE_PLACEHOLDER, NEW_TABLE_OPTION):
         return
@@ -398,14 +404,9 @@ def render_output_tables_tab():
         )
 
 
-def _render_new_table_form(workfile_state, name_to_id):
+def _render_new_table_form(workfile_state, name_to_id, the_settings):
     st.caption("Create a new Output Table")
     new_name = st.text_input("Name", key="ot_new_name")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        new_rows = st.number_input("Rows", min_value=1, max_value=200, value=3, step=1, key="ot_new_rows")
-    with col_b:
-        new_cols = st.number_input("Columns", min_value=1, max_value=200, value=3, step=1, key="ot_new_cols")
 
     if st.button("Create Output Table", type="primary", key="ot_create_table_btn"):
         name = new_name.strip()
@@ -415,13 +416,37 @@ def _render_new_table_form(workfile_state, name_to_id):
             st.error(f"'{name}' already exists. Choose a different name.")
         else:
             table_id = next_table_id(workfile_state.settings)
-            workfile_state.output_tables[table_id] = new_grid(table_id, int(new_rows), int(new_cols))
+            workfile_state.output_tables[table_id] = new_grid(table_id, DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLUMNS)
             workfile_state.output_table_rows.append({
                 "table_id": table_id, "table_name": name,
-                "rows": str(int(new_rows)), "columns": str(int(new_cols)),
+                "rows": str(DEFAULT_TABLE_ROWS), "columns": str(DEFAULT_TABLE_COLUMNS),
             })
+
+            # Automatic Running Order placement (Decisions.md) -- no real
+            # slide/position yet (that's for the user to sort out via this
+            # tab's own Preview sandbox or the Running Order tab), but the
+            # row exists from the moment the table does, rather than
+            # requiring a manual Insert above/below via Preview first.
+            page_w, page_h = get_page_size_emu(the_settings, None)
+            append_content_row_above_footer(workfile_state.running_order_rows, {
+                "function":       "insert_table",
+                "table_id":       table_id,
+                "table_type_ref": "plain_grid",
+                "width_emu":      percent_to_emu(70.0, page_w, page_h),
+                "height_emu":     percent_to_emu(50.0, page_w, page_h),
+                "notes":          "Output Table",
+            })
+
             workfile_state.dirty = True
-            st.session_state["ot_table_choice"] = name
+            # "ot_table_choice" is a widget-bound key that's already been
+            # instantiated earlier in this same run (the "Output Table"
+            # selectbox above, in the shared "Select Table" box) -- can't be
+            # written to directly here, same restriction as the Save to
+            # Running Order success branch further down. Staged in the
+            # existing "pending" key instead; applied at the top of
+            # render_output_tables_tab, before that selectbox is created on
+            # the next run.
+            st.session_state["ot_pending_table_choice"] = name
             st.success(f"Created '{name}'.")
             st.rerun()
 

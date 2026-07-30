@@ -32,6 +32,13 @@ from core.shared.infrastructure.id_generation import next_id
 
 OUTPUT_TABLE_COUNTER_KEY = "next_table_id"
 
+# Every Output Table starts at this size, whether created via a template's
+# [Table] yellow box or the Output Tables tab's own "+ New Output Table"
+# form -- no user-configurable Rows/Columns at creation time either way
+# (Decisions.md). Resize afterwards via the existing Resize control.
+DEFAULT_TABLE_ROWS = 7
+DEFAULT_TABLE_COLUMNS = 4
+
 # Tolerance for the column-widths-sum-to-100% / row-heights-sum-to-100%
 # validation check -- rounding two-decimal percentages across an arbitrary
 # column/row count will rarely land on exactly 100.00.

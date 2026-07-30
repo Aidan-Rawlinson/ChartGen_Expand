@@ -21,7 +21,7 @@ from core.shared.infrastructure.period_ids import (  # noqa: F401
 def get_valid_chart_refs_for_cache_file(cache_file: str, manifest: dict, converts_to_metrics: bool = False,
                                         custom_chart_rows: list = None) -> list:
     """
-    Return the list of chart_type_ref values valid for the data shape of the
+    Return the list of base_chart_name values valid for the data shape of the
     given cache file, per the shape/chart-type pairing in chart_type_map.csv,
     plus this workfile's own saved custom charts for that same shape
     (custom_chart_rows — omit or pass None/[] to list built-ins only, e.g.

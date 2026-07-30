@@ -71,7 +71,7 @@ def render_running_order_tab():
                 shape_hint = f"  ·  {shape_type}" if shape_type else ""
                 st.caption(f"Data: {label_hint}{shape_hint}")
 
-                current_ref = str(row.get("chart_type_ref", "") or "")
+                current_ref = str(row.get("base_chart_name", "") or "")
                 ref_options = [""] + valid_refs
                 try:
                     ref_index = ref_options.index(current_ref)
@@ -89,7 +89,7 @@ def render_running_order_tab():
                     pc3.metric("Width EMU",  row.get("width_emu",  ""))
                     pc4.metric("Height EMU", row.get("height_emu", ""))
             else:
-                f_chart_type = row.get("chart_type_ref", "")
+                f_chart_type = row.get("base_chart_name", "")
 
             if needs_populations:
                 peer_options = get_peer_group_value_options(master_table())
@@ -117,7 +117,7 @@ def render_running_order_tab():
                 ws_ro.running_order_rows[sel_idx]["enabled"] = 1 if f_enabled else 0
                 ws_ro.running_order_rows[sel_idx]["notes"]   = f_notes
                 if is_insert_chart:
-                    ws_ro.running_order_rows[sel_idx]["chart_type_ref"] = f_chart_type
+                    ws_ro.running_order_rows[sel_idx]["base_chart_name"] = f_chart_type
                 if needs_populations:
                     ws_ro.running_order_rows[sel_idx]["populations"] = f_populations
                 ws_ro.dirty = True
@@ -148,7 +148,7 @@ def render_running_order_tab():
             "On":          ["✓" if r["enabled"] == 1 else "–" for r in rows],
             "Function":    [_short_func(str(r.get("function", ""))) for r in rows],
             "Slide":       [r.get("slide_index", "") for r in rows],
-            "Chart type":  [r.get("chart_type_ref", "") for r in rows],
+            "Chart type":  [r.get("base_chart_name", "") for r in rows],
             "Notes":       [r.get("notes", "") for r in rows],
         })
 

@@ -1,7 +1,7 @@
 """
 xlsx_writer.py
 Writes Running Order rows to a formatted .xlsx file, with dropdown
-validation on function, chart_type_ref, and enabled, and colour-coding by
+validation on function, base_chart_name, and enabled, and colour-coding by
 row type.
 """
 
@@ -29,11 +29,11 @@ def write_xlsx(rows: list[dict], output_path: str,
                custom_chart_rows: list = None):
     """
     Write Running Order rows to a formatted .xlsx file with dropdown
-    validation on function, chart_type_ref, enabled, and (for TimeSeries
+    validation on function, base_chart_name, enabled, and (for TimeSeries
     rows) start_period/end_period.
 
     custom_chart_rows: this workfile's saved custom charts (WorkfileState.
-    custom_chart_rows) — merged into the per-row chart_type_ref dropdown
+    custom_chart_rows) — merged into the per-row base_chart_name dropdown
     for the row's own shape, the same as the Charts sheet and Running
     Order edit dialog. Omit or pass None/[] to offer built-in chart types
     only.
@@ -60,7 +60,7 @@ def write_xlsx(rows: list[dict], output_path: str,
     ws.title = "Running Order"
 
     # --- Hidden list sheet for start_period/end_period dropdowns ---
-    # Excel's inline list formula1 (used for function/chart_type_ref/etc.)
+    # Excel's inline list formula1 (used for function/base_chart_name/etc.)
     # is capped at 255 characters — fine for a handful of options, not for
     # a chart's full period history. Each distinct cache_file's period
     # options get their own column here (consecutive — column 1 for the
@@ -123,7 +123,7 @@ def write_xlsx(rows: list[dict], output_path: str,
         "scope":         13,
         "function":      22,
         "slide_index":   11,
-        "chart_type_ref":22,
+        "base_chart_name":22,
         "cache_file":    30,
         "populations":   30,
         "start_period":  16,
@@ -250,7 +250,7 @@ def write_xlsx(rows: list[dict], output_path: str,
         scope_col = COLUMNS.index("scope") + 1
         scope_dv.add(ws.cell(row=excel_row, column=scope_col))
 
-        # Per-row chart_type_ref dropdown — constrained to the valid chart
+        # Per-row base_chart_name dropdown — constrained to the valid chart
         # refs for the row's data shape via the shared rule in dialog_support
         # (which itself falls back to all refs if the shape is unknown).
         if func == "insert_chart":
@@ -271,7 +271,7 @@ def write_xlsx(rows: list[dict], output_path: str,
                     showDropDown=False,
                 )
                 ws.add_data_validation(chart_dv)
-                ctr_col = COLUMNS.index("chart_type_ref") + 1
+                ctr_col = COLUMNS.index("base_chart_name") + 1
                 chart_dv.add(ws.cell(row=excel_row, column=ctr_col))
 
             # Per-row start_period/end_period/metric_periods dropdown — only

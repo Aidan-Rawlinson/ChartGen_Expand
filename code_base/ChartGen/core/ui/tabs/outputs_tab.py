@@ -43,7 +43,7 @@ def render_outputs_tab():
         if not enabled_rows:
             issues.append("Running Order has rows, but none are enabled. Enable rows in the Running Order tab.")
         unassigned = [r for r in enabled_rows if r["function"] == "insert_chart"
-                      and not str(r.get("chart_type_ref", "")).strip()]
+                      and not str(r.get("base_chart_name", "")).strip()]
         if unassigned:
             issues.append(f"{len(unassigned)} insert_chart row(s) have no chart type assigned.")
 

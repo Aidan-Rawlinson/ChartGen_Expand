@@ -52,11 +52,11 @@ PLACEHOLDER = "..."
 # workfile_config/custom_charts/custom_charts.csv column schema — the index
 # of every custom Base Chart saved into this workfile. Source code itself
 # lives alongside it, one file per row, at
-# workfile_config/custom_charts/{shape_type}/{chart_type_ref}.py — the same
+# workfile_config/custom_charts/{shape_type}/{base_chart_name}.py — the same
 # folder-per-shape convention the built-in Base Charts use (Architecture,
 # base_charts/{shape}/). Mirrors the manifest/cache split: this file is the
 # index, the .py files are the payload.
-CUSTOM_CHART_FIELDNAMES = ["chart_type_ref", "shape_type", "added_at", "notes"]
+CUSTOM_CHART_FIELDNAMES = ["base_chart_name", "shape_type", "added_at", "notes"]
 
 # workfile_config/custom_tables/custom_tables.csv column schema -- the
 # index of every custom Base Table saved into this workfile (Decisions.md).
@@ -96,7 +96,10 @@ TEXT_STATS_FIELDNAMES = [
 # internal layout (column widths / row heights / content cells).
 OUTPUT_TABLE_FIELDNAMES = [
     "table_id",    # base-36 id, never reused -- also written, cosmetically only, into the grid's own corner cell
-    "table_name",  # user-facing name -- identity for template re-upload matching (same name = same table)
+    "table_name",  # user-facing name -- user-typed for a manually-created table,
+                   # auto-generated (Table_1, Table_2, ...) for a yellow-box one
+                   # (Decisions.md: re-upload always creates a fresh set, never
+                   # matched against an existing table by name)
     "rows",        # content grid row count (N), excluding the header row
     "columns",     # content grid column count (M), excluding the header column
 ]
@@ -178,14 +181,14 @@ class WorkfileState:
     # workfile_config/custom_charts/ — user- or AI-authored Base Charts,
     # saved into this workfile. custom_chart_rows mirrors manifest_rows
     # (the index); custom_chart_code mirrors cache (the payload, keyed by
-    # chart_type_ref rather than filename since that's this store's own
+    # base_chart_name rather than filename since that's this store's own
     # stable identity — see Decisions.md).
     custom_chart_rows: list = field(default_factory=list)  # CUSTOM_CHART_FIELDNAMES rows
-    custom_chart_code: dict = field(default_factory=dict)  # {chart_type_ref: source_text}
+    custom_chart_code: dict = field(default_factory=dict)  # {base_chart_name: source_text}
 
     # workfile_config/custom_tables/ -- user- or AI-authored Base Tables,
     # saved into this workfile. Mirrors custom_chart_rows/custom_chart_code
-    # exactly, keyed by table_type_ref instead of chart_type_ref, with no
+    # exactly, keyed by table_type_ref instead of base_chart_name, with no
     # shape_type dimension.
     custom_table_rows: list = field(default_factory=list)  # CUSTOM_TABLE_FIELDNAMES rows
     custom_table_code: dict = field(default_factory=dict)  # {table_type_ref: source_text}
@@ -326,12 +329,12 @@ def open_workfile(workfile_path: str) -> WorkfileState:
                 state.cache[fname] = zf.read(name).decode("utf-8")
 
         # workfile_config/custom_charts/ — index plus one .py per row,
-        # under workfile_config/custom_charts/{shape_type}/{chart_type_ref}.py
+        # under workfile_config/custom_charts/{shape_type}/{base_chart_name}.py
         state.custom_chart_rows = _csv_to_rows(
             _read("workfile_config/custom_charts/custom_charts.csv")
         )
         for row in state.custom_chart_rows:
-            ref = row.get("chart_type_ref", "")
+            ref = row.get("base_chart_name", "")
             shape = row.get("shape_type", "")
             py_path = f"workfile_config/custom_charts/{shape}/{ref}.py"
             if ref and py_path in names:
@@ -479,7 +482,7 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
         _write("workfile_config/custom_charts/custom_charts.csv",
                _rows_to_csv(state.custom_chart_rows, CUSTOM_CHART_FIELDNAMES))
         for row in state.custom_chart_rows:
-            ref = row.get("chart_type_ref", "")
+            ref = row.get("base_chart_name", "")
             shape = row.get("shape_type", "")
             code = state.custom_chart_code.get(ref, "")
             if ref:

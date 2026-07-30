@@ -12,24 +12,24 @@ MAP_PATH = os.path.join(
 
 
 def get_valid_chart_types(shape_type):
-    """Return list of (chart_type_ref, description) tuples valid for the given shape_type."""
+    """Return list of (base_chart_name, description) tuples valid for the given shape_type."""
     results = []
     with open(MAP_PATH, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             if row["data_shape"] == shape_type:
-                results.append((row["chart_type_ref"], row["description"]))
+                results.append((row["base_chart_name"], row["description"]))
     return results
 
 
 def get_chart_types_by_shape():
-    """Return the full data_shape -> [chart_type_ref, ...] mapping from the static config."""
+    """Return the full data_shape -> [base_chart_name, ...] mapping from the static config."""
     mapping = {}
     with open(MAP_PATH, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             shape = row.get("data_shape", "").strip()
-            ref   = row.get("chart_type_ref", "").strip()
+            ref   = row.get("base_chart_name", "").strip()
             if shape and ref:
                 mapping.setdefault(shape, []).append(ref)
     return mapping

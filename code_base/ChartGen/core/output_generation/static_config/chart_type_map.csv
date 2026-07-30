@@ -1,4 +1,4 @@
-data_shape,chart_type_ref,description
+data_shape,base_chart_name,description
 NumericSeries,ranked_column,Ranked descending column chart with reference lines
 NumericSeries,dot_strip,Strip / dot plot — one dot per organisation
 NumericSeries,box_whisker,Box and whisker — full distribution with outliers

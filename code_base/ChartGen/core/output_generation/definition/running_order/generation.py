@@ -10,9 +10,9 @@ import os
 from core.output_generation.execution.charts.chart_type_map import get_chart_types_by_shape
 
 
-def default_chart_type_ref_for_shape(shape_type: str, chart_types_by_shape: dict) -> str:
+def default_base_chart_name_for_shape(shape_type: str, chart_types_by_shape: dict) -> str:
     """
-    First valid chart_type_ref for shape_type, per chart_type_map.csv's own
+    First valid base_chart_name for shape_type, per chart_type_map.csv's own
     row order. Returns "" if shape_type isn't resolvable against the map
     (e.g. still the pre-fetch placeholder).
     """
@@ -21,9 +21,9 @@ def default_chart_type_ref_for_shape(shape_type: str, chart_types_by_shape: dict
 
 def backfill_default_chart_types(rows: list[dict], manifest: dict) -> int:
     """
-    Fill in chart_type_ref for any insert_chart row that's still blank, now
+    Fill in base_chart_name for any insert_chart row that's still blank, now
     that shape_type is known from a fetch. Never touches a row whose
-    chart_type_ref is already set — whether from a prior backfill or a
+    base_chart_name is already set — whether from a prior backfill or a
     manual edit. Called once, at the end of Fetch (see import_flow.py);
     generation time is too early, since shape_type is never known until a
     fetch has happened.
@@ -33,13 +33,13 @@ def backfill_default_chart_types(rows: list[dict], manifest: dict) -> int:
     chart_types_by_shape = get_chart_types_by_shape()
     backfilled = 0
     for row in rows:
-        if row.get("function") != "insert_chart" or row.get("chart_type_ref", ""):
+        if row.get("function") != "insert_chart" or row.get("base_chart_name", ""):
             continue
         cache_file = row.get("cache_file", "")
         shape_type = manifest.get(cache_file, {}).get("shape_type", "")
-        default_ref = default_chart_type_ref_for_shape(shape_type, chart_types_by_shape)
+        default_ref = default_base_chart_name_for_shape(shape_type, chart_types_by_shape)
         if default_ref:
-            row["chart_type_ref"] = default_ref
+            row["base_chart_name"] = default_ref
             backfilled += 1
     return backfilled
 
@@ -47,13 +47,12 @@ def backfill_default_chart_types(rows: list[dict], manifest: dict) -> int:
 def generate_from_template(
     template_result,          # TemplateReadResult from the Template Reader module
     manifest: dict,           # filename -> {url, shape_type, ...} manifest table rows
-    output_tables_by_name: dict = None,  # table_name -> table_id (see import_flow.merge_output_tables_from_template)
 ) -> list[dict]:
     """
     Build a list of Running Order row dicts from a TemplateReadResult.
 
     For each placeholder, based on content_type:
-      "chart"   → insert_chart row (chart_type_ref blank; backfilled once
+      "chart"   → insert_chart row (base_chart_name blank; backfilled once
                   Fetch has run — see backfill_default_chart_types below)
       "picture" → insert_picture row (image_path populated from the placeholder's yellow box)
       "excel"   → insert_from_excel row (excel_path, export_range, driver_range populated)
@@ -64,14 +63,13 @@ def generate_from_template(
 
     Returns the full list including create_ppt header and save_ppt/save_pdf footer.
     """
-    output_tables_by_name = output_tables_by_name or {}
     rows = []
     row_id = 1
 
     def _blank_row(func, note="", scope="normal"):
         return {
             "row_id": row_id, "enabled": 1, "scope": scope, "function": func,
-            "slide_index": "", "chart_type_ref": "",
+            "slide_index": "", "base_chart_name": "",
             "cache_file": "", "table_id": "", "table_type_ref": "",
             "populations": "", "start_period": "", "end_period": "",
             "metric_periods": "",
@@ -117,7 +115,7 @@ def generate_from_template(
 
         base = {
             "row_id": row_id, "enabled": 1, "scope": "normal",
-            "slide_index": ph.slide_index, "chart_type_ref": "", "cache_file": "",
+            "slide_index": ph.slide_index, "base_chart_name": "", "cache_file": "",
             "table_id": "", "table_type_ref": "", "populations": "",
             "start_period": "", "end_period": "", "metric_periods": "",
             "image_path": "", "excel_path": "", "export_range": "", "driver_range": "",
@@ -136,12 +134,11 @@ def generate_from_template(
             })
 
         elif ct == "table":
-            table_id = output_tables_by_name.get((ph.table_name or "").strip(), "")
             rows.append({**base,
                 "function": "insert_table",
-                "table_id": table_id,
+                "table_id": ph.table_id,
                 "table_type_ref": "plain_grid",
-                "notes": f"Output Table: {ph.table_name}",
+                "notes": "Output Table",
             })
 
         elif ct == "picture":

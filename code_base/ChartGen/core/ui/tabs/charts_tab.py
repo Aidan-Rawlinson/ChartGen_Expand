@@ -183,7 +183,7 @@ def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label
         st.session_state["cs_ro_choice"] = RO_PLACEHOLDER
         st.session_state["cs_last_loaded_ro"] = RO_PLACEHOLDER
 
-    st.session_state["cs_chart_type_ref"] = state.get("chart_type_ref", "")
+    st.session_state["cs_base_chart_name"] = state.get("base_chart_name", "")
     st.session_state["cs_populations_tokens"] = list(state.get("populations_tokens", []))
     st.session_state["cs_start_period"] = state.get("start_period", "")
     st.session_state["cs_end_period"] = state.get("end_period", "")
@@ -230,7 +230,7 @@ def capture_charts_sheet_state(workfile_state):
     state = {
         "ro_row_id": ro_choice if ro_choice != RO_PLACEHOLDER else None,
         "cache_file": st.session_state.get("cs_selected_cache_file", ""),
-        "chart_type_ref": st.session_state.get("cs_chart_type_ref", ""),
+        "base_chart_name": st.session_state.get("cs_base_chart_name", ""),
         "populations_tokens": st.session_state.get("cs_populations_tokens", []),
         "start_period": st.session_state.get("cs_start_period", ""),
         "end_period": st.session_state.get("cs_end_period", ""),
@@ -295,7 +295,7 @@ def render_charts_tab():
     def ro_row_label(row_id):
         r = ro_rows[row_id_to_idx[row_id]]
         cache_label = label_by_cache_file.get(str(r.get("cache_file", "") or ""), r.get("cache_file", "") or "— no data —")
-        ctype = str(r.get("chart_type_ref", "") or "— no chart type —")
+        ctype = str(r.get("base_chart_name", "") or "— no chart type —")
         return f"Row {row_id}: {ctype} · {cache_label}"
 
     def format_row_choice(v):
@@ -355,7 +355,7 @@ def render_charts_tab():
                     st.session_state["cs_bound_row_idx"] = row_idx
                     st.session_state["cs_bound_shape_type"] = shape_type
                     st.session_state["cs_pending_shape_choice"] = label_by_cache_file.get(cache_file)
-                    st.session_state["cs_pending_chart_type_ref"] = str(row.get("chart_type_ref", "") or "")
+                    st.session_state["cs_pending_base_chart_name"] = str(row.get("base_chart_name", "") or "")
                     st.session_state["cs_pending_populations_str"] = str(row.get("populations", "") or "")
                     st.session_state["cs_pending_start_period"] = str(row.get("start_period", "") or "")
                     st.session_state["cs_pending_end_period"] = str(row.get("end_period", "") or "")
@@ -528,21 +528,21 @@ def render_charts_tab():
         )
         type_desc_by_ref = {ref: desc for ref, desc in valid_types}
 
-        if "cs_pending_chart_type_ref" in st.session_state:
-            pending_ref = st.session_state.pop("cs_pending_chart_type_ref")
-            st.session_state["cs_chart_type_ref"] = pending_ref if pending_ref in valid_refs else ""
-        if st.session_state.get("cs_chart_type_ref", "") not in ([""] + valid_refs):
-            st.session_state["cs_chart_type_ref"] = ""
-        st.session_state.setdefault("cs_chart_type_ref", "")
+        if "cs_pending_base_chart_name" in st.session_state:
+            pending_ref = st.session_state.pop("cs_pending_base_chart_name")
+            st.session_state["cs_base_chart_name"] = pending_ref if pending_ref in valid_refs else ""
+        if st.session_state.get("cs_base_chart_name", "") not in ([""] + valid_refs):
+            st.session_state["cs_base_chart_name"] = ""
+        st.session_state.setdefault("cs_base_chart_name", "")
 
         # Auto-expanded while no chart type is chosen yet; collapses itself
         # the moment one is picked (re-evaluated fresh each run).
-        chart_settings_expanded = (st.session_state.get("cs_chart_type_ref", "") == "")
+        chart_settings_expanded = (st.session_state.get("cs_base_chart_name", "") == "")
         with st.expander("Select Visualisation", expanded=chart_settings_expanded):
-            chart_type_ref = st.selectbox(
+            base_chart_name = st.selectbox(
                 "Base chart", options=[""] + valid_refs,
                 format_func=lambda v: "— select chart type —" if v == "" else type_desc_by_ref.get(v, v),
-                key="cs_chart_type_ref", label_visibility="collapsed",
+                key="cs_base_chart_name", label_visibility="collapsed",
             )
 
         # --- Populations ---
@@ -661,12 +661,12 @@ def render_charts_tab():
         if save_clicked:
             if target_choice == TARGET_PLACEHOLDER:
                 st.error("Select a target Running Order row first.")
-            elif not chart_type_ref:
+            elif not base_chart_name:
                 st.error("Select a chart type before saving.")
             else:
                 target_idx = row_id_to_idx[target_choice]
                 field_value_builders = {
-                    "chart_type_ref": lambda: chart_type_ref,
+                    "base_chart_name": lambda: base_chart_name,
                     "cache_file":     lambda: selected_file,
                     "populations":    lambda: populations_str,
                     "start_period":   lambda: start_period,
@@ -699,16 +699,16 @@ def render_charts_tab():
                 "to preview and, if you're happy with it, save as a new chart."
             )
 
-            if not chart_type_ref:
+            if not base_chart_name:
                 st.caption("Select a chart type above first.")
             else:
                 bundle_text = build_bundle(
-                    chart_type_ref, effective_shape_type, pop_layers,
+                    base_chart_name, effective_shape_type, pop_layers,
                     width_pct, height_pct, tweaks_str, workfile_state.custom_chart_code,
                 )
                 st.download_button(
                     "⬇  Download bundle for this chart", data=bundle_text,
-                    file_name=f"{chart_type_ref}_custom_chart_bundle.md",
+                    file_name=f"{base_chart_name}_custom_chart_bundle.md",
                     mime="text/markdown", use_container_width=True,
                 )
 
@@ -722,7 +722,7 @@ def render_charts_tab():
                 try:
                     validate_custom_chart_code(custom_code_input)
                     st.session_state["cs_temp_custom_code"] = custom_code_input
-                    st.session_state["cs_temp_custom_for_chart"] = chart_type_ref
+                    st.session_state["cs_temp_custom_for_chart"] = base_chart_name
                     st.success("Valid — previewing below.")
                 except CustomChartError as e:
                     st.session_state.pop("cs_temp_custom_code", None)
@@ -731,7 +731,7 @@ def render_charts_tab():
 
             temp_active = (
                 st.session_state.get("cs_temp_custom_code")
-                and st.session_state.get("cs_temp_custom_for_chart") == chart_type_ref
+                and st.session_state.get("cs_temp_custom_for_chart") == base_chart_name
             )
             if temp_active:
                 st.caption("Save this as a new custom chart")
@@ -739,7 +739,7 @@ def render_charts_tab():
                                           label_visibility="collapsed", placeholder="New chart name")
                 if st.button("💾  Save as custom chart", use_container_width=True):
                     name = save_name.strip()
-                    existing_custom_refs = {r["chart_type_ref"] for r in workfile_state.custom_chart_rows}
+                    existing_custom_refs = {r["base_chart_name"] for r in workfile_state.custom_chart_rows}
                     if not name:
                         st.error("Enter a name for the new chart.")
                     elif name == "temp":
@@ -749,7 +749,7 @@ def render_charts_tab():
                     else:
                         from datetime import datetime, timezone
                         workfile_state.custom_chart_rows.append({
-                            "chart_type_ref": name,
+                            "base_chart_name": name,
                             "shape_type": effective_shape_type,
                             "added_at": datetime.now(timezone.utc).isoformat(),
                             "notes": "",
@@ -776,11 +776,11 @@ def render_charts_tab():
             st.rerun()
 
     with right:
-        if not chart_type_ref:
+        if not base_chart_name:
             return
 
         # A validated-but-not-yet-saved custom chart, staged in the Custom
-        # Charts expander, takes over the preview for the chart_type_ref it
+        # Charts expander, takes over the preview for the base_chart_name it
         # was validated against only — switching to a different chart type
         # falls straight back to that chart's own resolved callable, rather
         # than carrying a stale override across.
@@ -789,10 +789,10 @@ def render_charts_tab():
 
         with st.spinner("Rendering…"):
             try:
-                if temp_code and temp_for_chart == chart_type_ref:
+                if temp_code and temp_for_chart == base_chart_name:
                     chart_func = compile_custom_chart(temp_code)
                 else:
-                    chart_func = get_chart_callable(chart_type_ref, workfile_state.custom_chart_code)
+                    chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
                 image_bytes = chart_func(pop_layers, width=width_pct, height=height_pct, tweaks=tweaks_str)
             except Exception as e:
                 st.error(f"Chart failed to render: {e}")

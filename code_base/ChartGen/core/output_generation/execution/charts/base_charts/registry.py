@@ -1,6 +1,6 @@
 """
 registry.py
-Chart registry and dispatch — maps chart_type_ref to its Base Chart function
+Chart registry and dispatch — maps base_chart_name to its Base Chart function
 across all four data shapes.
 
 Each Base Chart function is a standalone artefact (its own module, no
@@ -59,7 +59,7 @@ CHART_REGISTRY = {
 }
 
 
-def render_chart(chart_type_ref: str, population_layers: list,
+def render_chart(base_chart_name: str, population_layers: list,
                  width: int, height: int, tweaks=""):
     """
     Returns image_bytes only — a Base Chart function's sole job is
@@ -75,8 +75,8 @@ def render_chart(chart_type_ref: str, population_layers: list,
     "Selected"-labelled entry in population_layers by whichever chart
     needs it.
     """
-    if chart_type_ref not in CHART_REGISTRY:
-        raise ValueError(f"Unknown chart_type_ref: {chart_type_ref}")
-    return CHART_REGISTRY[chart_type_ref](
+    if base_chart_name not in CHART_REGISTRY:
+        raise ValueError(f"Unknown base_chart_name: {base_chart_name}")
+    return CHART_REGISTRY[base_chart_name](
         population_layers, width=width, height=height, tweaks=tweaks,
     )

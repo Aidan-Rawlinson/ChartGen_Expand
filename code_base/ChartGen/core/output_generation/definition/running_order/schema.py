@@ -10,7 +10,7 @@ COLUMNS = [
     "scope",
     "function",
     "slide_index",
-    "chart_type_ref",
+    "base_chart_name",
     "cache_file",
     "table_id",
     "table_type_ref",
@@ -74,7 +74,7 @@ BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 # anything in the Running Order/assembly layer. Blank means "no tweaks" —
 # a nil-length string is what a Base Chart receives when the row's tweaks
 # column is empty.
-CHART_SANDBOX_FIELDS = ["chart_type_ref", "cache_file", "populations",
+CHART_SANDBOX_FIELDS = ["base_chart_name", "cache_file", "populations",
                         "start_period", "end_period", "metric_periods",
                         "width_emu", "height_emu", "tweaks"]
 

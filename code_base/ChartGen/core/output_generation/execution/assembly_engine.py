@@ -115,7 +115,7 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     cache_file = str(row.get("cache_file") or "").strip()
     if cache_file.lower() == "none":
         cache_file = ""
-    chart_type_ref = str(row.get("chart_type_ref", "")).strip()
+    base_chart_name = str(row.get("base_chart_name", "")).strip()
     slide_index = _int_or_none(row.get("slide_index"))
 
     # Position / size from the Running Order row (written from template at generation time)
@@ -127,7 +127,7 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     # Validate required fields
     missing = []
     if not cache_file:  missing.append("cache_file")
-    if not chart_type_ref: missing.append("chart_type_ref")
+    if not base_chart_name: missing.append("base_chart_name")
     if slide_index is None: missing.append("slide_index")
     if None in (left_emu, top_emu, width_emu, height_emu):
         missing.append("position/size EMU values")
@@ -184,11 +184,11 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     tweaks = str(row.get("tweaks", "") or "").strip()
     try:
         image_bytes = _render_chart_image(
-            chart_type_ref, population_layers, width_emu, height_emu, tweaks,
+            base_chart_name, population_layers, width_emu, height_emu, tweaks,
             settings.get("workfile_state").custom_chart_code,
         )
     except Exception as e:
-        return err_result(row, f"insert_chart: render failed for '{chart_type_ref}': {e}")
+        return err_result(row, f"insert_chart: render failed for '{base_chart_name}': {e}")
 
     # --- Insert into slide ---
     try:
@@ -199,7 +199,7 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     except Exception as e:
         return err_result(row, f"insert_chart: failed to insert image on slide {slide_index}: {e}")
 
-    return ok_result(row, f"Chart '{chart_type_ref}' inserted (slide {slide_index + 1})")
+    return ok_result(row, f"Chart '{base_chart_name}' inserted (slide {slide_index + 1})")
 
 
 def empty_placeholder(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
@@ -360,7 +360,7 @@ def _load_chart_data(cache_file: str, workfile_state=None):
     return load_shape(cache_file, workfile_state)
 
 
-def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu: int, height_emu: int,
+def _render_chart_image(base_chart_name: str, population_layers: list, width_emu: int, height_emu: int,
                         tweaks="", custom_chart_code=None):
     """
     Render a Matplotlib chart to SVG bytes sized to the placeholder.
@@ -372,7 +372,7 @@ def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu:
     tweaks is the row's own tweaks column, passed straight through to the
     Base Chart function's tweaks parameter, uninterpreted here.
 
-    chart_type_ref is resolved built-in first, then against this workfile's
+    base_chart_name is resolved built-in first, then against this workfile's
     own saved custom charts (get_chart_callable) — a custom chart behaves
     identically to a built-in from this point on. No report_context or any
     other runtime object is passed to a Base Chart function (Architecture,
@@ -390,7 +390,7 @@ def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu:
     width_pct  = (width_emu  / NARROWER_EMU) * 100
     height_pct = (height_emu / NARROWER_EMU) * 100
 
-    chart_func = get_chart_callable(chart_type_ref, custom_chart_code)
+    chart_func = get_chart_callable(base_chart_name, custom_chart_code)
     return chart_func(population_layers, width=width_pct, height=height_pct, tweaks=tweaks)
 
 

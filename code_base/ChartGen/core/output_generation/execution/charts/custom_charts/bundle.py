@@ -16,7 +16,7 @@ from core.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from core.output_generation.execution.charts.custom_charts.contract import build_static_sections
 
 
-def _get_chart_source(chart_type_ref: str, custom_chart_code: dict) -> str:
+def _get_chart_source(base_chart_name: str, custom_chart_code: dict) -> str:
     """
     Built-in: read the whole module the function lives in, not just the
     function itself — each Base Chart module carries its own inlined
@@ -25,12 +25,12 @@ def _get_chart_source(chart_type_ref: str, custom_chart_code: dict) -> str:
     function object alone would silently drop everything it depends on.
     Custom: stored source text is already the complete file as pasted in.
     """
-    if chart_type_ref in CHART_REGISTRY:
-        module = inspect.getmodule(CHART_REGISTRY[chart_type_ref])
+    if base_chart_name in CHART_REGISTRY:
+        module = inspect.getmodule(CHART_REGISTRY[base_chart_name])
         return inspect.getsource(module)
-    if custom_chart_code and chart_type_ref in custom_chart_code:
-        return custom_chart_code[chart_type_ref]
-    raise ValueError(f"Unknown chart_type_ref: {chart_type_ref}")
+    if custom_chart_code and base_chart_name in custom_chart_code:
+        return custom_chart_code[base_chart_name]
+    raise ValueError(f"Unknown base_chart_name: {base_chart_name}")
 
 
 def _layers_to_json(population_layers: list) -> str:
@@ -38,13 +38,13 @@ def _layers_to_json(population_layers: list) -> str:
     return json.dumps([dataclasses.asdict(layer) for layer in population_layers], indent=2, default=str)
 
 
-def build_bundle(chart_type_ref: str, shape_type: str, population_layers: list,
+def build_bundle(base_chart_name: str, shape_type: str, population_layers: list,
                  width: int, height: int, tweaks: str, custom_chart_code: dict = None) -> str:
     """
     Build the complete Custom Charts download document for one chart, as
     currently configured and rendering on screen.
     """
-    source = _get_chart_source(chart_type_ref, custom_chart_code)
+    source = _get_chart_source(base_chart_name, custom_chart_code)
     live_data = _layers_to_json(population_layers)
 
     return f"""\
@@ -56,7 +56,7 @@ The `population_layers` below are the **{shape_type}** shape. See the
 fields present in the live data section further down for its exact
 structure — every field that exists on this shape appears there.
 
-## Current code for this chart ("{chart_type_ref}")
+## Current code for this chart ("{base_chart_name}")
 
 This is the complete file, exactly as it will run — every import,
 constant, and helper function, together with the entry-point function

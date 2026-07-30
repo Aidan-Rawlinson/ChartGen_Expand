@@ -8,7 +8,7 @@ Custom Charts — user- or AI-authored Base Chart functions, stored in the
                    and the download bundle.
   - gate.py      — static validation (the "AST gate") and compilation of
                    custom chart source text into a callable.
-  - resolve.py   — built-in-then-custom chart_type_ref resolution, and the
+  - resolve.py   — built-in-then-custom base_chart_name resolution, and the
                    dropdown-merge helpers used by the Charts sheet and
                    Running Order.
   - bundle.py    — builds the single-document download bundle handed to an
