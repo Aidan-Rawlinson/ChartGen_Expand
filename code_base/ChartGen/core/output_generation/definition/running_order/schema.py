@@ -12,6 +12,8 @@ COLUMNS = [
     "slide_index",
     "chart_type_ref",
     "cache_file",
+    "table_id",
+    "table_type_ref",
     "populations",
     "start_period",
     "end_period",
@@ -34,6 +36,7 @@ ALL_FUNCTIONS = [
     "set_default_populations",
     "update_text",
     "insert_chart",
+    "insert_table",
     "insert_picture",
     "insert_from_excel",
     "open_excel",
@@ -46,7 +49,7 @@ ALL_FUNCTIONS = [
 SCOPE_VALUES = ["normal", "batch_open", "batch_close"]
 
 STRUCTURAL_FUNCTIONS = {"create_ppt", "set_default_populations", "update_text", "save_ppt", "save_pdf"}
-CONTENT_FUNCTIONS    = {"insert_chart", "insert_picture", "insert_from_excel", "empty_placeholder"}
+CONTENT_FUNCTIONS    = {"insert_chart", "insert_table", "insert_picture", "insert_from_excel", "empty_placeholder"}
 BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 
 # Fields the Charts sheet sandbox reads from, and writes back to, a single
@@ -74,3 +77,10 @@ BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 CHART_SANDBOX_FIELDS = ["chart_type_ref", "cache_file", "populations",
                         "start_period", "end_period", "metric_periods",
                         "width_emu", "height_emu", "tweaks"]
+
+# insert_table's own round-trip field list, mirroring CHART_SANDBOX_FIELDS
+# for the Output Tables sandbox -- no cache_file/populations/period fields
+# (a table has no data-shape cut of its own; the grid it references does
+# its own resolution independently, per row, at render time), just table
+# identity, table_type_ref, size, and tweaks.
+TABLE_SANDBOX_FIELDS = ["table_id", "table_type_ref", "width_emu", "height_emu", "tweaks"]

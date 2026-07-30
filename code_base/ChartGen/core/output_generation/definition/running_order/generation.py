@@ -47,6 +47,7 @@ def backfill_default_chart_types(rows: list[dict], manifest: dict) -> int:
 def generate_from_template(
     template_result,          # TemplateReadResult from the Template Reader module
     manifest: dict,           # filename -> {url, shape_type, ...} manifest table rows
+    output_tables_by_name: dict = None,  # table_name -> table_id (see import_flow.merge_output_tables_from_template)
 ) -> list[dict]:
     """
     Build a list of Running Order row dicts from a TemplateReadResult.
@@ -63,6 +64,7 @@ def generate_from_template(
 
     Returns the full list including create_ppt header and save_ppt/save_pdf footer.
     """
+    output_tables_by_name = output_tables_by_name or {}
     rows = []
     row_id = 1
 
@@ -70,7 +72,8 @@ def generate_from_template(
         return {
             "row_id": row_id, "enabled": 1, "scope": scope, "function": func,
             "slide_index": "", "chart_type_ref": "",
-            "cache_file": "", "populations": "", "start_period": "", "end_period": "",
+            "cache_file": "", "table_id": "", "table_type_ref": "",
+            "populations": "", "start_period": "", "end_period": "",
             "metric_periods": "",
             "image_path": "", "excel_path": "", "export_range": "", "driver_range": "",
             "left_emu": "", "top_emu": "", "width_emu": "", "height_emu": "",
@@ -114,7 +117,8 @@ def generate_from_template(
 
         base = {
             "row_id": row_id, "enabled": 1, "scope": "normal",
-            "slide_index": ph.slide_index, "chart_type_ref": "", "cache_file": "", "populations": "",
+            "slide_index": ph.slide_index, "chart_type_ref": "", "cache_file": "",
+            "table_id": "", "table_type_ref": "", "populations": "",
             "start_period": "", "end_period": "", "metric_periods": "",
             "image_path": "", "excel_path": "", "export_range": "", "driver_range": "",
             "left_emu": ph.left, "top_emu": ph.top,
@@ -129,6 +133,15 @@ def generate_from_template(
                 "function": "insert_chart",
                 "cache_file": cache_file,
                 "notes": ph.label or "",
+            })
+
+        elif ct == "table":
+            table_id = output_tables_by_name.get((ph.table_name or "").strip(), "")
+            rows.append({**base,
+                "function": "insert_table",
+                "table_id": table_id,
+                "table_type_ref": "plain_grid",
+                "notes": f"Output Table: {ph.table_name}",
             })
 
         elif ct == "picture":

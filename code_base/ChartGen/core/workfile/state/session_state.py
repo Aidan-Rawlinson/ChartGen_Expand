@@ -62,3 +62,16 @@ def clear_workfile_session_state():
     # never carrying over another workfile's in-progress sandbox values.
     for k in [k for k in st.session_state if k.startswith("cs_")]:
         del st.session_state[k]
+    # Output Tables tab state ("ot_" prefix, output_tables_tab.py) — cleared
+    # wholesale on every Open/Close for the same reason: a freshly opened
+    # workfile should never inherit another workfile's selected table,
+    # in-progress grid edits, or preview settings.
+    for k in [k for k in st.session_state if k.startswith("ot_")]:
+        del st.session_state[k]
+    # Preview configuration state ("ots_" prefix, output_tables_tab.py) --
+    # table type, tweaks, sizing, save-back target, paste-back. Kept
+    # distinct from "ot_" (table selection, shared by Edit Grid and
+    # Preview) so Reset never disturbs which table is selected. Cleared
+    # wholesale on every Open/Close for the same reason as "cs_"/"ot_" above.
+    for k in [k for k in st.session_state if k.startswith("ots_")]:
+        del st.session_state[k]

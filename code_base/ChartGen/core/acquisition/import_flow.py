@@ -24,9 +24,51 @@ from core.acquisition.template.template_reader import read_template
 from core.acquisition.url_triage import url_to_database
 from core.workfile.state.workfile_file import new_manifest_row, renumber_chart_refs
 from core.output_generation.execution.charts.cache_reader import load_manifest
+from core.output_generation.execution.tables.grid_store import next_table_id, new_grid
 from core.output_generation.definition.running_order import (
     generate_from_template, backfill_default_chart_types,
 )
+
+
+def merge_output_tables_from_template(template_result, *, workfile_state) -> dict:
+    """
+    Ensure an Output Table exists for every [Table:...] yellow box found in
+    the template. Same table_name means the same Output Table, trusting the
+    user on that identity the same way merge_urls_into_manifest trusts a
+    matching URL — its existing grid (and anything already authored in it)
+    is left completely untouched; the yellow box's Rows/Columns are only
+    applied when creating a brand new table, never to resize an existing
+    one. Must run before generate_from_template, which needs every
+    referenced table_name already resolved to a table_id.
+
+    Returns {"created": int, "already_present": int}.
+    """
+    by_name = {row.get("table_name", "").strip(): row for row in workfile_state.output_table_rows}
+
+    created = already_present = 0
+    for ph in template_result.placeholders:
+        if ph.content_type != "table" or not ph.table_name:
+            continue
+        name = ph.table_name.strip()
+        if name in by_name:
+            already_present += 1
+            continue
+        table_id = next_table_id(workfile_state.settings)
+        n_rows = max(1, int(ph.table_rows or 1))
+        n_cols = max(1, int(ph.table_columns or 1))
+        workfile_state.output_tables[table_id] = new_grid(table_id, n_rows, n_cols)
+        new_index_row = {
+            "table_id": table_id, "table_name": name,
+            "rows": str(n_rows), "columns": str(n_cols),
+        }
+        workfile_state.output_table_rows.append(new_index_row)
+        by_name[name] = new_index_row
+        created += 1
+
+    if created:
+        workfile_state.dirty = True
+
+    return {"created": created, "already_present": already_present}
 
 
 def merge_urls_into_manifest(urls: list[str], source: str, *, workfile_state) -> dict:
@@ -77,10 +119,16 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
        workfile_state.
     3. Merge any extracted toolkit URLs into the manifest table (new rows
        added, existing preserved, deleted rows resurrected). No fetch.
-    4. Generate the Running Order from the template read result and the
-       manifest table — chart rows get cache_file={hex_id}.json immediately;
-       chart_type_ref stays blank until Fetch backfills it (see
-       backfill_chart_types_after_fetch, below).
+    4. Ensure an Output Table exists for every [Table:...] yellow box found
+       (merge_output_tables_from_template) — same table_name reuses the
+       existing table_id and leaves its grid untouched; only a genuinely
+       new name gets a fresh grid, sized from the box's own Rows/Columns.
+    5. Generate the Running Order from the template read result, the
+       manifest table, and the table_name -> table_id lookup — chart rows
+       get cache_file={hex_id}.json immediately; chart_type_ref stays blank
+       until Fetch backfills it (see backfill_chart_types_after_fetch,
+       below); table rows get table_id resolved from step 4 and default to
+       table_type_ref="plain_grid".
 
     Returns:
     {
@@ -88,6 +136,8 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
         "new_urls_added": int,
         "urls_resurrected": int,
         "new_urls_already_present": int,
+        "output_tables_created": int,
+        "output_tables_already_present": int,
         "running_order_rows": list[dict],
     }
     """
@@ -106,8 +156,14 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
     urls = [p.url for p in template_result.placeholders if p.url]
     merge = merge_urls_into_manifest(urls, "Template", workfile_state=workfile_state)
 
+    table_merge = merge_output_tables_from_template(template_result, workfile_state=workfile_state)
+    output_tables_by_name = {
+        row.get("table_name", ""): row.get("table_id", "")
+        for row in workfile_state.output_table_rows
+    }
+
     manifest = load_manifest(workfile_state)
-    rows = generate_from_template(template_result, manifest)
+    rows = generate_from_template(template_result, manifest, output_tables_by_name)
     workfile_state.running_order_rows = rows
     workfile_state.dirty = True
 
@@ -116,6 +172,8 @@ def process_template(tmp_pptx_path: str, cleaned_output_path: str, *,
         "new_urls_added": merge["added"],
         "urls_resurrected": merge["resurrected"],
         "new_urls_already_present": merge["already_present"],
+        "output_tables_created": table_merge["created"],
+        "output_tables_already_present": table_merge["already_present"],
         "running_order_rows": rows,
     }
 

@@ -23,6 +23,7 @@ from pptx.util import Emu
 from core.output_generation.execution.charts.cache_reader import load_shape
 from core.output_generation.execution.charts.custom_charts import get_chart_callable
 from core.output_generation.execution.text.text_engine import update_text
+from core.output_generation.execution.tables.insert_table import insert_table
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
@@ -80,6 +81,16 @@ def create_ppt(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     output_path = os.path.join(output_folder, "pptx", f"{safe_name}.pptx")
 
     ctx.prs = Presentation(template_path)
+    # Force autoCompressPictures="0" on the presentation's own root XML
+    # element (ppt/presentation.xml) -- the same flag PowerPoint's "Do not
+    # compress images in file" checkbox controls (ISO/IEC 29500-1,
+    # section 19.2.1.26), stored per-presentation. python-pptx has no
+    # dedicated property for this; set directly on the underlying element.
+    # TEST, not yet a settled decision -- see Architecture, Structural
+    # Design Principles ("Validate only where designed"): confirming
+    # whether PowerPoint's own PDF export is silently downsampling images
+    # before deciding whether this stays.
+    ctx.prs.part._element.set("autoCompressPictures", "0")
     ctx.output_path = output_path
     ctx.template_path = template_path
 
@@ -231,11 +242,14 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
         powerpoint.Visible = 1
         deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
-        deck.ExportAsFixedFormat(
-                os.path.abspath(pdf_path),
-                2,   # ppFixedFormatTypePDF
-                2,   # Intent: ppFixedFormatIntentPrint (vs 1 = screen quality)
-            )
+        # TEST, not yet a settled decision -- see Architecture, Structural
+        # Design Principles ("Validate only where designed"). SaveAs(path,
+        # 32) is PowerPoint's older "Save As PDF" pathway (32 = ppSaveAsPDF)
+        # -- mechanically distinct from ExportAsFixedFormat, which produced
+        # visibly downsampled embedded images even with autoCompressPictures
+        # forced off (create_ppt). Trying this instead, to see whether it
+        # goes through a different internal rasteriser.
+        deck.SaveAs(os.path.abspath(pdf_path), 32)
         deck.Close()
         powerpoint.Quit()
         return ok_result(row, f"PDF saved: {pdf_path}")
@@ -253,6 +267,7 @@ FUNCTION_MAP = {
     "create_ppt":               create_ppt,
     "set_default_populations":  set_default_populations,
     "insert_chart":             insert_chart,
+    "insert_table":             insert_table,
     "insert_picture":           insert_picture,
     "insert_from_excel":        insert_from_excel,
     "open_excel":               open_excel,
@@ -364,9 +379,15 @@ def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu:
     the "Selected"-labelled entry in population_layers by the time this is
     called.
     """
+    # Percent-of-the-7.5in-reference conversion every Base Chart's
+    # width/height parameters expect -- no ceiling or floor: a chart's real
+    # placed size can legitimately be smaller or larger than that
+    # reference, and clamping the rendered resolution to it caused a
+    # genuine upscale (and visible pixellation) whenever a chart's real
+    # size exceeded it. See Architecture, Structural Design Principles.
     NARROWER_EMU = 6858000
-    width_pct  = max(10, int(min(100, (width_emu  / NARROWER_EMU) * 100)))
-    height_pct = max(10, int(min(100, (height_emu / NARROWER_EMU) * 100)))
+    width_pct  = (width_emu  / NARROWER_EMU) * 100
+    height_pct = (height_emu / NARROWER_EMU) * 100
 
     chart_func = get_chart_callable(chart_type_ref, custom_chart_code)
     return chart_func(population_layers, width=width_pct, height=height_pct, tweaks=tweaks)

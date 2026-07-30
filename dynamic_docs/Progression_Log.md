@@ -283,3 +283,16 @@ Made the workfile description field editable at any time (previously set only at
 Some UI density and heading polish on the Imports, Populations, and Text tabs, matching the Outputs tab's existing compact style.
 
 All six governed documents reviewed; Feature List, Functional Spec, Architecture, and Glossary updated (Architecture Decisions 19–22). Primer and Docs Maintenance Guide needed no changes.
+
+
+## Session — Output Tables
+
+Built Output Tables end to end: a full second content-construction pathway alongside Charts, mirroring its architecture throughout. Grid model (own spreadsheet-shaped storage, corner-cell id, column-width/row-height percentages), an Output Tables tab (one shared "Select Table" box driving both Edit Grid and a Preview sandbox), ten built-in Base Tables (`plain_grid`, `table_ledger`, `table_zebra`, `table_editorial`, `table_terminal`, `table_cardtile`, `table_pill`, `table_freeform`, `table_brutalist`, `table_softui`), Custom Tables (download/paste-back/validate/preview/save, mirroring Custom Charts), `insert_table` as the new Running Order function, and a `[Table:name,Rows:X,Columns:Y]` yellow-box grammar for template-driven creation. `table_cardtile` was iterated twice live. Chart-component cells (`{n}`) were deliberately parked, not built.
+
+Found and fixed two real cross-cutting bugs during testing: a table/chart sizing conversion that clamped rendered resolution to a fixed 7.5in reference, causing genuine image quality loss on any row exceeding it (affects the chart rendering path too, not just tables); and a Streamlit widget-mount timing issue in the new Preview sandbox where a Sizing box showed a stale value on first entry into Preview mode despite the underlying value being correct throughout. Also fixed two Streamlit crashes (`StreamlitAPIException` from writing to an already-instantiated widget's session-state key; `StreamlitDuplicateElementId` from two tabs sharing an unkeyed button, since Streamlit runs every tab's code every rerun regardless of visibility).
+
+Investigated a PDF-export image-pixellation complaint thoroughly: tried raising rendering DPI (300→450, no visible change), forcing `autoCompressPictures="0"`, and swapping `ExportAsFixedFormat` for `Presentation.SaveAs(...,32)` — a genuine improvement, but not a full fix. Reviewed and ruled out LibreOffice (different rendering engine, fidelity risk to the template), third-party PDF printer drivers (confirmed via their own documentation that printing structurally cannot carry hyperlink data), Adobe Acrobat PDFMaker automation (Adobe's own SDK guidance restricts automated/server use without a separate licence), and slide-image export + reassembly (loses selectable text and requires reconstructing hyperlinks by hand). Accepted as a known PowerPoint-inherent limitation for now — see Architecture Decision 26.
+
+Added a new shared helper, `core/shared/infrastructure/id_generation.py`, refactoring Stat Tags' own id issuance onto it alongside Output Tables' `table_id`. Added a new Architecture principle, "Validate only where designed" (Structural Design Principles), prompted directly by the sizing-clamp bug.
+
+All four applicable governed documents updated (Feature List, Functional Spec, Architecture, Glossary); Primer and Docs Maintenance Guide needed no changes.

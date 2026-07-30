@@ -11,6 +11,7 @@ import streamlit as st
 
 from core.ui.common.formatting import format_uk_time
 from core.ui.tabs.charts_tab import capture_charts_sheet_state
+from core.ui.tabs.output_tables_tab import capture_output_tables_sheet_state
 from core.workfile.state.session_state import ws, clear_workfile_session_state
 from core.workfile.state.workfile_file import save_workfile, close_workfile
 
@@ -85,6 +86,7 @@ def render_sidebar():
         # remains available so a read-only session can become a normal one.
         if st.button("Save", use_container_width=True, disabled=not has_workfile or read_only):
             capture_charts_sheet_state(w)
+            capture_output_tables_sheet_state(w)
             save_workfile(w, st.session_state.get("username", ""))
             st.rerun()
 
@@ -94,6 +96,7 @@ def render_sidebar():
 
         if st.button("Save and close", use_container_width=True, disabled=not has_workfile or read_only):
             capture_charts_sheet_state(w)
+            capture_output_tables_sheet_state(w)
             save_workfile(w, st.session_state.get("username", ""))
             close_workfile(w)
             st.session_state.pop("workfile_state", None)

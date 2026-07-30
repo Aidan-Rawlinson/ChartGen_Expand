@@ -58,6 +58,16 @@ PLACEHOLDER = "..."
 # index, the .py files are the payload.
 CUSTOM_CHART_FIELDNAMES = ["chart_type_ref", "shape_type", "added_at", "notes"]
 
+# workfile_config/custom_tables/custom_tables.csv column schema -- the
+# index of every custom Base Table saved into this workfile (Decisions.md).
+# Source code lives alongside it, one file per row, directly at
+# workfile_config/custom_tables/{table_type_ref}.py -- no per-shape
+# subfolder, unlike custom_charts, since a Base Table isn't scoped to any
+# one canonical data shape (every one takes the same already-resolved
+# grid). Mirrors the manifest/cache split the same way custom_charts does:
+# this file is the index, the .py files are the payload.
+CUSTOM_TABLE_FIELDNAMES = ["table_type_ref", "added_at", "notes"]
+
 # workfile_config/text_stats.csv column schema — "stat tags": short,
 # permanent tag ids (Decisions.md) standing in for one summary-stats value
 # from one chart's own independently-authored cut of its cached data, for
@@ -75,6 +85,20 @@ TEXT_STATS_FIELDNAMES = [
     "metric_periods",  # TimeSeries only
     "reference_id",    # which Reference id (shapes/reference_ids.py) to read from that population
     "description",     # optional free text, user reference only, ignored at resolution
+]
+
+# workfile_config/output_tables/output_tables.csv column schema -- the
+# index of every Output Table defined in this workfile (Decisions.md). This
+# is the index only; the grid itself is one CSV per table_id, held
+# alongside it at workfile_config/output_tables/{table_id}.csv, with no
+# fixed column schema of its own (same convention as the population tables
+# above) -- see core.output_generation.execution.tables.grid_store for its
+# internal layout (column widths / row heights / content cells).
+OUTPUT_TABLE_FIELDNAMES = [
+    "table_id",    # base-36 id, never reused -- also written, cosmetically only, into the grid's own corner cell
+    "table_name",  # user-facing name -- identity for template re-upload matching (same name = same table)
+    "rows",        # content grid row count (N), excluding the header row
+    "columns",     # content grid column count (M), excluding the header column
 ]
 
 
@@ -159,8 +183,22 @@ class WorkfileState:
     custom_chart_rows: list = field(default_factory=list)  # CUSTOM_CHART_FIELDNAMES rows
     custom_chart_code: dict = field(default_factory=dict)  # {chart_type_ref: source_text}
 
+    # workfile_config/custom_tables/ -- user- or AI-authored Base Tables,
+    # saved into this workfile. Mirrors custom_chart_rows/custom_chart_code
+    # exactly, keyed by table_type_ref instead of chart_type_ref, with no
+    # shape_type dimension.
+    custom_table_rows: list = field(default_factory=list)  # CUSTOM_TABLE_FIELDNAMES rows
+    custom_table_code: dict = field(default_factory=dict)  # {table_type_ref: source_text}
+
     # workfile_config/text_stats.csv — "stat tags" (Decisions.md), TEXT_STATS_FIELDNAMES rows
     text_stats_rows: list = field(default_factory=list)
+
+    # workfile_config/output_tables/ -- Output Tables (Decisions.md).
+    # output_table_rows mirrors custom_chart_rows (the index, OUTPUT_TABLE_FIELDNAMES);
+    # output_tables mirrors WorkfileState.tables (population tables) -- one
+    # grid per table_id, no fixed column schema -- see grid_store.py.
+    output_table_rows: list = field(default_factory=list)
+    output_tables: dict = field(default_factory=dict)
 
     # template/
     template_pptx_bytes: Optional[bytes] = None       # reference copy bytes
@@ -270,6 +308,16 @@ def open_workfile(workfile_path: str) -> WorkfileState:
         # workfile_config/text_stats.csv — stat tags
         state.text_stats_rows = _csv_to_rows(_read("workfile_config/text_stats.csv"))
 
+        # workfile_config/output_tables/ -- Output Tables: index plus one grid CSV per table_id
+        state.output_table_rows = _csv_to_rows(
+            _read("workfile_config/output_tables/output_tables.csv")
+        )
+        for name in names:
+            if (name.startswith("workfile_config/output_tables/") and name.endswith(".csv")
+                    and name != "workfile_config/output_tables/output_tables.csv"):
+                table_id = name.split("/")[-1][:-4]
+                state.output_tables[table_id] = _csv_to_rows(_read(name))
+
         # data_cache/
         state.manifest_rows = _csv_to_rows(_read("data_cache/manifest.csv"))
         for name in names:
@@ -288,6 +336,17 @@ def open_workfile(workfile_path: str) -> WorkfileState:
             py_path = f"workfile_config/custom_charts/{shape}/{ref}.py"
             if ref and py_path in names:
                 state.custom_chart_code[ref] = _read(py_path)
+
+        # workfile_config/custom_tables/ -- index plus one .py per row,
+        # directly at workfile_config/custom_tables/{table_type_ref}.py
+        state.custom_table_rows = _csv_to_rows(
+            _read("workfile_config/custom_tables/custom_tables.csv")
+        )
+        for row in state.custom_table_rows:
+            ref = row.get("table_type_ref", "")
+            py_path = f"workfile_config/custom_tables/{ref}.py"
+            if ref and py_path in names:
+                state.custom_table_code[ref] = _read(py_path)
 
         # template/
         for name in names:
@@ -402,6 +461,12 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
         _write("workfile_config/text_stats.csv",
                _rows_to_csv(state.text_stats_rows, TEXT_STATS_FIELDNAMES))
 
+        # workfile_config/output_tables/ -- index plus one grid CSV per table_id
+        _write("workfile_config/output_tables/output_tables.csv",
+               _rows_to_csv(state.output_table_rows, OUTPUT_TABLE_FIELDNAMES))
+        for table_id, grid_rows in state.output_tables.items():
+            _write(f"workfile_config/output_tables/{table_id}.csv", _rows_to_csv(grid_rows))
+
         # data_cache/
         _write("data_cache/manifest.csv",
                _rows_to_csv(state.manifest_rows, MANIFEST_FIELDNAMES))
@@ -419,6 +484,16 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
             code = state.custom_chart_code.get(ref, "")
             if ref:
                 _write(f"workfile_config/custom_charts/{shape}/{ref}.py", code)
+
+        # workfile_config/custom_tables/ -- index plus one .py per row,
+        # directly at workfile_config/custom_tables/{table_type_ref}.py
+        _write("workfile_config/custom_tables/custom_tables.csv",
+               _rows_to_csv(state.custom_table_rows, CUSTOM_TABLE_FIELDNAMES))
+        for row in state.custom_table_rows:
+            ref = row.get("table_type_ref", "")
+            code = state.custom_table_code.get(ref, "")
+            if ref:
+                _write(f"workfile_config/custom_tables/{ref}.py", code)
 
         # template/
         if state.template_pptx_bytes:

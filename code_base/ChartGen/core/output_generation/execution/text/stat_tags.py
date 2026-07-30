@@ -43,32 +43,21 @@ points at.
 """
 
 from core.output_generation.execution.charts.cache_reader import load_shape
+from core.shared.infrastructure.id_generation import next_id
 from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from core.shared.normalisation_containers.peer_group_tokens import parse_peer_token
 from core.shared.normalisation_containers.population_layers import build_population_layers
 from core.shared.normalisation_containers.shapes import summary_stats, reference_rows_for_shape_type
 
-TAG_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
-
-
-def _to_base36(n: int) -> str:
-    if n == 0:
-        return "0"
-    digits = []
-    while n:
-        n, rem = divmod(n, 36)
-        digits.append(TAG_ALPHABET[rem])
-    return "".join(reversed(digits))
-
 
 def next_stat_tag(settings: dict) -> str:
     """
-    Issue and persist the next stat tag id. Mutates settings in place —
-    caller is responsible for marking the workfile dirty.
+    Issue and persist the next stat tag id (base-36, shared encoding with
+    Output Tables' own table_id counter — see
+    core.shared.infrastructure.id_generation — but its own counter key, so
+    the two id spaces never collide or interleave).
     """
-    n = int(settings.get("next_stat_tag_id", "0") or "0") + 1
-    settings["next_stat_tag_id"] = str(n)
-    return _to_base36(n)
+    return next_id(settings, "next_stat_tag_id")
 
 
 def layer_display_label(populations_str: str, resolved_population_label: str) -> str:

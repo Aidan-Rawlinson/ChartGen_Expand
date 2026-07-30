@@ -26,6 +26,7 @@ ChartGen was built rapidly as a proof of concept. Its project structure is the s
 | Intention-revealing names | A name states the decision the package exists to make, not just what is inside it. |
 | Deliberately fine-grained | Finer than default Python convention recommends, because structure carries information here that would otherwise live nowhere (Legibility, Intention-revealing names) and more packages and modules mean more chances to name things. Bounded by Separation of concerns: a split still needs its own reason to exist. |
 | Moderate, meaningful nesting | Depth encodes relationship, not just size. A sub-package states that it belongs to its parent and is its own concern within it. One flat layer loses that relationship; four or more layers makes the tree illegible. Each layer needs the same justification as a whole package: a real parent-child relationship, not a package that felt big. |
+| Validate only where designed | Input validation, clamps, and defensive-guard logic are an architectural decision, not a local coding choice -- raised with the architect before adding one, not layered in ad hoc while fixing something else. Data flows are designed to be clean by construction; a validation added defensively elsewhere usually signals a problem upstream that the validation itself doesn't fix, and adds code bulk and its own bug surface rather than removing risk. |
 
 **Scope.** Applies to the Software domain's package and module layout (Section 4) and to the Workfile domain's on-disk layout, the `.cgw` internal structure (Section 5) — one system, separated into two domains for functional reasons only. Conventional Python layout does not apply to the Workfile domain.
 
@@ -115,6 +116,16 @@ chartgen/
     │       │   │   ├── contract.py, gate.py, resolve.py, bundle.py
     │       │   ├── cache_reader.py
     │       │   └── chart_type_map.py
+    │       ├── tables/
+    │       │   ├── grid_store.py, resolve.py, grid_xlsx.py, insert_table.py
+    │       │   ├── base_tables/
+    │       │   │   ├── plain_grid.py, table_ledger.py, table_zebra.py,
+    │       │   │   ├── table_editorial.py, table_terminal.py, table_cardtile.py,
+    │       │   │   ├── table_pill.py, table_freeform.py, table_brutalist.py,
+    │       │   │   ├── table_softui.py
+    │       │   │   └── registry.py
+    │       │   └── custom_tables/
+    │       │       ├── contract.py, gate.py, resolve.py, bundle.py
     │       ├── pictures/
     │       │   └── insert_picture.py
     │       ├── excel/
@@ -140,7 +151,8 @@ chartgen/
     │       ├── cache_writer.py
     │       ├── population_table_xlsx.py
     │       ├── value_formatting.py
-    │       └── period_ids.py
+    │       ├── period_ids.py
+    │       └── id_generation.py
     └── ui/
         ├── common/
         │   ├── formatting.py
@@ -154,7 +166,8 @@ chartgen/
         │   └── open_workfile_form.py, save_as_form.py
         └── tabs/
             ├── imports_tab.py, populations_tab.py, select_tab.py,
-            └── text_tab.py, running_order_tab.py, charts_tab.py, outputs_tab.py
+            ├── text_tab.py, running_order_tab.py, charts_tab.py,
+            └── output_tables_tab.py, outputs_tab.py
 ```
 
 | Path | Notes |
@@ -183,10 +196,16 @@ chartgen/
 | `core/output_generation/execution/charts/base_charts/` | 20 built-in Base Charts, one standalone file per chart_type_ref, grouped into a folder per canonical data shape. No shared helpers module — each file is fully self-contained, so it can be handed whole to an external AI for editing (Decision 18); dispatch in `registry.py` |
 | `core/output_generation/execution/charts/custom_charts/` | Custom Charts — user- or AI-authored Base Charts saved into a workfile. Static validation and compilation (`gate.py`), built-in-then-custom resolution (`resolve.py`), the AI-facing download bundle (`bundle.py`), and the shared contract both enforce and explain (`contract.py`). See Decision 18 |
 | `core/output_generation/execution/charts/` (remainder) | Cache reading; `chart_type_map.py` |
+| `core/output_generation/execution/tables/grid_store.py` | Output Table grid storage shape and mechanics — `col_key`/`new_grid`/`grid_dimensions`/`get_column_widths`/`get_row_heights`/`get_content_grid`/`validate_grid`/`resize_grid`, plus `next_table_id` (via `id_generation`). Mirrors the population tables' own "no fixed schema, each written from its own rows' keys" convention |
+| `core/output_generation/execution/tables/resolve.py` | `resolve_output_table` — resolves an Output Table's grid into plain values ready for a Base Table renderer: parsed column widths/row heights, and a content grid with every Stat Tag resolved via `text_engine.build_stat_tag_tokens` (the same token map `update_text` uses, not duplicated) |
+| `core/output_generation/execution/tables/grid_xlsx.py` | `write_output_table_xlsx`/`read_output_table_xlsx` — full-replace Excel round-trip for a single Output Table's grid, mirroring its own spreadsheet shape directly rather than a flat table; content cells carry a Stat Tag id dropdown via a hidden list sheet (Decision 12's pattern), free text still accepted alongside it |
+| `core/output_generation/execution/tables/insert_table.py` | `insert_table` Running Order function — the Output Table equivalent of `insert_chart`, kept in its own module for the same reason `update_text` was promoted out of `assembly_engine` (Decision 20). Resolves `table_type_ref` built-in-then-custom via `custom_tables.resolve.get_table_callable`, the same pattern `insert_chart` uses for Custom Charts |
+| `core/output_generation/execution/tables/base_tables/` | Ten built-in Base Tables, one standalone file per `table_type_ref`, no shared helpers module — the same self-containment convention as `base_charts/` (Decision 18); dispatch in `registry.py`. See Decision 24 |
+| `core/output_generation/execution/tables/custom_tables/` | Custom Tables — user- or AI-authored Base Tables saved into a workfile. Mirrors `charts/custom_charts/` field for field (`contract.py`, `gate.py`, `resolve.py`, `bundle.py`), for the table domain rather than the chart domain — kept as its own copy, not shared, since the two rendering domains are deliberately independent. See Decision 24 |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — per-unit tags and Stat Tags alike, ordinary text frames and PowerPoint table cells alike. Promoted out of `assembly_engine` to its own module; the resolution logic for a Stat Tag itself lives in `stat_tags.py`, this module only builds the combined token dict and walks the presentation. See Decision 20 |
-| `core/output_generation/execution/text/stat_tags.py` | Stat Tags: `next_stat_tag` (base-36 counter), `layer_display_label`, `resolve_stat_cut`/`resolve_stat_tag_value` — resolves one `text_stats.csv` row to a value for the current reporting unit, via `cut_resolution.prepare_chart_cut`. See Decision 19 |
+| `core/output_generation/execution/text/stat_tags.py` | Stat Tags: `next_stat_tag` (base-36 counter, via shared `id_generation`), `layer_display_label`, `resolve_stat_cut`/`resolve_stat_tag_value` — resolves one `text_stats.csv` row to a value for the current reporting unit, via `cut_resolution.prepare_chart_cut`. Also exposes `build_stat_tag_tokens` (in `text_engine.py`, public — see below), reused by Output Tables' own cell resolution. See Decision 19 |
 | `core/output_generation/execution/text/stat_tags_xlsx.py` | Excel download/upload round-trip for `text_stats.csv` — full-replace on upload, the same pattern as the Running Order's own xlsx pair, not the manifest table's identity-merge one. See Decision 19 |
 | `core/output_generation/static_config/chart_type_map.csv` | Data shape → valid chart type refs (developer-owned, read-only) |
 | `core/shared/normalisation_containers/` | NumericSeries / NumericCompositional / CategoricalCompositional / TimeSeries, split into one module per shape under `shapes/`, each owning its shape's canonical Metric-Series stats computation and summary statistics (plus `common.py` for the shared `Unit`/`ShapeStats` base, `dispatch.py` for `filter_shape`/`summary_stats`/`summary_stats_by_layer`/`shape_units`/`units_by_layer`/`apply_period_range`, and `reference_ids.py` for converting a shape's summary stats into short id-tagged rows for display — see Decision 15); `build_population_layers`; the shared peer-group token rule; `shape_transforms.py` for cross-shape conversions (see Decision 12); `cut_resolution.py` composing the shared middle of "resolve a chart's own cut" — period trim, metric-periods conversion, population-table/target-rows/selected-ids resolution — used by `insert_chart`, the Charts sheet, and Stat Tags alike (see Decision 22) |
@@ -198,7 +217,8 @@ chartgen/
 | `core/shared/infrastructure/population_table_xlsx.py` | Excel export/import round-trip for any population-level table — the workfile-state equivalent of the manifest table's own xlsx pair (`acquisition/manifest_table/`). Generic across any table's own columns; identity is `unit_id`, not a system-generated key |
 | `core/shared/infrastructure/value_formatting.py` | `format_number` / `format_reference_value` — numeric display formatting, moved here from `ui/common/formatting.py` this session so execution-layer code (`update_text`/Stat Tags) can use the same logic without importing from `ui`. `ui/common/formatting.py` re-exports `format_number` for its existing callers. See Decision 22 |
 | `core/shared/infrastructure/period_ids.py` | `parse_metric_periods_string` / `build_metric_periods_string` — moved here from `output_generation/definition/running_order/dialog_support.py` this session for the same reason as `value_formatting.py`: `cut_resolution.py` needed them and shared code can't import from `output_generation.definition`. `dialog_support.py` re-exports both. See Decision 22 |
-| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers, per-tab guidance links, layout CSS), `auth/` (the page-level sign-in gate), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the seven tab renderers). Business logic delegated to the owning module rather than living here |
+| `core/shared/infrastructure/id_generation.py` | `to_base36`/`next_id` — shared base-36 id-issuing helper. Used by Stat Tags (`settings["next_stat_tag_id"]`) and Output Tables (`settings["next_table_id"]`) alike; each keeps its own counter/settings key under its own name, so the two id spaces never collide or interleave — only the digit-encoding is shared |
+| `core/ui/` | Streamlit UI, grouped into `common/` (generic display/picker helpers, per-tab guidance links, layout CSS), `auth/` (the page-level sign-in gate), `workfile/` (sidebar, dialogs, New/Open/Save As forms), and `tabs/` (the eight tab renderers). Business logic delegated to the owning module rather than living here |
 
 ---
 
@@ -214,10 +234,16 @@ MyWorkfile.cgw  (ZIP)
 │   │   └── {table_name}.csv
 │   ├── running_order.csv
 │   ├── text_stats.csv
-│   └── custom_charts/
-│       ├── custom_charts.csv
-│       └── {shape_type}/
-│           └── {chart_type_ref}.py
+│   ├── custom_charts/
+│   │   ├── custom_charts.csv
+│   │   └── {shape_type}/
+│   │       └── {chart_type_ref}.py
+│   ├── output_tables/
+│   │   ├── output_tables.csv
+│   │   └── {table_id}.csv
+│   └── custom_tables/
+│       ├── custom_tables.csv
+│       └── {table_type_ref}.py
 ├── data_cache/
 │   ├── manifest.csv
 │   └── {hex_id}.json
@@ -233,6 +259,8 @@ MyWorkfile.cgw  (ZIP)
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
 | `workfile_config/text_stats.csv` | ★ Stat Tags (Decision 19) — one row per tag, keyed by its own `tag`. Column schema below |
 | `workfile_config/custom_charts/` | Custom Charts saved into this workfile (Decision 18) — `custom_charts.csv` is the index (`chart_type_ref`, `shape_type`, `added_at`, `notes`); one `.py` per row, under a folder named for its `shape_type`, mirroring the built-in Base Charts' own folder-per-shape layout |
+| `workfile_config/output_tables/` | Output Tables (Decision 23) — `output_tables.csv` is the index (`table_id`, `table_name`, `rows`, `columns`); one grid CSV per `table_id`, directly under this folder (no per-shape subfolder — an Output Table isn't scoped to any canonical data shape). Column schema below |
+| `workfile_config/custom_tables/` | Custom Tables saved into this workfile (Decision 24) — `custom_tables.csv` is the index (`table_type_ref`, `added_at`, `notes`); one `.py` per row, directly under this folder — no per-shape subfolder, mirroring `custom_charts/`'s pattern but flat, since a Base Table isn't scoped to any canonical data shape either |
 | `data_cache/manifest.csv` | ★ The manifest table — the chart URL table and the canonical index of every chart in the workfile, one row per chart URL, keyed permanently by `hex_id`. Column schema below |
 | `data_cache/{hex_id}.json` | One file per fetched chart — serialised data shape, named by the owning manifest row's `hex_id` |
 | `template/MyWorkfile.pptx` | Reference copy of the cleaned template — validation only. Never run from. Compared against the live sibling `.pptx` (below) to warn on structural drift |
@@ -261,6 +289,8 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `slide_index` | 0-based slide index (blank for structural functions) |
 | `chart_type_ref` | Base Chart function name, e.g. `ranked_column` (blank for non-chart rows) |
 | `cache_file` | JSON cache filename supplying data for this chart (blank for non-chart rows) |
+| `table_id` | Output Table id this row renders (blank for non-table rows). See Decision 23 |
+| `table_type_ref` | Base Table function name, e.g. `plain_grid` (blank for non-table rows) |
 | `populations` | Per-row populations string, overriding the project default (blank to use the default) |
 | `start_period` | Period_id, TimeSeries rows only — inclusive range start (blank = from the first period). See Decision 12 |
 | `end_period` | Period_id, TimeSeries rows only — inclusive range end (blank = to the last period). See Decision 12 |
@@ -309,6 +339,32 @@ Fetch-populated cells hold the placeholder `...` until the first fetch.
 | `reference_id` | Which Reference id (Decision 15) to read from the resolved population |
 | `description` | Optional free text; user reference only, ignored at resolution |
 
+**Output Tables index column schema** (`workfile_config/output_tables/output_tables.csv`, Decision 23):
+
+| Column | Description |
+|--------|-------------|
+| `table_id` | Base-36 id (`0`–`9` then `a`–`z`), never reused — also written, cosmetically only, into the grid's own corner cell. Issued from a persisted counter (`settings["next_table_id"]`), via the shared `id_generation` helper |
+| `table_name` | User-facing name — identity for template re-upload matching (same name = same table) |
+| `rows` | Content grid row count (N), excluding the header row |
+| `columns` | Content grid column count (M), excluding the header column |
+
+**Output Table grid layout** (`workfile_config/output_tables/{table_id}.csv`, Decision 23) — no fixed column schema (same convention as a population table); columns are named `c0`..`cM` generically. An (N+1) × (M+1) grid:
+
+| Cell(s) | Description |
+|--------|-------------|
+| Row 0, col 0 (corner) | The table's own `table_id`. Display only, never read back for anything |
+| Row 0, cols 1..M | Column widths, % of total table width, 2 decimal places |
+| Rows 1..N, col 0 | Row heights, % of total table height, 2 decimal places |
+| Rows 1..N, cols 1..M | Content cells — constant text, or a Stat Tag id (`[3]`). Chart-component cells (`{3}`) are recognised by the grammar but not resolved or rendered — parked, see Feature List |
+
+**Custom Tables index column schema** (`workfile_config/custom_tables/custom_tables.csv`, Decision 24):
+
+| Column | Description |
+|--------|-------------|
+| `table_type_ref` | The saved Base Table's own function name — must not collide with a built-in or an existing Custom Table in the same workfile |
+| `added_at` | ISO datetime the row was created |
+| `notes` | Optional free text; user reference only |
+
 **Sitting alongside the `.cgw`, not inside it** — these are the only other artefacts a colleague sees on a shared drive:
 
 ```
@@ -345,6 +401,10 @@ Streamlit process (st.session_state)
 │     custom_chart_rows: list[dict]
 │     custom_chart_code: dict — {chart_type_ref: source_text}
 │     text_stats_rows: list[dict]
+│     output_table_rows: list[dict]
+│     output_tables: dict — {table_id: list[dict]} grid rows
+│     custom_table_rows: list[dict]
+│     custom_table_code: dict — {table_type_ref: source_text}
 │     template_pptx_bytes: bytes | None
 │     last_saved_by
 │     last_saved_at
@@ -388,6 +448,8 @@ Streamlit process (st.session_state)
 | `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
 | `WorkfileState.custom_chart_rows` / `.custom_chart_code` | Mirror `workfile_config/custom_charts/` (index + one `.py` per row) the same way `manifest_rows`/`cache` mirror the manifest/cache pair — see Decision 18 |
 | `WorkfileState.text_stats_rows: list[dict]` | Mirrors `workfile_config/text_stats.csv` — Stat Tags. See Decision 19 |
+| `WorkfileState.output_table_rows` / `.output_tables` | Mirror `workfile_config/output_tables/` (index + one grid CSV per `table_id`) the same way `tables`/`table_order` mirror the population tables — no fixed grid column schema, see Decision 23 |
+| `WorkfileState.custom_table_rows` / `.custom_table_code` | Mirror `workfile_config/custom_tables/` (index + one `.py` per row) the same way `custom_chart_rows`/`custom_chart_code` mirror `custom_charts/` — see Decision 24 |
 | `WorkfileState.dirty: bool` | Not persisted — session-only flag |
 | `WorkfileState.read_only: bool` | Not persisted — session-only. True only for a session opened via Open Read-Only; such a session never writes or clears the lock. |
 | `st.session_state["token"]` | API session token (Decision 7) — never the password |
@@ -670,3 +732,33 @@ Three call sites independently duplicated the same sequence — period-range tri
 **Lives in `shared/normalisation_containers`, not `output_generation`.** None of the composed pipeline touches pptx, Streamlit, or the cache — it's pure data-shape normalisation, one level up from `population_layers.py` and `shape_transforms.py` (this composes them), the same tier. This forced two smaller relocations, since `shared` must not import from a higher layer (Section 2, one-way dependencies): `parse_metric_periods_string`/`build_metric_periods_string` moved from `output_generation/definition/running_order/dialog_support.py` to `shared/infrastructure/period_ids.py` (re-exported from `dialog_support.py` for existing callers), and `format_number`/`format_reference_value` moved from `ui/common/formatting.py` to `shared/infrastructure/value_formatting.py` (re-exported from `ui/common/formatting.py`), since `update_text`/Stat Tags — execution-layer code — needed the same formatting logic and couldn't import it from `ui`.
 
 **Each caller keeps its own error-handling policy.** `prepare_chart_cut` raises `ValueError` (from the metric-periods conversion step) rather than swallowing it, so `insert_chart` still returns its own `err_result`, the Charts sheet still shows its own `st.error`, and Stat Tags still resolve to "unresolved" silently — behaviour identical to before the consolidation, only the duplicated code itself removed.
+
+### Decision 23 — Output Tables: Grid Model, Anchor, and Storage
+
+An Output Table is a grid of constant text and Stat Tag values, composited into a single image by a Base Table function (Decision 24) — the table equivalent of a chart, authored on its own tab (`ui/tabs/output_tables_tab.py`) rather than the Charts sheet, since an Output Table's content model doesn't fit `CHART_SANDBOX_FIELDS`.
+
+**Grid layout, not a flat table.** The grid is stored in the same physical shape it's authored in — an (N+1) × (M+1) spreadsheet-shaped CSV, not a flat one-row-per-cell table (contrast Stat Tags, Decision 19). Row 0 and column 0 hold metadata (column widths, row heights, the table's own id in the corner cell); the remainder is content. Column widths/row heights are percentages of the table's own total width/height, each independently expected to sum to ~100% (validated on an explicit Update, tolerance ±0.5%, never auto-corrected — see Architecture, Structural Design Principles).
+
+**`table_id` is the anchor, not `table_name`.** A `[Table:name,Rows:X,Columns:Y]` yellow box (Section 6.3 equivalent, Functional Spec) is matched to an existing Output Table by name on template re-upload — same name reuses the existing `table_id` and leaves its grid untouched; `Rows`/`Columns` are only applied when creating a genuinely new table. `table_id` itself is a base-36 id from the shared `id_generation` counter (`settings["next_table_id"]`), the same never-reused guarantee `hex_id` and Stat Tags already have.
+
+**Content resolution reuses Stat Tags, not a new mechanism.** A cell holding a Stat Tag id (`[3]`) resolves via `text_engine.build_stat_tag_tokens` — the same token map `update_text` already builds — rather than a duplicated resolution path. Chart-component cells (`{3}`, referencing a Custom Chart-style saved visual embedded in a cell) are recognised by the grid's own grammar but not resolved or rendered — parked, see Feature List.
+
+**`insert_table` mirrors `insert_chart`'s resolution, not its own scheme.** `table_type_ref` resolves built-in-then-custom via `custom_tables.resolve.get_table_callable`, the same pattern `insert_chart` uses via `get_chart_callable` for Custom Charts.
+
+### Decision 24 — Base Tables as Standalone Artefacts, and Custom Tables
+
+A Base Table is treated exactly the way a Base Chart is (Decision 18) — a rendering artefact, not application logic. Each of the ten built-ins is its own standalone file (`base_tables/{table_type_ref}.py`), carrying its own copy of whatever helpers it needs, no shared internal helpers module. Every Base Table takes a fixed, minimal call — **table_inputs**: `content` (already-resolved grid, Stat Tags substituted), `column_widths`, `row_heights`, `width`, `height`, `tweaks` — and returns image bytes only, the table equivalent of `chart_inputs`.
+
+**No shape-type scoping.** Unlike a Base Chart, a Base Table isn't scoped to any one canonical data shape — every one takes the same already-resolved grid, so a saved Custom Table is a valid option everywhere, always, the moment it's saved. This is why `custom_tables/` (mirroring `custom_charts/` field for field — `contract.py`, `gate.py`, `resolve.py`, `bundle.py`) has no per-shape subfolder, unlike `custom_charts/`.
+
+**Contract kept as its own copy, not shared with the chart domain.** `custom_tables/contract.py` defines its own allowed-imports whitelist and banned-names list, identical in content to the chart domain's today but deliberately not imported from it — `base_tables` and `base_charts` are independent rendering domains (Decision 18's own framing), and a future divergence in allowed libraries for one should carry no risk to the other.
+
+### Decision 25 — Table and Chart Sizing: Unclamped Percent Conversion
+
+`insert_table` and `assembly_engine._render_chart_image` convert a row's `width_emu`/`height_emu` into the percent-of-the-shorter-page-dimension value a Base Table/Base Chart function's `width`/`height` parameters expect, against a fixed 7.5-inch reference (`NARROWER_EMU = 6858000`). This conversion has no ceiling or floor: a table or chart's real placed size can legitimately be smaller or larger than that reference. An earlier version clamped the result to a 10–100 range — this caused a genuine loss of rendered resolution whenever a row's real physical size exceeded the reference (the image was generated at the clamped, smaller size, then stretched to its true, larger placement size on the slide), which is a defect, not a safeguard — see Architecture, Structural Design Principles ("Validate only where designed").
+
+### Decision 26 — PDF Export Mechanism
+
+`save_pdf` drives PowerPoint via COM automation (`comtypes`) and calls `Presentation.SaveAs(pdf_path, 32)` — PowerPoint's own "Save As PDF" pathway (`32` = `ppSaveAsPDF`) — rather than `ExportAsFixedFormat`. `create_ppt` forces `autoCompressPictures="0"` on the presentation's own root XML element (`ppt/presentation.xml`) at the point the template is opened, the same flag PowerPoint's "Do not compress images in file" option controls, regardless of what the template file started with.
+
+**Known limitation, accepted.** An embedded picture's resolution in the exported PDF can still render below its true source resolution — this is understood to be inherent to PowerPoint's own PDF-writing engine (neither `SaveAs`/`ExportAsFixedFormat`'s available parameters, nor `autoCompressPictures`, nor rendering resolution on the ChartGen side, changes this), not something further settings or code changes on ChartGen's side can currently resolve. See Feature List.

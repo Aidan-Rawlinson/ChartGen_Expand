@@ -106,7 +106,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 |---|---|---|
 | Template upload and processing pipeline | Complete | |
 | Named placeholder element slots | Complete | |
-| Yellow textbox convention (URL / picture / Excel) | Complete | Yellow boxes are classified by content: toolkit URL (chart), image path (picture), or Excel path with driver/export ranges. Detected by colour whether the fill is literal or theme-referenced (Architecture Decision 14). Resolved against the slide's placeholders into three outcomes: fully contained, with 1mm tolerance (placeholder's own position/size used), no overlap (free-floating — the box's own position/size used instead), partial overlap (ambiguous — left unclassified and unremoved, warned). Unrecognised content is also warned, not just silently stripped. See Architecture Decisions 13–14. |
+| Yellow textbox convention (URL / picture / Excel / table) | Complete | Yellow boxes are classified by content: toolkit URL (chart), image path (picture), Excel path with driver/export ranges, or `[Table:name,Rows:X,Columns:Y]` (Output Table). Detected by colour whether the fill is literal or theme-referenced (Architecture Decision 14). Resolved against the slide's placeholders into three outcomes: fully contained, with 1mm tolerance (placeholder's own position/size used), no overlap (free-floating — the box's own position/size used instead), partial overlap (ambiguous — left unclassified and unremoved, warned). Unrecognised content is also warned, not just silently stripped. See Architecture Decisions 13–14. |
 | Cleaned template production | Complete | |
 | Cleaned template as user-owned asset | Complete | Two edit tiers: cosmetic edits picked up silently on next run; structural edits require re-upload, which regenerates the Running Order. See Architecture Decision 2. |
 | Template validation on run (slide layout comparison) | Complete | Compares slide layout names between the `.cgw` reference copy and the live template; warns on mismatch, doesn't block. See Architecture Decision 3. |
@@ -126,6 +126,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Control flag (row on/off) | Complete | |
 | `create_ppt` | Complete | |
 | `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `chart_type_ref` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. See Chart construction, Part 5. |
+| `insert_table` | Complete | Renders a Base Table from an Output Table's grid, the same way `insert_chart` renders a chart. Resolves `table_type_ref` against the built-in library first, then a workfile's own saved Custom Tables. See Output Tables, Part 5. |
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders. |
@@ -174,12 +175,29 @@ Structured in pipeline order: application/session foundations, then workfile set
 
 ---
 
+## Output Tables
+
+| Feature | Readiness | Notes |
+|---|---|---|
+| Output Table grid (create, edit, resize) | Complete | Authored as an (N+1) × (M+1) grid — column widths/row heights (% of the table's own width/height, each expected to sum to ~100%) plus content cells (constant text or a Stat Tag id). Validated on an explicit Update, tolerance ±0.5%, never auto-corrected. See Architecture Decision 23. |
+| Output Table creation via yellow box (`[Table:name,Rows:X,Columns:Y]`) | Complete | Same name on re-upload reuses the existing table's grid unchanged; `Rows`/`Columns` only apply to a genuinely new name. See Architecture Decision 23. |
+| Output Table Excel download/upload round-trip | Complete | Full-replace, mirroring the grid's own spreadsheet shape directly (not a flat table) — content cells offer a Stat Tag id dropdown via a hidden list sheet, free text still accepted alongside it. |
+| Base Table library (10 styles) | Complete | `plain_grid`, `table_ledger`, `table_zebra`, `table_editorial`, `table_terminal`, `table_cardtile`, `table_pill`, `table_freeform`, `table_brutalist`, `table_softui` — each a standalone artefact, no shared internal helpers, taking `table_inputs` (resolved grid, sizing, tweaks) and returning image bytes only. See Architecture Decision 24. |
+| Custom Tables (download bundle, AI edit, paste-back validation, live preview, save) | Complete | User- or AI-authored Base Tables saved into a workfile via a self-contained download/paste-back flow, mirroring Custom Charts. No shape-type scoping — a saved Custom Table is valid everywhere immediately. See Architecture Decision 24. |
+| Output Tables tab — shared selection box (Running Order row / Output Table by name) | Complete | One selection, shared by Edit Grid and Preview modes; "+ New Output Table" last in the list, revealing inline creation controls. See Functional Spec Section 9.6. |
+| Output Tables tab — Preview sandbox (table type, tweaks, sizing, Save to Running Order, Custom Tables, Reset) | Complete | Mirrors the Charts sheet's own mechanics wherever the concepts match. Sandbox state persists across Save/reopen (`settings["output_tables_sheet_state"]`), the same pattern as the Charts sheet (Architecture Decision 21). |
+| Stat Tag resolution in Output Table cells | Complete | Reuses `update_text`'s own token-building logic (`build_stat_tag_tokens`), not a duplicated resolution path. |
+| Chart-component cells (`{n}`, a saved chart embedded in a table cell) | Not built | Recognised by the grid's own grammar; not resolved or rendered. |
+| Running Order placement for a manually-created Output Table | Partial | A yellow-box-created Output Table gets an `insert_table` row automatically at template processing. A table created directly on the Output Tables tab has no automatic placement — only the tab's own Save to Running Order (Insert above/below an existing row). |
+
+---
+
 ## Tables
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Text-tag-based table population (basic tables) | Complete | Achieved via Stat Tags placed in a table cell plus `update_text`'s table-cell coverage — no dedicated table-population mechanism of its own. Distinct from Autotables (below), which would populate a table automatically rather than via manually-placed tags. |
-| Autotables (statistics from chart construction) | Not built | Summary stats are computed by the shape modules (see Glossary) and read directly, on demand, by any consumer that needs them — the Charts sheet preview and Stat Tags being the current consumers. Nothing collects or stores chart statistics ahead of a consumer needing them; a `AssemblyContext`-based collection step existed briefly and was removed as unused (Architecture Decision 17). The functions to populate a table automatically from shape statistics are not yet implemented. |
+| Text-tag-based table population (basic tables) | Complete | Achieved via Stat Tags placed in a table cell plus `update_text`'s table-cell coverage — no dedicated table-population mechanism of its own. |
+| Autotables (statistics from chart construction, auto-populating a native PowerPoint table) | Not built, superseded | Superseded by Output Tables (above) for the need it was intended to meet — a table now renders the same way a chart does, as a single image from a resolved grid, rather than a native PowerPoint table populated from chart statistics. Summary stats remain computed by the shape modules and read directly, on demand, by any consumer that needs them, unchanged. |
 | Multi-unit table expansion | Not built | |
 
 ---

@@ -28,7 +28,7 @@ from core.workfile.state.session_state import ws, has_workfile
 from core.session_shell.lifecycle.startup_file import apply_startup_workfile
 from core.ui.tabs import (
     imports_tab, populations_tab, select_tab,
-    text_tab, running_order_tab, charts_tab, outputs_tab,
+    text_tab, running_order_tab, charts_tab, output_tables_tab, outputs_tab,
 )
 
 
@@ -82,9 +82,9 @@ else:
 st.caption("Analysis and Reporting software")
 
 (tab_imports, tab_populations, tab_select,
- tab_text, tab_running_order, tab_charts, tab_outputs) = st.tabs([
+ tab_text, tab_running_order, tab_charts, tab_output_tables, tab_outputs) = st.tabs([
     "Imports", "Populations", "Select",
-    "Text", "Running Order", "Charts", "Outputs"
+    "Text", "Running Order", "Charts", "Tables", "Outputs"
 ])
 
 with tab_populations:
@@ -104,6 +104,9 @@ with tab_running_order:
 
 with tab_charts:
     charts_tab.render_charts_tab()
+
+with tab_output_tables:
+    output_tables_tab.render_output_tables_tab()
 
 with tab_outputs:
     outputs_tab.render_outputs_tab()

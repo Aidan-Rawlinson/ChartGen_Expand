@@ -24,7 +24,7 @@ _RUN_TAG = "{http://schemas.openxmlformats.org/drawingml/2006/main}r"
 _T_TAG = "{http://schemas.openxmlformats.org/drawingml/2006/main}t"
 
 
-def _build_stat_tag_tokens(workfile_state, full_unit_set: dict) -> dict:
+def build_stat_tag_tokens(workfile_state, full_unit_set: dict) -> dict:
     """
     Resolve every stat tag defined on this workfile to its current value for
     this report, keyed by its literal template text ("[<tag>]"). A tag that
@@ -101,7 +101,7 @@ def update_text(ctx, row: dict, settings: dict) -> dict:
 
     workfile_state = settings.get("workfile_state")
     if workfile_state is not None:
-        tokens.update(_build_stat_tag_tokens(workfile_state, ctx.full_unit_set or {}))
+        tokens.update(build_stat_tag_tokens(workfile_state, ctx.full_unit_set or {}))
 
     if not tokens:
         return ok_result(row, "update_text: no tags to replace (no ReportContext, no stat tags).")

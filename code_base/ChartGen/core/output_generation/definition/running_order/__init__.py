@@ -19,6 +19,7 @@ from core.output_generation.definition.running_order.schema import (
     CONTENT_FUNCTIONS,
     BATCH_FUNCTIONS,
     CHART_SANDBOX_FIELDS,
+    TABLE_SANDBOX_FIELDS,
 )
 from core.output_generation.definition.running_order.dialog_support import (
     get_valid_chart_refs_for_cache_file,
@@ -48,6 +49,7 @@ __all__ = [
     "CONTENT_FUNCTIONS",
     "BATCH_FUNCTIONS",
     "CHART_SANDBOX_FIELDS",
+    "TABLE_SANDBOX_FIELDS",
     "get_valid_chart_refs_for_cache_file",
     "build_populations_options",
     "parse_populations_string",

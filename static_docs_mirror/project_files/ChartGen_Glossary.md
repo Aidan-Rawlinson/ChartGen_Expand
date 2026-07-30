@@ -52,6 +52,7 @@ chartgen/
     │   ├── definition/
     │   └── execution/
     │       ├── charts/
+    │       ├── tables/
     │       ├── pictures/
     │       ├── excel/
     │       └── text/
@@ -196,7 +197,7 @@ MyWorkfile.cgw  (ZIP)
 
 ### Cluster 10 — Chart construction
 
-- **Autotable** — a table populated from statistics computed by the shape modules (plus the value(s) for the selected unit(s)), read directly from the shapes on demand, rather than from text tag replacement. Draws on Summary stats (see Cluster 7) or on the shapes directly. Distinct from text-tag-based tables. Not yet built. See Functional Spec, Section 10.5.
+- **Autotable** — a table populated from statistics computed by the shape modules (plus the value(s) for the selected unit(s)), read directly from the shapes on demand, rather than from text tag replacement. Not built; superseded by Output Table (Cluster 12) for the need it was intended to meet — a table now renders the same way a chart does, as a single image, rather than a native PowerPoint table auto-populated from chart statistics. See Functional Spec, Section 10.5.
 
 - **Base Chart** — one of ChartGen's chart-rendering functions, each a standalone artefact handling one canonical data shape. See the Architecture document, Decision 18.
 
@@ -211,3 +212,15 @@ MyWorkfile.cgw  (ZIP)
 ### Cluster 11 — Excel integration
 
 - **Driver range / export range** — Excel named ranges used by `insert_from_excel`: the driver range receives the current `unit_id`; the export range is the area captured as an image afterwards.
+
+### Cluster 12 — Table construction
+
+- **Output Table** — a grid of constant text and Stat Tag values, composited into a single image by a Base Table function — the table equivalent of a chart, rendered the same way rather than as a native PowerPoint table. Identified by a permanent, never-reused `table_id` (base-36, via the shared `id_generation` counter). Authored on its own tab, not the Charts sheet. See Functional Spec, Section 11.2, and Architecture, Decision 23.
+
+- **Base Table** — one of ChartGen's table-rendering functions, each a standalone artefact, the table equivalent of a Base Chart. No shape-type scoping — every Base Table takes the same table_inputs. See Architecture, Decision 24.
+
+- **table_inputs** — the fixed six-parameter call every Base Table function receives: `content`, `column_widths`, `row_heights`, `width`, `height`, `tweaks`. The table equivalent of chart_inputs (Cluster 10). See Functional Spec, Section 11.2.
+
+- **Custom Table** — a Base Table saved into a workfile rather than shipped with ChartGen, typically authored with an AI's help. Behaves identically to a built-in from the point it's saved. See Functional Spec, Section 11.2, and Architecture, Decision 24.
+
+- **table_type_ref** — the identifier a Running Order `insert_table` row uses to select a Base Table function, e.g. `plain_grid`. The table equivalent of `chart_type_ref`; resolves built-in-then-custom the same way.
