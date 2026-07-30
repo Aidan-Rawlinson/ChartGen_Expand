@@ -19,10 +19,15 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
+
+# Calibri -- ChartGen's standard chart/table font, baked into the SVG
+# vector output as real glyph outlines (svg.fonttype default "path").
+# See Architecture, SVG rendering methodology.
+matplotlib.rcParams["font.family"] = "Calibri"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-DPI = 450
+DPI = 300
 NARROWER_DIM_INCHES = 7.5
 
 # Font-size search bounds for the "shrink to fit column 1" behaviour.
@@ -43,7 +48,7 @@ def _size_to_inches(width, height):
 
 def _fig_to_bytes(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight",
+    fig.savefig(buf, format="svg", bbox_inches="tight",
                 facecolor="white", edgecolor="none")
     plt.close(fig)
     buf.seek(0)

@@ -18,12 +18,12 @@ import traceback
 from dataclasses import replace
 
 from pptx import Presentation
-from pptx.util import Emu
 
 from core.output_generation.execution.charts.cache_reader import load_shape
 from core.output_generation.execution.charts.custom_charts import get_chart_callable
 from core.output_generation.execution.text.text_engine import update_text
 from core.output_generation.execution.tables.insert_table import insert_table
+from core.output_generation.execution.svg_insert import add_svg_picture
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
@@ -243,13 +243,14 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         powerpoint.Visible = 1
         deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
         # TEST, not yet a settled decision -- see Architecture, Structural
-        # Design Principles ("Validate only where designed"). SaveAs(path,
-        # 32) is PowerPoint's older "Save As PDF" pathway (32 = ppSaveAsPDF)
-        # -- mechanically distinct from ExportAsFixedFormat, which produced
-        # visibly downsampled embedded images even with autoCompressPictures
-        # forced off (create_ppt). Trying this instead, to see whether it
-        # goes through a different internal rasteriser.
-        deck.SaveAs(os.path.abspath(pdf_path), 32)
+        # Design Principles ("Validate only where designed"). ExportAsFixedFormat
+        # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
+        # called with default settings for everything else. Decision 26 originally
+        # moved away from this method because it produced visibly downsampled
+        # embedded images even with autoCompressPictures forced off -- revisited
+        # here at Aidan's request; that finding may still apply and is worth
+        # re-checking against raster (non-SVG) content before treating this as settled.
+        deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
         deck.Close()
         powerpoint.Quit()
         return ok_result(row, f"PDF saved: {pdf_path}")
@@ -362,7 +363,7 @@ def _load_chart_data(cache_file: str, workfile_state=None):
 def _render_chart_image(chart_type_ref: str, population_layers: list, width_emu: int, height_emu: int,
                         tweaks="", custom_chart_code=None):
     """
-    Render a Matplotlib chart to PNG bytes sized to the placeholder.
+    Render a Matplotlib chart to SVG bytes sized to the placeholder.
     Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
     only job. Statistics/unit lists are read directly off population_layers
     (already in scope here) by whatever needs them, e.g. Autotables
@@ -397,8 +398,10 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
                                image_bytes, left_emu: int, top_emu: int,
                                width_emu: int, height_emu: int):
     """
-    Insert a PNG image at the exact EMU position on the given slide.
-    Sub-step of insert_chart.
+    Insert an SVG image at the exact EMU position on the given slide, via
+    the shared add_svg_picture dual-blip mechanism (see svg_insert.py) --
+    every Base Chart returns SVG bytes (Architecture, SVG rendering
+    methodology). Sub-step of insert_chart.
     """
     if slide_index >= len(prs.slides):
         raise IndexError(
@@ -406,11 +409,9 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
             f"(template has {len(prs.slides)} slides)."
         )
     slide = prs.slides[slide_index]
-    image_bytes.seek(0)
-    slide.shapes.add_picture(
-        image_bytes,
-        Emu(left_emu), Emu(top_emu),
-        Emu(width_emu), Emu(height_emu),
+    add_svg_picture(
+        slide, image_bytes.read(),
+        left_emu, top_emu, width_emu, height_emu,
     )
 
 

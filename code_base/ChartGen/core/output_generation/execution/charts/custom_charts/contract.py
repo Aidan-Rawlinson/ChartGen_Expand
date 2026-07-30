@@ -94,8 +94,20 @@ third-party package. Plan the implementation around this constraint.
 
 The function must return image bytes — the same thing every existing
 Base Chart returns: a `matplotlib` figure saved to an in-memory buffer via
-`fig.savefig(buf, format="png", ...)`, with the buffer returned (not the
-figure object itself, and not a Matplotlib Axes/Figure).
+`fig.savefig(buf, format="svg", ...)` (SVG, not PNG — every Base Chart is
+rendered as a vector image, not a raster one), with the buffer returned
+(not the figure object itself, and not a Matplotlib Axes/Figure).
+
+Font must be Calibri — set once, near the top of the file, right after
+the matplotlib imports:
+
+    import matplotlib
+    matplotlib.rcParams["font.family"] = "Calibri"
+
+Leave `matplotlib.rcParams["svg.fonttype"]` at its own default ("path").
+Do not set it to "none" — that was tried and reverted (it doesn't make
+text genuinely searchable in PowerPoint or in either PDF export pathway,
+and introduces character-positioning corruption in the PDF specifically).
 
 ## Submitting your answer
 

@@ -1,15 +1,33 @@
 """
 table_cardtile.py
-Base Table -- table_cardtile. Card-tile metrics style: header row (row 0
-of `content` -- the person's own first grid row, not synthetic content
-injected by this function) rendered as plain bold text; every subsequent
-row rendered as a rounded white card with a soft shadow. All value
-columns (including the final column) are rendered consistently as
-right-aligned text within the card.
+Base Table -- card-tile layout: a bold header row over a stack of
+rounded, drop-shadowed "cards", one per data row.
 
-Standalone artefact, the base_tables equivalent of a Base Chart
-(Architecture, Decision 18) -- no imports from ChartGen's own code,
-third-party libraries only.
+Renders as SVG (matplotlib's own SVG backend, format='svg') rather than
+PNG -- the standard rendering methodology across every Base Chart and
+Base Table (see Architecture, SVG rendering methodology). Returned bytes
+are vector text, not raster, inserted into the PowerPoint via the shared
+add_svg_picture dual-blip mechanism rather than a plain add_picture call.
+
+DPI is kept only for matplotlib's own text-metric estimation during
+layout (_text_width_inches/_text_height_inches, both still rasterise to a
+throwaway offscreen figure to measure text extents) -- it has no bearing
+on the final SVG's own resolution, which is vector and scales losslessly.
+
+Font is Calibri (matplotlib.rcParams["font.family"], below) -- ChartGen's
+standard chart/table font. svg.fonttype is left at matplotlib's own
+default ("path"), which bakes Calibri's actual glyph shapes into vector
+outlines at render time, so the result looks correct regardless of what's
+installed wherever the SVG is later opened. An alternative ("none", real
+live <text> elements) was tried and reverted: neither PowerPoint's own
+Find nor either PDF export method exposed the text as genuinely
+searchable, and the PDF additionally came out with characters selectable
+in mismatched positions/layers -- "path" gives the clean, high-quality
+result with no such artefacts, at the accepted cost that table text
+isn't searchable/selectable in the final output.
+
+table_inputs contract unchanged: content, column_widths, row_heights,
+width, height, tweaks in; bytes out.
 """
 
 import io
@@ -18,11 +36,16 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
+
+# Calibri -- ChartGen's standard chart/table font, baked into the SVG
+# vector output as real glyph outlines (svg.fonttype default "path").
+# See Architecture, SVG rendering methodology.
+matplotlib.rcParams["font.family"] = "Calibri"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
-DPI = 450
+DPI = 300
 NARROWER_DIM_INCHES = 7.5
 
 MAX_FONT_SIZE = 12
@@ -36,33 +59,11 @@ GREY_TEXT = "#5B6770"
 
 CARD_ROUNDING_INCHES = 0.06
 BORDER_WIDTH = 0.375
-# The grey (lower) shape is offset from the white (upper) shape by this
-# fraction of the shape's own height (in the y/vertical direction). The
-# x-direction offset is derived from this so that the physical offset --
-# in real inches on the page -- is identical right and down, rather than
-# using the same data-percent value in both axes (which, since the table
-# is much wider than it is tall, made the rightward offset land far
-# larger than the downward one).
 SHADOW_OFFSET_FRACTION = 0.065
-# Extra margin (inches) added around the tight bounding box on save, so
-# the offset shadow -- which sits outside the card's own left/right
-# extent by design -- always has a sliver of white space around it
-# rather than sitting flush against the image edge.
 SAVE_PAD_INCHES = 0.03
 
 
 def _rounded_rect_polygon(x, y, w, h, rx, ry, n=12, **kwargs):
-    """A rounded rectangle built from true circular-arc corners.
-
-    FancyBboxPatch's built-in rounding uses a single rounding_size in data
-    units, applied identically to x and y -- but this table's axes map a
-    100-unit data grid onto a physical width and height that are rarely
-    equal, so a single data-unit radius renders as an ellipse, not a
-    circle. Here rx and ry are chosen by the caller (from separate
-    physical inch-to-data-unit conversions) so the rendered corner is a
-    genuine quarter-circle: cropped out and reassembled, the four corners
-    form one true circle.
-    """
     rx = max(0.0, min(rx, w / 2))
     ry = max(0.0, min(ry, h / 2))
 
@@ -86,7 +87,7 @@ def _size_to_inches(width, height):
 
 def _fig_to_bytes(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight", pad_inches=SAVE_PAD_INCHES,
+    fig.savefig(buf, format="svg", bbox_inches="tight", pad_inches=SAVE_PAD_INCHES,
                 facecolor="white", edgecolor="none")
     plt.close(fig)
     buf.seek(0)
@@ -211,9 +212,6 @@ def table_cardtile(content, column_widths, row_heights, width=80, height=50, twe
             row1_center_in = ((y0_r1 + y1_r1) / 2) * y_to_inch
             row1_top_in = row1_center_in - ht_row1 / 2
             gap_in = row1_top_in - header_bottom_in
-            # Drop the header text down so the gap to the next row's text
-            # closes by one fifth, rather than leaving the header centred
-            # on its own row.
             delta_in = gap_in / 5
             header_y += delta_in / y_to_inch
 

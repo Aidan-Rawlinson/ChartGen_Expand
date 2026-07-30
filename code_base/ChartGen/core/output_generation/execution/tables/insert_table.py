@@ -19,11 +19,10 @@ identically to a built-in from this point on, mirroring insert_chart's own
 get_chart_callable resolution exactly.
 """
 
-from pptx.util import Emu
-
 from core.output_generation.execution.results import ok_result, err_result
 from core.output_generation.execution.tables.resolve import resolve_output_table
 from core.output_generation.execution.tables.custom_tables.resolve import get_table_callable
+from core.output_generation.execution.svg_insert import add_svg_picture
 
 
 def insert_table(ctx, row: dict, settings: dict) -> dict:
@@ -80,9 +79,11 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
 
     try:
         slide = ctx.prs.slides[slide_index]
-        image_bytes.seek(0)
-        slide.shapes.add_picture(
-            image_bytes, Emu(left_emu), Emu(top_emu), Emu(width_emu), Emu(height_emu),
+        # Every Base Table returns SVG bytes (see Architecture, SVG
+        # rendering methodology) -- inserted via the shared add_svg_picture
+        # dual-blip mechanism rather than a plain add_picture call.
+        add_svg_picture(
+            slide, image_bytes.read(), left_emu, top_emu, width_emu, height_emu,
         )
     except Exception as e:
         return err_result(row, f"insert_table: failed to insert image on slide {slide_index}: {e}")

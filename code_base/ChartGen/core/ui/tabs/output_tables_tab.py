@@ -95,6 +95,19 @@ DEFAULT_ZOOM = "Actual size (approximately)"
 OTS_KEY_PREFIX = "ots_"
 
 
+def _svg_preview_html(svg_text, width_css):
+    """
+    Forces an SVG's rendered size to width_css (a CSS width value, e.g.
+    "480px" or "100%") via an inline style on the SVG's own root element,
+    since st.markdown has no width parameter the way st.image does. Used
+    instead of st.image because st.image goes through PIL, which can't
+    decode SVG -- every Base Table returns SVG bytes (Architecture, SVG
+    rendering methodology).
+    """
+    styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
+    return f'<div style="width:{width_css}">{styled}</div>'
+
+
 def _int_or_none(value):
     try:
         return int(value)
@@ -768,8 +781,11 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                 return
 
         if zoom_choice == "Fit to screen":
-            st.image(image_bytes, use_container_width=True)
+            st.markdown(_svg_preview_html(image_bytes.read().decode("utf-8"), "100%"), unsafe_allow_html=True)
         else:
             multiplier = ZOOM_MULTIPLIERS.get(zoom_choice, 1.0)
             px_width = max(50, int((width_emu / 914400) * 96 * multiplier))
-            st.image(image_bytes, width=px_width)
+            st.markdown(
+                _svg_preview_html(image_bytes.read().decode("utf-8"), f"{px_width}px"),
+                unsafe_allow_html=True,
+            )
