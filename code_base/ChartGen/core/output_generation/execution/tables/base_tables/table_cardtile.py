@@ -27,7 +27,7 @@ result with no such artefacts, at the accepted cost that table text
 isn't searchable/selectable in the final output.
 
 table_inputs contract unchanged: content, column_widths, row_heights,
-width, height, tweaks in; bytes out.
+width_emu, height_emu, tweaks in; bytes out.
 """
 
 import io
@@ -46,7 +46,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 DPI = 300
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 MAX_FONT_SIZE = 12
 MIN_FONT_SIZE = 4
@@ -80,9 +80,20 @@ def _rounded_rect_polygon(x, y, w, h, rx, ry, n=12, **kwargs):
     return mpatches.Polygon(verts, closed=True, **kwargs)
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
+
+
+def _chart_cell_id(cell_text):
+    """None if not a chart-component cell marker ("{" + Chart Store id +
+    "}"); otherwise the id. String slicing only, no regex -- see
+    plain_grid.py's own copy for the full reasoning."""
+    t = (cell_text or "").strip()
+    if len(t) > 2 and t.startswith("{") and t.endswith("}"):
+        inner = t[1:-1]
+        if inner.startswith("C"):
+            return inner
+    return None
 
 
 def _fig_to_bytes(fig):
@@ -92,6 +103,67 @@ def _fig_to_bytes(fig):
     plt.close(fig)
     buf.seek(0)
     return buf
+
+
+def _resolve_chart_cells(fig, chart_cells_raw: dict, w_inches: float, h_inches: float,
+                         width_emu: int, height_emu: int) -> dict:
+    """
+    Convert each chart cell's raw data-space rectangle (0-100 x 0-100 --
+    exactly the coordinates passed to _record_chart_cell during drawing,
+    before anything is known about cropping) into a final EMU rectangle,
+    corrected for whatever bbox_inches="tight" + pad_inches actually
+    crops the saved canvas to.
+
+    This can't safely assume the 0-100 space maps 1:1 onto width_emu x
+    height_emu the way plain_grid.py's own (crop-free) version can --
+    this file's shadow is drawn with clip_on=False specifically so it
+    isn't clipped off, which means it can genuinely extend past the
+    nominal canvas edge, and bbox_inches="tight" expands the saved canvas
+    to include it. fig.get_tightbbox(renderer) returns the exact bounding
+    box (figure-inches) that "tight" will crop to -- the same computation
+    bbox_inches="tight" itself uses, read directly here rather than
+    re-derived or assumed. Adding pad_inches on every side (matching what
+    savefig is called with) gives the true final canvas extent; any
+    data-space point's fraction of *that*, not of the nominal declared
+    canvas, is what determines where it actually lands once the saved
+    image is stretched into width_emu x height_emu. Verified empirically
+    against matplotlib's own rendered SVG output during development, not
+    assumed to hold.
+    """
+    if not chart_cells_raw:
+        return {}
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    tight_bbox = fig.get_tightbbox(renderer)
+
+    crop_left_in = tight_bbox.x0 - SAVE_PAD_INCHES
+    crop_top_in = tight_bbox.y0 - SAVE_PAD_INCHES
+    total_w_in = (tight_bbox.x1 - tight_bbox.x0) + 2 * SAVE_PAD_INCHES
+    total_h_in = (tight_bbox.y1 - tight_bbox.y0) + 2 * SAVE_PAD_INCHES
+
+    chart_cells = {}
+    for tag, (cx0, cx1, cy0, cy1) in chart_cells_raw.items():
+        # Data-space (0-100) -> figure-inches is exact here (not
+        # approximate) because the axes fill the entire figure canvas --
+        # see _new_axes.
+        fig_x0 = (cx0 / 100.0) * w_inches
+        fig_x1 = (cx1 / 100.0) * w_inches
+        fig_y0 = (cy0 / 100.0) * h_inches
+        fig_y1 = (cy1 / 100.0) * h_inches
+
+        frac_x0 = (fig_x0 - crop_left_in) / total_w_in if total_w_in else 0.0
+        frac_x1 = (fig_x1 - crop_left_in) / total_w_in if total_w_in else 0.0
+        frac_y0 = (fig_y0 - crop_top_in) / total_h_in if total_h_in else 0.0
+        frac_y1 = (fig_y1 - crop_top_in) / total_h_in if total_h_in else 0.0
+
+        chart_cells[tag] = {
+            "x": frac_x0 * width_emu,
+            "y": frac_y0 * height_emu,
+            "width": (frac_x1 - frac_x0) * width_emu,
+            "height": (frac_y1 - frac_y0) * height_emu,
+        }
+    return chart_cells
 
 
 def _text_width_inches(text, fontsize, dpi):
@@ -138,16 +210,16 @@ def _fit_font_size(texts, available_width_inches, dpi,
     return min_size
 
 
-def _prepare(content, column_widths, row_heights, width, height):
+def _prepare(content, column_widths, row_heights, width_emu, height_emu):
     n_cols = len(column_widths)
-    w_inches, h_inches = _size_to_inches(width, height)
+    w_inches, h_inches = _size_to_inches(width_emu, height_emu)
     left_pad_pct = (LEFT_PAD_INCHES / w_inches) * 100 if w_inches else 0.0
 
     col0_width_pct = column_widths[0] if column_widths else 0.0
     col0_width_inches = (col0_width_pct / 100.0) * w_inches
     available_inches = col0_width_inches - (2 * LEFT_PAD_INCHES)
 
-    col0_texts = [row[0] if row else "" for row in content]
+    col0_texts = [row[0] for row in content if row and not _chart_cell_id(row[0])]
     font_size = _fit_font_size(col0_texts, available_inches, DPI)
 
     col_x = [0.0]
@@ -167,7 +239,12 @@ def _prepare(content, column_widths, row_heights, width, height):
 
 
 def _new_axes(p):
-    fig, ax = plt.subplots(figsize=(p["w_inches"], p["h_inches"]))
+    fig = plt.figure(figsize=(p["w_inches"], p["h_inches"]))
+    # Axes fill the entire figure canvas exactly ([0,0,1,1] in
+    # figure-fraction coordinates), not tight_layout's own heuristic
+    # centering -- required for the data-space-to-figure-inches mapping
+    # _resolve_chart_cells relies on to be exact rather than approximate.
+    ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 100)
     ax.invert_yaxis()
@@ -189,12 +266,22 @@ def _cell_text(p, r, c):
     return row[c] if c < len(row) else ""
 
 
-def table_cardtile(content, column_widths, row_heights, width=80, height=50, tweaks=""):
-    p = _prepare(content, column_widths, row_heights, width, height)
+def table_cardtile(content, column_widths, row_heights, width_emu=5486400, height_emu=3429000, tweaks=""):
+    p = _prepare(content, column_widths, row_heights, width_emu, height_emu)
     fig, ax = _new_axes(p)
     n_rows, n_cols = p["n_rows"], p["n_cols"]
     fs, lp = p["font_size"], p["left_pad_pct"]
     full_width = 100.0
+
+    chart_cells_raw = {}
+
+    def _record_chart_cell(chart_tag, cx0, cx1, cy0, cy1):
+        # Data-space coordinates only, at this point (0-100 x 0-100) --
+        # converted to a final, crop-corrected EMU rectangle afterwards,
+        # once the actual tight-crop bbox is known (_resolve_chart_cells).
+        # Storing the raw coordinates here rather than converting to EMU
+        # immediately is what makes that correction possible.
+        chart_cells_raw[chart_tag] = (cx0, cx1, cy0, cy1)
 
     if n_rows > 0:
         _, _, hy0, hy1 = _cell_bounds(p, 0, 0)
@@ -215,11 +302,22 @@ def table_cardtile(content, column_widths, row_heights, width=80, height=50, twe
             delta_in = gap_in / 5
             header_y += delta_in / y_to_inch
 
-        ax.text(lp, header_y, _cell_text(p, 0, 0), ha="left", va="center",
-                fontsize=fs, fontweight="bold", color=ACCENT_BLUE)
+        header0_val = _cell_text(p, 0, 0)
+        header0_x0, header0_x1, _, _ = _cell_bounds(p, 0, 0)
+        header0_tag = _chart_cell_id(header0_val)
+        if header0_tag:
+            _record_chart_cell(header0_tag, header0_x0, header0_x1, hy0, hy1)
+        else:
+            ax.text(lp, header_y, header0_val, ha="left", va="center",
+                    fontsize=fs, fontweight="bold", color=ACCENT_BLUE)
         for c in range(1, n_cols):
             cx0, cx1, cy0, cy1 = _cell_bounds(p, 0, c)
-            ax.text(cx1 - lp, header_y, _cell_text(p, 0, c), ha="right", va="center",
+            header_val = _cell_text(p, 0, c)
+            header_tag = _chart_cell_id(header_val)
+            if header_tag:
+                _record_chart_cell(header_tag, cx0, cx1, cy0, cy1)
+                continue
+            ax.text(cx1 - lp, header_y, header_val, ha="right", va="center",
                     fontsize=fs, fontweight="bold", color=ACCENT_BLUE)
 
     rx = (CARD_ROUNDING_INCHES / p["w_inches"]) * 100 if p["w_inches"] else 0.0
@@ -241,12 +339,33 @@ def table_cardtile(content, column_widths, row_heights, width=80, height=50, twe
                                       facecolor="white", zorder=2)
         ax.add_patch(shadow)
         ax.add_patch(card)
-        ax.text(lp, (y0 + y1) / 2, _cell_text(p, r, 0), ha="left", va="center",
-                fontsize=fs, color="#2F3A45", zorder=3)
+        # A chart cell's own reported rectangle is the card's own white
+        # background -- vertically inset to card_y/card_h (the middle 80%
+        # of the row; the shadow and the 10% top/bottom margin are outside
+        # this, and never part of what's reported), never the raw row
+        # bounds. Horizontally, each column still gets its own share of
+        # the shared card (there is only one card per row, spanning every
+        # column -- a column is a text-alignment position within it, not
+        # a separate rectangle of its own).
+        cx0_col0, cx1_col0, _, _ = _cell_bounds(p, r, 0)
+        body0_val = _cell_text(p, r, 0)
+        body0_tag = _chart_cell_id(body0_val)
+        if body0_tag:
+            _record_chart_cell(body0_tag, cx0_col0, cx1_col0, card_y, card_y + card_h)
+        else:
+            ax.text(lp, (y0 + y1) / 2, body0_val, ha="left", va="center",
+                    fontsize=fs, color="#2F3A45", zorder=3)
         for c in range(1, n_cols):
             cx0, cx1, cy0, cy1 = _cell_bounds(p, r, c)
-            ax.text(cx1 - lp, (cy0 + cy1) / 2, _cell_text(p, r, c), ha="right", va="center",
+            body_val = _cell_text(p, r, c)
+            body_tag = _chart_cell_id(body_val)
+            if body_tag:
+                _record_chart_cell(body_tag, cx0, cx1, card_y, card_y + card_h)
+                continue
+            ax.text(cx1 - lp, (cy0 + cy1) / 2, body_val, ha="right", va="center",
                     fontsize=fs, color=GREY_TEXT, zorder=3)
 
-    fig.tight_layout(pad=0)
-    return _fig_to_bytes(fig)
+    chart_cells = _resolve_chart_cells(
+        fig, chart_cells_raw, p["w_inches"], p["h_inches"], width_emu, height_emu,
+    )
+    return _fig_to_bytes(fig), chart_cells

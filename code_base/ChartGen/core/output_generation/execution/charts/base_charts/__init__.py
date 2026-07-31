@@ -6,7 +6,7 @@ categorical_compositional/, timeseries/), with dispatch in registry.py.
 
 Each Base Chart function is a standalone artefact: no imports from
 ChartGen's own code, only third-party libraries (matplotlib, numpy). It
-receives chart_inputs only — population_layers, width, height, tweaks —
+receives chart_inputs only — population_layers, width_emu, height_emu, tweaks —
 and returns image_bytes only. There is no shared internal helpers module;
 each function carries its own copy of whatever palette/formatting/sizing
 logic it needs. This is deliberate, not an oversight: a Base Chart is

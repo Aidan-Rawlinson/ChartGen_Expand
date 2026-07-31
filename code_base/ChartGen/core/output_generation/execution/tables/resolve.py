@@ -7,10 +7,13 @@ the same token map update_text uses (build_stat_tag_tokens,
 core.output_generation.execution.text.text_engine), not duplicated here.
 Literal text passes straight through.
 
-Chart-component cells ("{n}") are recognised by the grid's own grammar
-(grid_store.py) but parked this session -- not resolved or rendered; a
-cell holding one is left as its literal text, same as anything else
-unresolved.
+Chart-component cells ("{Cn}") are recognised by the grid's own grammar
+(grid_store.py) but left untouched here, exactly like any other
+unresolved literal text -- a Base Table function itself recognises and
+acts on them (Decision 28), reporting back the cell rectangle it reserved
+for each one rather than drawing it as text. Text resolution (this
+module) and chart-cell resolution (inside the Base Table function) are
+deliberately two separate steps against the same content grid.
 """
 
 from core.output_generation.execution.tables.grid_store import (

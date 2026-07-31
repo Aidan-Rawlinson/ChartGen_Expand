@@ -79,7 +79,7 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             )
 
             # Transform to canonical shape
-            shape = transform(raw_json, year)
+            shape = transform(raw_json, year, option)
             # Stamp which population table this data's units belong to. All
             # data is submissions data today, so this is always the
             # submissions table for the chart's own project/year — not

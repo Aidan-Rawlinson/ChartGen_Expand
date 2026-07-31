@@ -115,14 +115,12 @@ chartgen/
     │       │   ├── custom_charts/
     │       │   │   ├── contract.py, gate.py, resolve.py, bundle.py
     │       │   ├── cache_reader.py
+    │       │   ├── chart_store.py, chart_store_xlsx.py
     │       │   └── chart_type_map.py
     │       ├── tables/
     │       │   ├── grid_store.py, resolve.py, grid_xlsx.py, insert_table.py
     │       │   ├── base_tables/
-    │       │   │   ├── plain_grid.py, table_ledger.py, table_zebra.py,
-    │       │   │   ├── table_editorial.py, table_terminal.py, table_cardtile.py,
-    │       │   │   ├── table_pill.py, table_freeform.py, table_brutalist.py,
-    │       │   │   ├── table_softui.py
+    │       │   │   ├── plain_grid.py, table_cardtile.py
     │       │   │   └── registry.py
     │       │   └── custom_tables/
     │       │       ├── contract.py, gate.py, resolve.py, bundle.py
@@ -196,11 +194,13 @@ chartgen/
 | `core/output_generation/execution/charts/base_charts/` | 20 built-in Base Charts, one standalone file per base_chart_name, grouped into a folder per canonical data shape. No shared helpers module — each file is fully self-contained, so it can be handed whole to an external AI for editing (Decision 18); dispatch in `registry.py` |
 | `core/output_generation/execution/charts/custom_charts/` | Custom Charts — user- or AI-authored Base Charts saved into a workfile. Static validation and compilation (`gate.py`), built-in-then-custom resolution (`resolve.py`), the AI-facing download bundle (`bundle.py`), and the shared contract both enforce and explain (`contract.py`). See Decision 18 |
 | `core/output_generation/execution/charts/` (remainder) | Cache reading; `chart_type_map.py` |
+| `core/output_generation/execution/charts/chart_store.py` | Chart Store (Decision 28): `next_chart_store_id` (base-36 counter, via shared `id_generation`), `chart_store_row_label` |
+| `core/output_generation/execution/charts/chart_store_xlsx.py` | Excel download/upload round-trip for `chart_store.csv` — full-replace, mirroring `stat_tags_xlsx.py`'s own pattern. See Decision 28 |
 | `core/output_generation/execution/tables/grid_store.py` | Output Table grid storage shape and mechanics — `col_key`/`new_grid`/`grid_dimensions`/`get_column_widths`/`get_row_heights`/`get_content_grid`/`validate_grid`/`resize_grid`, plus `next_table_id` (via `id_generation`). Mirrors the population tables' own "no fixed schema, each written from its own rows' keys" convention |
 | `core/output_generation/execution/tables/resolve.py` | `resolve_output_table` — resolves an Output Table's grid into plain values ready for a Base Table renderer: parsed column widths/row heights, and a content grid with every Stat Tag resolved via `text_engine.build_stat_tag_tokens` (the same token map `update_text` uses, not duplicated) |
 | `core/output_generation/execution/tables/grid_xlsx.py` | `write_output_table_xlsx`/`read_output_table_xlsx` — full-replace Excel round-trip for a single Output Table's grid, mirroring its own spreadsheet shape directly rather than a flat table; content cells carry a Stat Tag id dropdown via a hidden list sheet (Decision 12's pattern), free text still accepted alongside it |
 | `core/output_generation/execution/tables/insert_table.py` | `insert_table` Running Order function — the Output Table equivalent of `insert_chart`, kept in its own module for the same reason `update_text` was promoted out of `assembly_engine` (Decision 20). Resolves `table_type_ref` built-in-then-custom via `custom_tables.resolve.get_table_callable`, the same pattern `insert_chart` uses for Custom Charts |
-| `core/output_generation/execution/tables/base_tables/` | Ten built-in Base Tables, one standalone file per `table_type_ref`, no shared helpers module — the same self-containment convention as `base_charts/` (Decision 18); dispatch in `registry.py`. See Decision 24 |
+| `core/output_generation/execution/tables/base_tables/` | Two built-in Base Tables (`plain_grid`, `table_cardtile`) -- trimmed back from ten, one standalone file per `table_type_ref`, no shared helpers module -- the same self-containment convention as `base_charts/` (Decision 18); dispatch in `registry.py`. Returns `(image_bytes, chart_cells)`, not bare bytes. See Decisions 24, 29, and 30 |
 | `core/output_generation/execution/tables/custom_tables/` | Custom Tables — user- or AI-authored Base Tables saved into a workfile. Mirrors `charts/custom_charts/` field for field (`contract.py`, `gate.py`, `resolve.py`, `bundle.py`), for the table domain rather than the chart domain — kept as its own copy, not shared, since the two rendering domains are deliberately independent. See Decision 24 |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
@@ -234,6 +234,7 @@ MyWorkfile.cgw  (ZIP)
 │   │   └── {table_name}.csv
 │   ├── running_order.csv
 │   ├── text_stats.csv
+│   ├── chart_store.csv
 │   ├── custom_charts/
 │   │   ├── custom_charts.csv
 │   │   └── {shape_type}/
@@ -258,6 +259,7 @@ MyWorkfile.cgw  (ZIP)
 | `workfile_config/tables/{table_name}.csv` | ★ One file per population-level table (e.g. `nhs_organisations.csv`, `submissions_2026_123.csv`) — any number of them, added and removed freely. No single fixed column schema at this layer; each is written using its own rows' keys. `table_order` (in `settings.csv`, `\|`-delimited) is the only record of display order — whichever table name is listed first is the master table, driving the reporting unit picker and the batch loop. No separate "master" flag exists; position is the only source of truth |
 | `workfile_config/running_order.csv` | ★ Canonical Running Order store — flat table, not `.xlsx`. The `.xlsx` is generated from this on demand for download and parsed back into it on upload; it is never itself written to this archive |
 | `workfile_config/text_stats.csv` | ★ Stat Tags (Decision 19) — one row per tag, keyed by its own `tag`. Column schema below |
+| `workfile_config/chart_store.csv` | Chart Store (Decision 28) — one row per entry, keyed by its own `chart_store_id`; flat and unordered, no position concept. Column schema below |
 | `workfile_config/custom_charts/` | Custom Charts saved into this workfile (Decision 18) — `custom_charts.csv` is the index (`base_chart_name`, `shape_type`, `added_at`, `notes`); one `.py` per row, under a folder named for its `shape_type`, mirroring the built-in Base Charts' own folder-per-shape layout |
 | `workfile_config/output_tables/` | Output Tables (Decision 23) — `output_tables.csv` is the index (`table_id`, `table_name`, `rows`, `columns`); one grid CSV per `table_id`, directly under this folder (no per-shape subfolder — an Output Table isn't scoped to any canonical data shape). Column schema below |
 | `workfile_config/custom_tables/` | Custom Tables saved into this workfile (Decision 24) — `custom_tables.csv` is the index (`table_type_ref`, `added_at`, `notes`); one `.py` per row, directly under this folder — no per-shape subfolder, mirroring `custom_charts/`'s pattern but flat, since a Base Table isn't scoped to any canonical data shape either |
@@ -330,7 +332,7 @@ Fetch-populated cells hold the placeholder `...` until the first fetch.
 
 | Column | Description |
 |--------|-------------|
-| `tag` | Base-36 id (`0`–`9` then `a`–`z`), never reused — the literal `[tag]` template text. Issued from a persisted counter (`settings["next_stat_tag_id"]`) |
+| `tag` | `T` + base-36 id (`0`–`9` then `a`–`z`), never reused — the literal `[tag]` template text. Issued from a persisted counter (`settings["next_stat_tag_id"]`). The `T` prefix (added Decision 30) disambiguates a Stat Tag from a Chart Store id (`C` prefix) when both appear inside the same Output Table cell grammar |
 | `hex_id` | Manifest `hex_id` this tag's data comes from — not `chart_ref`, which renumbers |
 | `populations` | This tag's own single population token (`All`, `Selected`, `Region()`, `Region(Wales)`, etc.) — independent of any Running Order row |
 | `start_period` | Period_id, TimeSeries only |
@@ -338,6 +340,22 @@ Fetch-populated cells hold the placeholder `...` until the first fetch.
 | `metric_periods` | `^`-delimited period_id(s), TimeSeries only |
 | `reference_id` | Which Reference id (Decision 15) to read from the resolved population |
 | `description` | Optional free text; user reference only, ignored at resolution |
+
+**Chart Store column schema** (`workfile_config/chart_store.csv`, Decision 28):
+
+| Column | Description |
+|--------|-------------|
+| `chart_store_id` | `C` + base-36 id (`0`–`9` then `a`–`z`), never reused. Issued from a persisted counter (`settings["next_chart_store_id"]`), via the shared `id_generation` helper. The `C` prefix (added Decision 30) disambiguates a Chart Store id from a Stat Tag's `T` prefix when both appear inside the same Output Table cell grammar |
+| `base_chart_name` | Base Chart function name |
+| `cache_file` | JSON cache filename supplying this entry's data |
+| `populations` | This entry's own populations string |
+| `start_period` | Period_id, TimeSeries only |
+| `end_period` | Period_id, TimeSeries only |
+| `metric_periods` | `^`-delimited period_id(s), TimeSeries only |
+| `width_emu` | Width in EMU |
+| `height_emu` | Height in EMU |
+| `tweaks` | Free-text string, passed straight through to the Base Chart function's own `tweaks` parameter |
+| `description` | Optional free text; user reference only |
 
 **Output Tables index column schema** (`workfile_config/output_tables/output_tables.csv`, Decision 23):
 
@@ -355,7 +373,7 @@ Fetch-populated cells hold the placeholder `...` until the first fetch.
 | Row 0, col 0 (corner) | The table's own `table_id`. Display only, never read back for anything |
 | Row 0, cols 1..M | Column widths, % of total table width, 2 decimal places |
 | Rows 1..N, col 0 | Row heights, % of total table height, 2 decimal places |
-| Rows 1..N, cols 1..M | Content cells — constant text, or a Stat Tag id (`[3]`). Chart-component cells (`{3}`) are recognised by the grammar but not resolved or rendered — parked, see Feature List |
+| Rows 1..N, cols 1..M | Content cells — constant text, a Stat Tag id (`[T3]`), or a Chart Store chart-component marker (`{C3}`) — recognised and acted on by the Base Table function itself, not resolved here. See Decision 30 |
 
 **Custom Tables index column schema** (`workfile_config/custom_tables/custom_tables.csv`, Decision 24):
 
@@ -401,6 +419,7 @@ Streamlit process (st.session_state)
 │     custom_chart_rows: list[dict]
 │     custom_chart_code: dict — {base_chart_name: source_text}
 │     text_stats_rows: list[dict]
+│     chart_store_rows: list[dict]
 │     output_table_rows: list[dict]
 │     output_tables: dict — {table_id: list[dict]} grid rows
 │     custom_table_rows: list[dict]
@@ -448,6 +467,7 @@ Streamlit process (st.session_state)
 | `WorkfileState.cache: dict` — `{filename: json_string}` | Mirrors `data_cache/{hex_id}.json` files |
 | `WorkfileState.custom_chart_rows` / `.custom_chart_code` | Mirror `workfile_config/custom_charts/` (index + one `.py` per row) the same way `manifest_rows`/`cache` mirror the manifest/cache pair — see Decision 18 |
 | `WorkfileState.text_stats_rows: list[dict]` | Mirrors `workfile_config/text_stats.csv` — Stat Tags. See Decision 19 |
+| `WorkfileState.chart_store_rows: list[dict]` | Mirrors `workfile_config/chart_store.csv` — the Chart Store. Flat and unordered — no companion "position" structure the way `running_order_rows` has. See Decision 28 |
 | `WorkfileState.output_table_rows` / `.output_tables` | Mirror `workfile_config/output_tables/` (index + one grid CSV per `table_id`) the same way `tables`/`table_order` mirror the population tables — no fixed grid column schema, see Decision 23 |
 | `WorkfileState.custom_table_rows` / `.custom_table_code` | Mirror `workfile_config/custom_tables/` (index + one `.py` per row) the same way `custom_chart_rows`/`custom_chart_code` mirror `custom_charts/` — see Decision 24 |
 | `WorkfileState.dirty: bool` | Not persisted — session-only flag |
@@ -782,3 +802,41 @@ Every Base Chart and Base Table renders as SVG (matplotlib's own SVG backend, `f
 **DPI.** Base Tables retain `DPI = 300`, used only for matplotlib's own text-metric estimation during layout (`_text_width_inches`/`_text_height_inches`, which still rasterise to a throwaway offscreen figure to measure text extents) -- no bearing on the SVG's own resolution. Base Charts have no DPI constant, having no equivalent text-fit-measurement step.
 
 **Scope.** Covers every built-in Base Chart and Base Table, and, via the `custom_charts`/`custom_tables` contract documents, every Custom Chart/Table saved from this point on -- one saved before this methodology must be re-saved to return SVG bytes and set Calibri, since both insertion call sites now assume SVG bytes unconditionally.
+
+### Decision 28 — Chart Store
+
+A Chart Store was added to hold chart-defs independently of the Running Order, for future use as chart components inside Output Table cells (sparklines, or a grid layout composed of small charts — not yet resolved at render time, see Feature List). The Running Order is, by design, strictly an ordered sequence of report content (Section 9.1); a chart-def with no place in that sequence at all — because it exists only to be referenced from inside a table cell — has nowhere to live there. The Chart Store is deliberately flat and unordered: `chart_store_rows` carries no position field, and no Insert-above/below concept exists for it, unlike the Running Order's own rows.
+
+**Fields mirror `CHART_SANDBOX_FIELDS` exactly**, plus the entry's own identity. A Chart Store entry is, structurally, "the same chart specification a Running Order row or the Charts sheet's own sandbox already holds" — `base_chart_name`, `cache_file`, `populations`, `start_period`/`end_period`/`metric_periods`, `width_emu`/`height_emu`, `tweaks` — with a permanent `chart_store_id` (base-36, `settings["next_chart_store_id"]`, the same `id_generation` counter convention as Stat Tags and Output Tables) and an optional `description`, the same free-text convenience field Stat Tags already has.
+
+**A third Charts sheet entry point, not a new sandbox.** Rather than build a separate authoring surface, a "Chart Store line" selector was added alongside the existing "Running Order row" and "Data shape" entry points (Decision 11) — loading an entry stages the same `cs_pending_*` sandbox fields a Running Order row load already stages, so the load/reset/mismatch machinery needed no new mechanism, only a third source of pending values. Save-back is genuinely different, though: Add/Overwrite only, never Insert above/below, since there's no position to insert relative to — `chart_store_action`/`chart_store_target_choice` are a deliberately smaller pair than the Running Order save's own Action/Target, not a trimmed-down copy of it.
+
+**"Show Chart Store" replaces the preview, never sits beside it.** Toggling it switches the Charts sheet's whole right-hand content area over to a table of every Chart Store entry — mirroring Stat Tags' own table (Decision 19): read-only, one row per entry, delete/download/upload only, no inline grid editing. The rest of the left rail (Select Visualisation, Populations, Tweaks, Sizing, both Save controls, Custom Charts, Zoom, Reset) doesn't render at all while the table is shown, since none of it means anything without a chart actually being previewed.
+
+**Excel round-trip mirrors Stat Tags, not Output Tables.** A Chart Store entry is a flat row, like a Stat Tag — not a grid, like an Output Table — so `chart_store_xlsx.py` mirrors `stat_tags_xlsx.py`'s full-replace download/upload pattern (download current rows, edit, upload replaces the whole list; a row re-uploaded with a blank `chart_store_id` is issued a fresh one) rather than `grid_xlsx.py`'s own spreadsheet-shaped one.
+
+**Sandbox state persistence extended, not duplicated.** The Chart Store selection, target, action, and description follow the same `charts_sheet_state` JSON blob the Running Order side already uses (Decision 21) — captured and restored alongside the existing fields, so a Chart Store line loaded before a Save/reopen is still loaded afterwards, the same guarantee a bound Running Order row already had.
+
+### Decision 29 — EMU as the Single Sizing Unit for Base Charts and Base Tables
+
+Every Base Chart and Base Table function previously took `width`/`height` as a percentage of a fixed 7.5-inch reference (`NARROWER_EMU`, Decision 25) — a real unit, but a needlessly indirect one: `NARROWER_EMU = 6858000` is exactly `7.5 * 914400`, so the whole conversion reduced to EMU divided by a constant, routed through a percentage for no functional reason.
+
+**Removed entirely.** Every Base Chart/Base Table function now takes `width_emu`/`height_emu` directly — the same field names the Running Order itself stores. `assembly_engine._render_chart_image` and `insert_table.py` pass EMU straight through; the percent-of-7.5in conversion step (and `NARROWER_EMU` itself) no longer exists at either call site. `chart_inputs`/`table_inputs` (Decisions 18 and 24) and both `gate.py`'s own enforced parameter names were updated to match — a Custom Chart/Table built against the old contract must be re-saved, the same class of breaking change Decision 27's SVG methodology was.
+
+**Percent survives in exactly one place: the two Sizing widgets.** The Charts sheet's and Output Tables tab's own Sizing controls still show percent-of-the-shorter-page-dimension (`page_sizing.py`, Decision 11) — a human-friendly authoring unit, converting to/from EMU immediately on read and write. It never travels any further than that single widget boundary; nothing downstream (session_state, the `_sheet_state` JSON blobs, either render call) touches percent again. EMU is now the one real unit end to end, matching Decision 1's own framing of `WorkfileState` as the only real state — every percentage anywhere in the system is now a derived, transient display value, not an independent unit in its own right.
+
+### Decision 30 — Charts Inside Table Cells
+
+A chart-component cell (Decision 23, previously parked) is now implemented: a grid cell holding the literal marker `{Cn}` (a Chart Store id, Decision 28) is not drawn as text — a Base Table function recognises the marker itself (a plain string check: starts with `{`, ends with `}`, the text between starts with `C` — no regex needed) and instead reports back the exact rectangle it reserved for that cell.
+
+**Return contract changed:** every Base Table now returns `(image_bytes, chart_cells)`, not bare bytes (Decision 29 covers the sizing-unit half of this same change). `chart_cells` is `{tag: {"x", "y", "width", "height"}}`, all four in EMU, one entry per `{Cn}` cell the function found — a style with none returns `{}`. Both `Cn` (Chart Store) and `Tn` (Stat Tag, Decision 19) ids gained a one-letter prefix specifically so the two can coexist unambiguously inside the same cell grammar — a plain base-36 id had no way to tell the two apart.
+
+**Two different consumers, two different mechanisms, deliberately not one.** `insert_table.py` (final report) loads the named Chart Store entry, renders it via the same cache-load/cut/population-layers/render pipeline `insert_chart` uses, sized to the cell's own rectangle — never the entry's own stored size — and inserts it as a second, layered PowerPoint picture, added after the table's own. The Output Tables tab's Preview instead splices each chart in as a nested `<image>` data-URI inside the table's own SVG string, positioned in **percent** of the table's declared canvas, not EMU/pixels — because Preview has no PowerPoint shape-layering available, and percent positioning stays aligned with the cell borders the same function drew regardless of whatever the browser or any crop does to the outer SVG's own rendered size. Composing the two SVG documents directly (nesting one's markup inside the other) was considered and rejected — an `<image>` reference is fully opaque to the browser, so there's no risk of the two documents' own internal ids/styles colliding the way direct inlining would risk.
+
+**"The cell" is a design decision per style, not a geometry lookup.** A style's own padding, border, drop shadow, or rounded corners can mean the reported rectangle is deliberately smaller than the raw `column_widths`/`row_heights` grid cell — `table_cardtile`'s own card is vertically inset from its row (the shadow and a 10% top/bottom margin sit outside it), while its header row (no card at all) reports the raw cell. Rounded corners are reported as the card's plain bounding box, not its true rounded shape — a placed picture is rectangular regardless, so true corner-accuracy isn't achievable or meaningful here.
+
+**Base Tables trimmed from ten styles to two (`plain_grid`, `table_cardtile`), the other eight deleted outright.** Working through chart-cell accuracy surfaced a genuinely harder problem than first assumed: a style whose `savefig` call uses `bbox_inches="tight"` (needed whenever anything is deliberately drawn outside the axes via `clip_on=False` — a bleeding shadow or badge, several of the deleted styles had one) cannot safely assume its 0–100 data axis maps 1:1 onto its declared canvas. The crop can expand or shrink the saved image asymmetrically depending on what actually bled outside the axes, and a chart-cell rectangle computed as a naive fraction of the nominal canvas silently drifts out of alignment — confirmed as a real bug during development, not a hypothetical one, and initially misdiagnosed as being about the chart's own content rather than the table's own reported rectangle. Rather than carry that latent inaccuracy across eight more styles speculatively, the ones without a worked-through fix were removed; `table_cardtile` was kept specifically to work through the harder case (see below), alongside `plain_grid` as the simple reference case.
+
+**Two different fixes for two different situations, not one general mechanism.** `plain_grid` draws nothing outside its own axes at all, so it drops `bbox_inches="tight"` entirely and makes its axes fill the whole figure explicitly (`fig.add_axes([0,0,1,1])` instead of `tight_layout`) — the 0–100 space then maps onto the declared canvas exactly, with nothing to correct for afterwards; verified empirically (rendered output checked against the formula's prediction) during development. `table_cardtile` keeps `bbox_inches="tight"` (its shadow needs it) and instead calls `fig.get_tightbbox(renderer)` after all drawing is complete — the same computation `bbox_inches="tight"` itself uses internally, read directly rather than re-derived — and remaps every cell's data-space coordinates through the actual crop bounding box (plus `pad_inches`) before converting to EMU (`_resolve_chart_cells`). This is the reference implementation for any future style that needs deliberate overflow; a style that overflows nothing at all should prefer `plain_grid`'s simpler, exact approach instead.
+
+**Standing guidance lives in the bundle, not in code comments elsewhere.** Both of the points above — "the cell" being a design decision, and the `bbox_inches="tight"` trap — are written into `custom_tables/contract.py`'s own explanation text, not `base_tables/__init__.py` or any other in-repo location, because the bundle download/paste-back flow (Decision 24) is practically the only way a Base Table gets built or modified going forward; guidance placed anywhere else would not reach whoever's actually doing that work.

@@ -1,9 +1,11 @@
 """
 stat_tags.py
-Defines and resolves "stat tags" — short, permanent identifiers (base-36,
-e.g. "1", "a3") standing in for one summary-stats value from one chart's
-own data, for use by update_text (ordinary text frames and table cells)
-and previewed on the Text tab.
+Defines and resolves "stat tags" — short, permanent identifiers ("T" plus
+a base-36 counter, e.g. "T1", "Ta3") standing in for one summary-stats
+value from one chart's own data, for use by update_text (ordinary text
+frames and table cells) and previewed on the Text tab. The "T" prefix
+disambiguates a Stat Tag from a Chart Store id ("C" prefix) when both
+appear inside the same Output Table cell grammar (Decision 28).
 
 A stat tag's own row (workfile_config/text_stats.csv, WorkfileState.text_stats_rows)
 carries everything needed to reproduce the exact filtered data_shape a Base
@@ -52,12 +54,16 @@ from core.shared.normalisation_containers.shapes import summary_stats, reference
 
 def next_stat_tag(settings: dict) -> str:
     """
-    Issue and persist the next stat tag id (base-36, shared encoding with
-    Output Tables' own table_id counter — see
+    Issue and persist the next stat tag id — "T" followed by a base-36
+    counter (shared encoding with Output Tables' own table_id counter and
+    Chart Store's own chart_store_id — see
     core.shared.infrastructure.id_generation — but its own counter key, so
-    the two id spaces never collide or interleave).
+    the id spaces never collide or interleave). The "T" prefix disambiguates
+    a Stat Tag from a Chart Store id ("C" prefix) when both are used inside
+    the same Output Table cell grammar (Decision 28) — not needed for the
+    counter itself, which already has its own key.
     """
-    return next_id(settings, "next_stat_tag_id")
+    return "T" + next_id(settings, "next_stat_tag_id")
 
 
 def layer_display_label(populations_str: str, resolved_population_label: str) -> str:

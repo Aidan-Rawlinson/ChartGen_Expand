@@ -4,13 +4,13 @@ Base Table functions -- the table equivalent of
 core/output_generation/execution/charts/base_charts/. Each is a standalone
 artefact -- no imports from ChartGen's own code, only third-party
 libraries (matplotlib) -- taking table_inputs only (content, column_widths,
-row_heights, width, height, tweaks) and returning image_bytes only.
-Dispatch is in registry.py.
+row_heights, width_emu, height_emu, tweaks) and returning (image_bytes,
+chart_cells). Dispatch is in registry.py.
 
-Only one table_type_ref exists so far (plain_grid) -- a deliberately
-minimal first pass (Decisions.md). A Base Table is treated exactly the way
-a Base Chart is: a rendering artefact, not application logic, reviewable
-and editable in full, which is what makes Custom Tables
+Two table_type_refs exist -- plain_grid and table_cardtile (Decisions.md,
+trimmed back from ten). A Base Table is treated exactly the way a Base
+Chart is: a rendering artefact, not application logic, reviewable and
+editable in full, which is what makes Custom Tables
 (execution/tables/custom_tables/) possible on the same terms as Custom
 Charts.
 

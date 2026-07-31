@@ -44,9 +44,11 @@ selection surviving a rerun always still means the same row. Only an Insert
 why sandbox state referencing rows is cleared after every save.
 """
 
+import io
 import json
 from dataclasses import replace as _replace
 
+import pandas as pd
 import streamlit as st
 
 from core.acquisition.toolkit_nhs.peer_groups import get_peer_group_value_options
@@ -58,6 +60,10 @@ from core.output_generation.definition.running_order import (
 )
 from core.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from core.output_generation.execution.charts.cache_reader import cache_files_sorted_by_chart_ref
+from core.output_generation.execution.charts.chart_store import next_chart_store_id, chart_store_row_label
+from core.output_generation.execution.charts.chart_store_xlsx import (
+    write_chart_store_xlsx, read_chart_store_xlsx, assign_missing_chart_store_ids,
+)
 from core.output_generation.execution.charts.chart_type_map import get_valid_chart_types
 from core.output_generation.execution.charts.custom_charts import (
     validate_custom_chart_code, compile_custom_chart, CustomChartError,
@@ -94,6 +100,8 @@ CS_KEY_PREFIX = "cs_"
 RO_PLACEHOLDER = "- Running order line -"
 SHAPE_PLACEHOLDER = "- Chart list -"
 TARGET_PLACEHOLDER = "- Select target row -"
+CHART_STORE_PLACEHOLDER = "- Chart Store line -"
+CHART_STORE_TARGET_PLACEHOLDER = "- Select Chart Store entry -"
 
 # Sandbox state referencing a specific Running Order row by row_id — cleared
 # after every save, since an Insert renumbers row_ids after the insertion
@@ -101,6 +109,16 @@ TARGET_PLACEHOLDER = "- Select target row -"
 ROW_REFERENCING_KEYS = [
     "cs_ro_choice", "cs_last_loaded_ro", "cs_bound_row_idx",
     "cs_bound_shape_type", "cs_target_row_choice",
+]
+
+# Chart Store's own equivalent of ROW_REFERENCING_KEYS — cleared whenever a
+# Running Order row load takes over the sandbox, so the two entry points
+# stay mutually exclusive (selecting one always clears the other's own
+# selectbox back to its placeholder, rather than leaving a stale selection
+# on screen that no longer matches what's actually bound).
+CHART_STORE_REFERENCING_KEYS = [
+    "cs_chart_store_choice", "cs_last_loaded_chart_store", "cs_bound_chart_store_id",
+    "cs_chart_store_target_choice",
 ]
 
 
@@ -128,13 +146,25 @@ def _int_or_none(value):
 
 
 def _clear_sandbox_state():
+    # "cs_tab_rendered" is deliberately preserved — deleting it would make
+    # the next render treat the sheet as freshly opened, which would
+    # re-trigger _restore_charts_sheet_state and silently reload whatever
+    # was last saved to settings["charts_sheet_state"] instead of actually
+    # giving Reset a blank sandbox. Mirrors output_tables_tab.py's own
+    # Reset, which already guards against exactly this.
+    keep = {"cs_tab_rendered"}
     for k in list(st.session_state.keys()):
-        if k.startswith(CS_KEY_PREFIX):
+        if k.startswith(CS_KEY_PREFIX) and k not in keep:
             del st.session_state[k]
 
 
 def _clear_row_referencing_state():
     for k in ROW_REFERENCING_KEYS:
+        st.session_state.pop(k, None)
+
+
+def _clear_chart_store_referencing_state():
+    for k in CHART_STORE_REFERENCING_KEYS:
         st.session_state.pop(k, None)
 
 
@@ -149,7 +179,7 @@ def _clear_row_referencing_state():
 # reopen isn't something to do implicitly.
 
 
-def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label_by_cache_file):
+def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label_by_cache_file, chart_store_by_id):
     """
     Re-stage the Charts sheet's widget state from settings["charts_sheet_state"]
     (written by capture_charts_sheet_state at Save), so the sheet looks the
@@ -183,6 +213,15 @@ def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label
         st.session_state["cs_ro_choice"] = RO_PLACEHOLDER
         st.session_state["cs_last_loaded_ro"] = RO_PLACEHOLDER
 
+    chart_store_id = state.get("chart_store_id")
+    if chart_store_id in chart_store_by_id:
+        st.session_state["cs_chart_store_choice"] = chart_store_id
+        st.session_state["cs_last_loaded_chart_store"] = chart_store_id
+        st.session_state["cs_bound_chart_store_id"] = chart_store_id
+    else:
+        st.session_state["cs_chart_store_choice"] = CHART_STORE_PLACEHOLDER
+        st.session_state["cs_last_loaded_chart_store"] = CHART_STORE_PLACEHOLDER
+
     st.session_state["cs_base_chart_name"] = state.get("base_chart_name", "")
     st.session_state["cs_populations_tokens"] = list(state.get("populations_tokens", []))
     st.session_state["cs_start_period"] = state.get("start_period", "")
@@ -210,6 +249,16 @@ def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label
     if target_row_id in row_id_to_idx:
         st.session_state["cs_target_row_choice"] = target_row_id
 
+    chart_store_action = state.get("chart_store_action", "Add new entry")
+    if chart_store_action in ("Add new entry", "Overwrite selected entry"):
+        st.session_state["cs_chart_store_action"] = chart_store_action
+
+    chart_store_target_id = state.get("chart_store_target_id")
+    if chart_store_target_id in chart_store_by_id:
+        st.session_state["cs_chart_store_target_choice"] = chart_store_target_id
+
+    st.session_state["cs_chart_store_description"] = state.get("chart_store_description", "")
+
 
 def capture_charts_sheet_state(workfile_state):
     """
@@ -226,6 +275,8 @@ def capture_charts_sheet_state(workfile_state):
 
     ro_choice = st.session_state.get("cs_ro_choice", RO_PLACEHOLDER)
     target_choice = st.session_state.get("cs_target_row_choice", TARGET_PLACEHOLDER)
+    chart_store_choice = st.session_state.get("cs_chart_store_choice", CHART_STORE_PLACEHOLDER)
+    chart_store_target_choice = st.session_state.get("cs_chart_store_target_choice", CHART_STORE_TARGET_PLACEHOLDER)
 
     state = {
         "ro_row_id": ro_choice if ro_choice != RO_PLACEHOLDER else None,
@@ -241,8 +292,101 @@ def capture_charts_sheet_state(workfile_state):
         "manual_page_size": st.session_state.get("cs_manual_page_size"),
         "action": st.session_state.get("cs_action", "Overwrite selected row"),
         "target_row_id": target_choice if target_choice != TARGET_PLACEHOLDER else None,
+        "chart_store_id": chart_store_choice if chart_store_choice != CHART_STORE_PLACEHOLDER else None,
+        "chart_store_action": st.session_state.get("cs_chart_store_action", "Add new entry"),
+        "chart_store_target_id": (
+            chart_store_target_choice if chart_store_target_choice != CHART_STORE_TARGET_PLACEHOLDER else None
+        ),
+        "chart_store_description": st.session_state.get("cs_chart_store_description", ""),
     }
     workfile_state.settings["charts_sheet_state"] = json.dumps(state)
+
+
+def _render_chart_store_area(workfile_state, the_manifest, label_by_cache_file, the_settings):
+    """
+    The Chart Store table -- shown in the right-hand content area in place
+    of the chart preview (never alongside it, per Decisions.md) while
+    "Show Chart Store" is toggled on. Read-only list, delete/download/
+    upload only -- mirrors text_tab.py's own Stat Tags table exactly, for
+    the chart-def domain instead of the stat-tag domain.
+    """
+    st.subheader("Chart Store")
+    chart_store_rows = workfile_state.chart_store_rows
+
+    if not chart_store_rows:
+        st.caption("No Chart Store entries yet — use Save to Chart Store on a configured chart to add one.")
+        return
+
+    def _chart_label_for_cache_file(cache_file):
+        entry = the_manifest.get(cache_file, {})
+        title = str(entry.get("chart_title", "")).strip()
+        ref = str(entry.get("chart_ref", "")).strip()
+        if title and title != "...":
+            return f"{ref or cache_file}  —  {title}"
+        return ref or cache_file
+
+    page_w, page_h = get_page_size_emu(the_settings, None)
+
+    display_ids, display_types, display_sources, display_pops, display_sizes, display_descriptions = (
+        [], [], [], [], [], []
+    )
+    for row in chart_store_rows:
+        display_ids.append(row.get("chart_store_id", ""))
+        display_types.append(row.get("base_chart_name", ""))
+        display_sources.append(_chart_label_for_cache_file(row.get("cache_file", "")))
+        display_pops.append(row.get("populations", "") or "(default)")
+        w = _int_or_none(row.get("width_emu"))
+        h = _int_or_none(row.get("height_emu"))
+        w_pct = round(emu_to_percent(w, page_w, page_h), 1) if w else None
+        h_pct = round(emu_to_percent(h, page_w, page_h), 1) if h else None
+        display_sizes.append(f"{w_pct}% × {h_pct}%" if w_pct and h_pct else "—")
+        display_descriptions.append(row.get("description", ""))
+
+    selection = st.dataframe(
+        pd.DataFrame({
+            "ID": display_ids,
+            "Chart type": display_types,
+            "Data source": display_sources,
+            "Populations": display_pops,
+            "Size": display_sizes,
+            "Description": display_descriptions,
+        }),
+        use_container_width=True, hide_index=True,
+        on_select="rerun", selection_mode="single-row",
+    )
+    selected_rows = selection.selection.get("rows", [])
+    sel_idx = selected_rows[0] if selected_rows else None
+
+    col_del, col_dl, col_ul = st.columns([1, 1, 1])
+
+    if col_del.button("🗑  Delete selected entry", disabled=(sel_idx is None), use_container_width=True):
+        del workfile_state.chart_store_rows[sel_idx]
+        workfile_state.dirty = True
+        st.rerun()
+
+    cstore_buffer = io.BytesIO()
+    write_chart_store_xlsx(chart_store_rows, cstore_buffer)
+    col_dl.download_button(
+        label="⬇  Download Chart Store", data=cstore_buffer.getvalue(),
+        file_name="chart_store.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+    if col_ul.button("⬆  Upload Chart Store", use_container_width=True):
+        st.session_state["cstore_show_uploader"] = not st.session_state.get("cstore_show_uploader", False)
+
+    if st.session_state.get("cstore_show_uploader", False):
+        uploaded_cstore = st.file_uploader(
+            "Upload Chart Store", type=["xlsx"], key="cstore_uploader",
+            label_visibility="collapsed",
+        )
+        if uploaded_cstore is not None:
+            imported_rows = read_chart_store_xlsx(io.BytesIO(uploaded_cstore.getbuffer()))
+            workfile_state.chart_store_rows = assign_missing_chart_store_ids(imported_rows, workfile_state.settings)
+            workfile_state.dirty = True
+            st.session_state["cstore_show_uploader"] = False
+            st.rerun()
 
 
 def render_charts_tab():
@@ -292,6 +436,12 @@ def render_charts_tab():
     }
     chart_row_ids = list(row_id_to_idx.keys())
 
+    chart_store_by_id = {r["chart_store_id"]: r for r in workfile_state.chart_store_rows}
+    chart_store_ids = list(chart_store_by_id.keys())
+
+    def format_chart_store_choice(v):
+        return v if v in (CHART_STORE_PLACEHOLDER, CHART_STORE_TARGET_PLACEHOLDER) else chart_store_row_label(chart_store_by_id[v], label_by_cache_file)
+
     def ro_row_label(row_id):
         r = ro_rows[row_id_to_idx[row_id]]
         cache_label = label_by_cache_file.get(str(r.get("cache_file", "") or ""), r.get("cache_file", "") or "— no data —")
@@ -312,7 +462,7 @@ def render_charts_tab():
     # row's own stored fields. ---
     if "cs_tab_rendered" not in st.session_state:
         st.session_state["cs_tab_rendered"] = True
-        _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label_by_cache_file)
+        _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label_by_cache_file, chart_store_by_id)
 
     left, right = st.columns([1, 4.7])
 
@@ -321,6 +471,36 @@ def render_charts_tab():
         # from insert_chart (or deleted) via the Running Order tab since.
         if st.session_state.get("cs_ro_choice") not in ([RO_PLACEHOLDER] + chart_row_ids):
             st.session_state["cs_ro_choice"] = RO_PLACEHOLDER
+
+        # Applied here, before the "Chart Store line"/"Target Chart Store
+        # entry" selectboxes below are created — staged the same way
+        # "ot_pending_ro_choice_after_save" is (Output Tables tab): those
+        # widgets have already been instantiated once this run wherever a
+        # prior Save to Chart Store happened, so they can only be set to a
+        # new value before their next instantiation.
+        if "cs_pending_chart_store_choice_after_save" in st.session_state:
+            pending_cstore = st.session_state.pop("cs_pending_chart_store_choice_after_save")
+            if pending_cstore in chart_store_ids:
+                st.session_state["cs_chart_store_choice"] = pending_cstore
+                # Also sync "last loaded" so the Chart Store line detection
+                # block below sees this as unchanged, not a fresh
+                # selection — a save doesn't need the sandbox reloaded
+                # from what it just wrote; recomputing Sizing (and
+                # everything else) from EMU a second time here was the
+                # source of the sandbox occasionally going stale after a
+                # save, not a genuine new load.
+                st.session_state["cs_last_loaded_chart_store"] = pending_cstore
+        if "cs_pending_chart_store_target_after_save" in st.session_state:
+            pending_cstore_target = st.session_state.pop("cs_pending_chart_store_target_after_save")
+            if pending_cstore_target in chart_store_ids:
+                st.session_state["cs_chart_store_target_choice"] = pending_cstore_target
+
+        if st.session_state.get("cs_chart_store_choice") not in ([CHART_STORE_PLACEHOLDER] + chart_store_ids):
+            st.session_state["cs_chart_store_choice"] = CHART_STORE_PLACEHOLDER
+        if st.session_state.get("cs_chart_store_target_choice") not in (
+            [CHART_STORE_TARGET_PLACEHOLDER] + chart_store_ids
+        ):
+            st.session_state["cs_chart_store_target_choice"] = CHART_STORE_TARGET_PLACEHOLDER
 
         reset_triggered = False
 
@@ -365,6 +545,75 @@ def render_charts_tab():
                     st.session_state["cs_height_pct"] = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 50.0
                     st.session_state["cs_target_row_choice"] = ro_choice
 
+                    # Mutually exclusive with Chart Store line — this
+                    # widget hasn't rendered yet this run, so clearing its
+                    # own bookkeeping here (before it does) is enough; no
+                    # rerun needed, unlike the reverse direction below.
+                    _clear_chart_store_referencing_state()
+
+            # --- Chart Store line — a second entry point, alongside
+            # Running Order row, that also loads into the shared sandbox
+            # fields below. Placed here, above "Data shape", so its own
+            # pending values are staged before the shared
+            # "cs_pending_shape_choice -> cs_shape_choice" consumption step
+            # runs (immediately below) and before the Data shape selectbox
+            # itself is created — the same ordering Running Order row
+            # relies on, and the reason this can't sit after Data shape in
+            # the script without an explicit rerun (a widget already
+            # instantiated this pass can't be changed retroactively).
+            # Unlike a Running Order row, a Chart Store entry has no
+            # position/sequence — its own Save-back (below) only ever
+            # offers Add/Overwrite, never Insert above/below. ---
+            chart_store_choice = st.selectbox(
+                "Chart Store line", options=[CHART_STORE_PLACEHOLDER] + chart_store_ids,
+                format_func=format_chart_store_choice, key="cs_chart_store_choice",
+                label_visibility="collapsed",
+            )
+
+            last_loaded_cstore = st.session_state.get("cs_last_loaded_chart_store", "__unset__")
+            if chart_store_choice != last_loaded_cstore:
+                if chart_store_choice == CHART_STORE_PLACEHOLDER and last_loaded_cstore not in (CHART_STORE_PLACEHOLDER, "__unset__"):
+                    reset_triggered = True
+                st.session_state["cs_last_loaded_chart_store"] = chart_store_choice
+                if chart_store_choice == CHART_STORE_PLACEHOLDER:
+                    st.session_state.pop("cs_bound_chart_store_id", None)
+                else:
+                    cstore_row = chart_store_by_id[chart_store_choice]
+                    cstore_cache_file = str(cstore_row.get("cache_file", "") or "")
+                    cstore_page_w, cstore_page_h = get_page_size_emu(
+                        the_settings, st.session_state.get("cs_manual_page_size")
+                    )
+                    cstore_w_emu = _int_or_none(cstore_row.get("width_emu"))
+                    cstore_h_emu = _int_or_none(cstore_row.get("height_emu"))
+
+                    st.session_state["cs_bound_chart_store_id"] = chart_store_choice
+                    st.session_state["cs_pending_shape_choice"] = label_by_cache_file.get(cstore_cache_file)
+                    st.session_state["cs_pending_base_chart_name"] = str(cstore_row.get("base_chart_name", "") or "")
+                    st.session_state["cs_pending_populations_str"] = str(cstore_row.get("populations", "") or "")
+                    st.session_state["cs_pending_start_period"] = str(cstore_row.get("start_period", "") or "")
+                    st.session_state["cs_pending_end_period"] = str(cstore_row.get("end_period", "") or "")
+                    st.session_state["cs_pending_metric_periods_str"] = str(cstore_row.get("metric_periods", "") or "")
+                    st.session_state["cs_pending_tweaks_str"] = str(cstore_row.get("tweaks", "") or "")
+                    st.session_state["cs_width_pct"] = (
+                        round(emu_to_percent(cstore_w_emu, cstore_page_w, cstore_page_h), 1) if cstore_w_emu else 50.0
+                    )
+                    st.session_state["cs_height_pct"] = (
+                        round(emu_to_percent(cstore_h_emu, cstore_page_w, cstore_page_h), 1) if cstore_h_emu else 50.0
+                    )
+                    st.session_state["cs_chart_store_target_choice"] = chart_store_choice
+                    st.session_state["cs_chart_store_action"] = "Overwrite selected entry"
+                    st.session_state["cs_chart_store_description"] = str(cstore_row.get("description", "") or "")
+
+                    # Mutually exclusive with Running Order row — but that
+                    # selectbox already rendered earlier this same run
+                    # (it's above this block), so clearing its bookkeeping
+                    # now only takes visual effect next pass; force it
+                    # rather than leaving the Running Order row box showing
+                    # a stale selection that no longer reflects what's
+                    # actually bound.
+                    _clear_row_referencing_state()
+                    st.rerun()
+
             if "cs_pending_shape_choice" in st.session_state:
                 pending_shape_label = st.session_state.pop("cs_pending_shape_choice")
                 if pending_shape_label is not None:
@@ -384,9 +633,24 @@ def render_charts_tab():
                     reset_triggered = True
                 st.session_state["cs_last_shape_choice"] = shape_choice
 
+            # "Show Chart Store" sits last in the box, after every entry
+            # point — it doesn't load anything into the sandbox itself, so
+            # it has no ordering dependency the way Chart Store line does.
+            show_chart_store_clicked = st.button(
+                "🗂  Hide Chart Store" if st.session_state.get("cs_show_chart_store", False) else "🗂  Show Chart Store",
+                use_container_width=True, key="cs_show_chart_store_btn",
+            )
+            if show_chart_store_clicked:
+                st.session_state["cs_show_chart_store"] = not st.session_state.get("cs_show_chart_store", False)
+
         if reset_triggered:
             _clear_sandbox_state()
             st.rerun()
+
+        if st.session_state.get("cs_show_chart_store", False):
+            with right:
+                _render_chart_store_area(workfile_state, the_manifest, label_by_cache_file, the_settings)
+            return
 
         bound_row_idx = st.session_state.get("cs_bound_row_idx")
 
@@ -692,6 +956,72 @@ def render_charts_tab():
                 st.success("Saved to Running Order.")
                 st.rerun()
 
+        # --- Save to Chart Store — a flat, unordered store, so unlike
+        # Save to Running Order there is no position/sequence to give:
+        # just Add (always a new entry) or Overwrite (an existing one,
+        # picked below). A Chart Store Line loaded above defaults this to
+        # Overwrite that same entry, mirroring how a bound Running Order
+        # row defaults its own save to Overwrite. ---
+        with st.expander("Save to Chart Store", expanded=False):
+            st.session_state.setdefault("cs_chart_store_action", "Add new entry")
+            st.caption("Action")
+            chart_store_action = st.selectbox(
+                "Action", options=["Add new entry", "Overwrite selected entry"],
+                key="cs_chart_store_action", label_visibility="collapsed",
+            )
+            st.caption("Target Chart Store entry")
+            chart_store_target_choice = st.selectbox(
+                "Target Chart Store entry", options=[CHART_STORE_TARGET_PLACEHOLDER] + chart_store_ids,
+                format_func=format_chart_store_choice, key="cs_chart_store_target_choice",
+                label_visibility="collapsed",
+            )
+            st.caption("Description (optional)")
+            chart_store_description = st.text_input(
+                "Description", key="cs_chart_store_description", label_visibility="collapsed",
+            )
+            save_to_chart_store_clicked = st.button(
+                "🗂  Save to Chart Store", type="primary", use_container_width=True,
+            )
+
+        if save_to_chart_store_clicked:
+            if not base_chart_name:
+                st.error("Select a chart type before saving.")
+            elif chart_store_action == "Overwrite selected entry" and chart_store_target_choice == CHART_STORE_TARGET_PLACEHOLDER:
+                st.error("Select a Chart Store entry to overwrite first.")
+            else:
+                field_values = {
+                    "base_chart_name": base_chart_name,
+                    "cache_file":      selected_file,
+                    "populations":     populations_str,
+                    "start_period":    start_period,
+                    "end_period":      end_period,
+                    "metric_periods":  metric_periods_str,
+                    "width_emu":       width_emu,
+                    "height_emu":      height_emu,
+                    "tweaks":          tweaks_str,
+                    "description":     chart_store_description,
+                }
+                if chart_store_action == "Add new entry":
+                    saved_id = next_chart_store_id(workfile_state.settings)
+                    workfile_state.chart_store_rows.append({"chart_store_id": saved_id, **field_values})
+                else:
+                    saved_id = chart_store_target_choice
+                    for row in workfile_state.chart_store_rows:
+                        if row.get("chart_store_id") == saved_id:
+                            row.update(field_values)
+                            break
+                workfile_state.dirty = True
+                # "cs_chart_store_choice"/"cs_chart_store_target_choice" are
+                # widget-bound keys already instantiated earlier this run —
+                # staged the same way "ot_pending_ro_choice_after_save" is,
+                # applied at the top of render_charts_tab before those
+                # selectboxes are created on the next run.
+                st.session_state["cs_pending_chart_store_choice_after_save"] = saved_id
+                st.session_state["cs_pending_chart_store_target_after_save"] = saved_id
+                st.session_state.pop("cs_last_loaded_chart_store", None)
+                st.success("Saved to Chart Store.")
+                st.rerun()
+
         with st.expander("Custom Charts", expanded=False):
             st.caption(
                 "Download a self-contained bundle for the chart currently selected, "
@@ -704,7 +1034,7 @@ def render_charts_tab():
             else:
                 bundle_text = build_bundle(
                     base_chart_name, effective_shape_type, pop_layers,
-                    width_pct, height_pct, tweaks_str, workfile_state.custom_chart_code,
+                    width_emu, height_emu, tweaks_str, workfile_state.custom_chart_code,
                 )
                 st.download_button(
                     "⬇  Download bundle for this chart", data=bundle_text,
@@ -793,7 +1123,7 @@ def render_charts_tab():
                     chart_func = compile_custom_chart(temp_code)
                 else:
                     chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
-                image_bytes = chart_func(pop_layers, width=width_pct, height=height_pct, tweaks=tweaks_str)
+                image_bytes = chart_func(pop_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str)
             except Exception as e:
                 st.error(f"Chart failed to render: {e}")
                 return

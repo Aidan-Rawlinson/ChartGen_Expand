@@ -28,8 +28,10 @@ configuration only -- table_type_ref, tweaks, sizing, save-back target,
 paste-back -- never the table selection itself, which lives in the shared
 box above).
 
-Chart-component cells ("{n}") are recognised by the grid's own grammar
-(grid_store.py) but not resolved or rendered this session -- parked.
+Chart-component cells ("{Cn}") reference a Chart Store entry (Decision
+28) -- rendered live in Preview (spliced into the table's own SVG as a
+nested <image>) and in the final report (a layered PowerPoint picture,
+insert_table.py); neither path composites the two SVG documents into one.
 
 Every Output Table starts at the same fixed size
 (grid_store.DEFAULT_TABLE_ROWS x DEFAULT_TABLE_COLUMNS), whether created
@@ -42,6 +44,7 @@ this tab's own Preview sandbox or the Running Order tab, the same as they
 would for any other row needing attention.
 """
 
+import base64
 import io
 import json
 from datetime import datetime, timezone
@@ -53,6 +56,8 @@ from core.output_generation.definition.running_order import (
     TABLE_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
     append_content_row_above_footer,
 )
+from core.output_generation.execution.charts.cache_reader import load_shape
+from core.output_generation.execution.charts.custom_charts import get_chart_callable
 from core.output_generation.execution.tables.base_tables import TABLE_REGISTRY
 from core.output_generation.execution.tables.custom_tables.bundle import build_bundle
 from core.output_generation.execution.tables.custom_tables.gate import (
@@ -75,6 +80,8 @@ from core.shared.infrastructure.page_sizing import (
 )
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
+from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
+from core.shared.normalisation_containers.population_layers import build_population_layers
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, settings, master_table
 
@@ -112,6 +119,116 @@ def _svg_preview_html(svg_text, width_css):
     """
     styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
     return f'<div style="width:{width_css}">{styled}</div>'
+
+
+def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
+                                       workfile_state, full_unit_set: dict):
+    """
+    Preview-side equivalent of insert_table.py's own
+    _render_chart_store_chart -- same cache-load / cut / population-layers
+    / render pipeline, without an AssemblyContext (this runs from the
+    Streamlit tab, not a report assembly run, so there's no ctx.report_context
+    to consult -- mirrors how charts_tab.py's own Preview builds population
+    layers directly, with no such check either). Returns None on any
+    failure -- one broken chart cell doesn't block the rest of the preview.
+    """
+    cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
+    base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
+    if not cache_file or not base_chart_name:
+        return None
+
+    try:
+        data_shape, shape_type = load_shape(cache_file, workfile_state)
+    except Exception:
+        return None
+
+    start_period = str(chart_store_row.get("start_period", "") or "").strip()
+    end_period = str(chart_store_row.get("end_period", "") or "").strip()
+    metric_periods_str = str(chart_store_row.get("metric_periods", "") or "").strip()
+
+    try:
+        data_shape, _, target_rows, selected_ids = prepare_chart_cut(
+            data_shape, shape_type, start_period, end_period, metric_periods_str,
+            workfile_state.tables, workfile_state.table_order, full_unit_set,
+        )
+    except ValueError:
+        return None
+
+    populations_str = str(chart_store_row.get("populations", "") or "").strip()
+    try:
+        population_layers = build_population_layers(
+            data_shape, populations_str, target_rows, selected_ids
+        )
+    except Exception:
+        population_layers = []
+    if not population_layers:
+        from dataclasses import replace as _dc_replace
+        population_layers = [_dc_replace(data_shape, population_label="All")]
+
+    tweaks = str(chart_store_row.get("tweaks", "") or "").strip()
+    try:
+        chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
+        return chart_func(
+            population_layers,
+            width_emu=int(round(chart_rect["width"])),
+            height_emu=int(round(chart_rect["height"])),
+            tweaks=tweaks,
+        )
+    except Exception:
+        return None
+
+
+def _splice_chart_cells_into_svg(table_svg_text: str, chart_cells: dict, workfile_state,
+                                  full_unit_set: dict, width_emu: int, height_emu: int) -> str:
+    """
+    Preview-only compositing: embeds each chart cell's own rendered chart
+    as a nested <image> data URI inside the table's own SVG, positioned as
+    a percentage of the table's own declared width/height (recovered from
+    each cell's EMU rectangle) rather than absolute pixels -- percentages
+    resolve against whatever the table's own SVG viewport actually ends up
+    being (post any bbox_inches="tight" crop, post the CSS stretch
+    _svg_preview_html applies), so this stays visually aligned with the
+    cell borders the same Base Table function drew, which used the exact
+    same percent coordinates internally, rather than needing to reverse-
+    engineer matplotlib's own crop margins from outside it.
+
+    Only for on-screen preview -- the final report instead layers a
+    separate PowerPoint picture (insert_table.py), never merges SVG
+    documents (Decisions.md): an <image> reference is fully opaque to the
+    browser, so there's no risk of the two SVGs' own internal ids/styles
+    colliding the way directly inlining one SVG's markup into another's
+    would be.
+    """
+    if not chart_cells or not width_emu or not height_emu:
+        return table_svg_text
+
+    chart_store_by_id = {r.get("chart_store_id"): r for r in workfile_state.chart_store_rows}
+    inserts = []
+    for tag, rect in chart_cells.items():
+        chart_store_row = chart_store_by_id.get(tag)
+        if chart_store_row is None:
+            continue
+        chart_image_bytes = _render_chart_store_chart_preview(
+            chart_store_row, rect, workfile_state, full_unit_set
+        )
+        if chart_image_bytes is None:
+            continue
+        b64 = base64.b64encode(chart_image_bytes.read()).decode("ascii")
+        x_pct = (rect["x"] / width_emu) * 100
+        y_pct = (rect["y"] / height_emu) * 100
+        w_pct = (rect["width"] / width_emu) * 100
+        h_pct = (rect["height"] / height_emu) * 100
+        inserts.append(
+            f'<image x="{x_pct}%" y="{y_pct}%" width="{w_pct}%" height="{h_pct}%" '
+            f'xlink:href="data:image/svg+xml;base64,{b64}" preserveAspectRatio="none" />'
+        )
+
+    if not inserts:
+        return table_svg_text
+    idx = table_svg_text.rfind("</svg>")
+    if idx == -1:
+        return table_svg_text
+    return table_svg_text[:idx] + "".join(inserts) + table_svg_text[idx:]
 
 
 def _int_or_none(value):
@@ -286,6 +403,14 @@ def render_output_tables_tab():
         pending_ro = st.session_state.pop("ot_pending_ro_choice_after_save")
         if pending_ro in table_row_ids:
             st.session_state["ot_ro_choice"] = pending_ro
+            # Also sync "last loaded" and the bound row index so the RO-row
+            # detection block below sees this as unchanged, not a fresh
+            # selection, and doesn't recompute Sizing from EMU a second
+            # time — that redundant reload-after-save was the source of
+            # the Sizing box occasionally going stale right after a save,
+            # not a genuine new load.
+            st.session_state["ot_last_loaded_ro"] = pending_ro
+            st.session_state["ot_bound_row_idx"] = row_id_to_idx[pending_ro]
 
     if st.session_state.get("ot_ro_choice") not in ([RO_PLACEHOLDER] + table_row_ids):
         st.session_state["ot_ro_choice"] = RO_PLACEHOLDER
@@ -711,7 +836,7 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
 
             bundle_text = build_bundle(
                 table_type_ref, resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                width_pct, height_pct, tweaks_str, workfile_state.custom_table_code,
+                width_emu, height_emu, tweaks_str, workfile_state.custom_table_code,
             )
             st.download_button(
                 "\u2b07  Download bundle for this table", data=bundle_text,
@@ -797,20 +922,27 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                     table_func = compile_custom_table(temp_code)
                 else:
                     table_func = get_table_callable(table_type_ref, workfile_state.custom_table_code)
-                image_bytes = table_func(
+                image_bytes, chart_cells = table_func(
                     resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                    width=width_pct, height=height_pct, tweaks=tweaks_str,
+                    width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str,
                 )
             except Exception as e:
                 st.error(f"Table failed to render: {e}")
                 return
 
+        svg_text = image_bytes.read().decode("utf-8")
+        if chart_cells:
+            full_unit_set = _current_full_unit_set(workfile_state, the_settings)
+            svg_text = _splice_chart_cells_into_svg(
+                svg_text, chart_cells, workfile_state, full_unit_set, width_emu, height_emu,
+            )
+
         if zoom_choice == "Fit to screen":
-            st.markdown(_svg_preview_html(image_bytes.read().decode("utf-8"), "100%"), unsafe_allow_html=True)
+            st.markdown(_svg_preview_html(svg_text, "100%"), unsafe_allow_html=True)
         else:
             multiplier = ZOOM_MULTIPLIERS.get(zoom_choice, 1.0)
             px_width = max(50, int((width_emu / 914400) * 96 * multiplier))
             st.markdown(
-                _svg_preview_html(image_bytes.read().decode("utf-8"), f"{px_width}px"),
+                _svg_preview_html(svg_text, f"{px_width}px"),
                 unsafe_allow_html=True,
             )

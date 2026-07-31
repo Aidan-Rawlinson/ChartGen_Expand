@@ -62,7 +62,7 @@ working function.
 Every Base Chart function receives exactly four parameters, in this
 order, and returns exactly one thing:
 
-    def my_chart(population_layers: list, width=80, height=50, tweaks=""):
+    def my_chart(population_layers: list, width_emu=5486400, height_emu=3429000, tweaks=""):
         ...
         return image_bytes
 
@@ -76,8 +76,11 @@ order, and returns exactly one thing:
   units (nothing currently resolves to that label) — this is expected
   behaviour, not an error, and every chart type in this system already
   handles it by simply drawing nothing extra for that layer.
-- **width**, **height** — integers, the target size as a percentage of the
-  shorter dimension of the output page (not pixels, not inches, not EMU).
+- **width_emu**, **height_emu** — integers, the target size in EMU
+  (English Metric Units — 914400 per inch), the same unit PowerPoint
+  itself stores every shape's size in. Not a percentage, not pixels — a
+  real physical size. To convert to inches for a `matplotlib` figure's own
+  `figsize`, divide by 914400.
 - **tweaks** — a free-text string, blank by default. Nothing in the wider
   system currently parses this string's contents — if you want to make
   some part of the chart's appearance configurable, you're free to invent
@@ -129,8 +132,8 @@ You're free to add, remove, or rename helper functions as needed — every
 existing Base Chart already has several (palette constants, sizing,
 formatting helpers), and there's no limit on how many you use. The one
 rule: exactly one function in the file must be the entry point, accepting
-the four chart_inputs parameters shown above (population_layers, width,
-height, tweaks) — that's the one the system will call. Any other functions
+the four chart_inputs parameters shown above (population_layers, width_emu,
+height_emu, tweaks) — that's the one the system will call. Any other functions
 are treated as private helpers and aren't restricted beyond the
 allowed-imports rule above, which applies to the whole file.
 """

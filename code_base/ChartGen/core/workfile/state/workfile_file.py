@@ -77,7 +77,7 @@ CUSTOM_TABLE_FIELDNAMES = ["table_type_ref", "added_at", "notes"]
 # Genuinely new state, not derived from any Running Order row: a stat tag
 # isn't tied to any specific insert_chart row.
 TEXT_STATS_FIELDNAMES = [
-    "tag",             # base-36 id, never reused — the literal [tag] template text
+    "tag",             # "T" + base-36 id, never reused — the literal [tag] template text
     "hex_id",          # manifest hex_id this tag's data comes from
     "populations",     # this tag's own single-token population (independent of any Running Order row)
     "start_period",    # TimeSeries only
@@ -102,6 +102,29 @@ OUTPUT_TABLE_FIELDNAMES = [
                    # matched against an existing table by name)
     "rows",        # content grid row count (N), excluding the header row
     "columns",     # content grid column count (M), excluding the header column
+]
+
+# workfile_config/chart_store.csv column schema -- the Chart Store: a flat,
+# unordered set of independently-authored chart-defs, for use as chart
+# components inside Output Table cells (sparklines, grid layouts, etc) --
+# independent of the Running Order, which is strictly a sequence of report
+# content. Mirrors CHART_SANDBOX_FIELDS (the Charts sheet's own
+# insert_chart round-trip field list) plus its own base-36 id (mirroring
+# Stat Tags/Output Tables -- id_generation, settings["next_chart_store_id"])
+# and an optional free-text description, the same convention text_stats.csv
+# uses for its own rows.
+CHART_STORE_FIELDNAMES = [
+    "chart_store_id",  # "C" + base-36 id, never reused
+    "base_chart_name",
+    "cache_file",
+    "populations",
+    "start_period",
+    "end_period",
+    "metric_periods",
+    "width_emu",
+    "height_emu",
+    "tweaks",
+    "description",      # optional free text, user reference only
 ]
 
 
@@ -195,6 +218,12 @@ class WorkfileState:
 
     # workfile_config/text_stats.csv — "stat tags" (Decisions.md), TEXT_STATS_FIELDNAMES rows
     text_stats_rows: list = field(default_factory=list)
+
+    # workfile_config/chart_store.csv -- Chart Store (Decisions.md):
+    # independently-authored chart-defs, for use as chart components inside
+    # Output Table cells. CHART_STORE_FIELDNAMES rows, flat and unordered --
+    # no position/sequence concept, unlike running_order_rows.
+    chart_store_rows: list = field(default_factory=list)
 
     # workfile_config/output_tables/ -- Output Tables (Decisions.md).
     # output_table_rows mirrors custom_chart_rows (the index, OUTPUT_TABLE_FIELDNAMES);
@@ -310,6 +339,9 @@ def open_workfile(workfile_path: str) -> WorkfileState:
 
         # workfile_config/text_stats.csv — stat tags
         state.text_stats_rows = _csv_to_rows(_read("workfile_config/text_stats.csv"))
+
+        # workfile_config/chart_store.csv -- Chart Store
+        state.chart_store_rows = _csv_to_rows(_read("workfile_config/chart_store.csv"))
 
         # workfile_config/output_tables/ -- Output Tables: index plus one grid CSV per table_id
         state.output_table_rows = _csv_to_rows(
@@ -463,6 +495,10 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
         # workfile_config/text_stats.csv — stat tags
         _write("workfile_config/text_stats.csv",
                _rows_to_csv(state.text_stats_rows, TEXT_STATS_FIELDNAMES))
+
+        # workfile_config/chart_store.csv -- Chart Store
+        _write("workfile_config/chart_store.csv",
+               _rows_to_csv(state.chart_store_rows, CHART_STORE_FIELDNAMES))
 
         # workfile_config/output_tables/ -- index plus one grid CSV per table_id
         _write("workfile_config/output_tables/output_tables.csv",

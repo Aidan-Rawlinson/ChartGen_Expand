@@ -41,7 +41,7 @@ def _grid_to_json(content: list, column_widths: list, row_heights: list) -> str:
 
 
 def build_bundle(table_type_ref: str, content: list, column_widths: list, row_heights: list,
-                 width: int, height: int, tweaks: str, custom_table_code: dict = None) -> str:
+                 width_emu: int, height_emu: int, tweaks: str, custom_table_code: dict = None) -> str:
     """
     Build the complete Custom Tables download document for one table, as
     currently configured and rendering on screen.
@@ -68,8 +68,8 @@ This is the actual content / column_widths / row_heights this table is
 currently being called with -- the same data you would need to reason
 about to check any change you make.
 
-width = {width}
-height = {height}
+width_emu = {width_emu}
+height_emu = {height_emu}
 tweaks = "{tweaks}"
 
 ```json

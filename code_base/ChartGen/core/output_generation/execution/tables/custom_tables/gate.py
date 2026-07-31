@@ -24,7 +24,7 @@ class CustomTableError(Exception):
     pass
 
 
-REQUIRED_PARAMS = ["content", "column_widths", "row_heights", "width", "height", "tweaks"]
+REQUIRED_PARAMS = ["content", "column_widths", "row_heights", "width_emu", "height_emu", "tweaks"]
 
 
 def _is_entry_point(func: ast.FunctionDef) -> bool:

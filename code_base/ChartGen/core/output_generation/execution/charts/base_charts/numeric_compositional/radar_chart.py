@@ -5,8 +5,8 @@ on radial axes. Population layers not applicable — renders aggregated
 sample averages.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks).
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks).
 """
 
 import io
@@ -27,12 +27,11 @@ import matplotlib.ticker as mticker
 BAR_BLUE = "#7CB9E8"
 NAVY     = "#1F4E79"
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -58,10 +57,10 @@ def _axis_formatter(format_modifier):
     return mticker.FuncFormatter(lambda v, _: _format_number(v, format_modifier))
 
 
-def radar_chart(population_layers: list, width=55, height=55, tweaks=""):
+def radar_chart(population_layers: list, width_emu=3771900, height_emu=3771900, tweaks=""):
     """Radar / spider chart — component values on radial axes."""
     base = population_layers[0]
-    w, h = _size_to_inches(width, height)
+    w, h = _size_to_inches(width_emu, height_emu)
     fig = plt.figure(figsize=(w, h))
     metric = base.metrics[0]
     components = metric.component_names

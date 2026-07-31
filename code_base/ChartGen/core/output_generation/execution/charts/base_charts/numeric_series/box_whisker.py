@@ -4,8 +4,8 @@ Base Chart — NumericSeries. Box and whisker plot with outliers; the
 Selected unit and any peer-group layers are overlaid as markers.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks) — no report_context or any other runtime object. The
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks) — no report_context or any other runtime object. The
 Selected unit's identity and label come entirely from the
 "Selected"-labelled entry in population_layers.
 """
@@ -37,12 +37,11 @@ ORANGE       = "#E87722"
 HIGHLIGHT    = "#C12958"
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -74,10 +73,10 @@ def _axis_formatter(format_modifier):
     return mticker.FuncFormatter(lambda v, _: _format_number(v, format_modifier))
 
 
-def box_whisker(population_layers: list, width=50, height=50, tweaks=""):
+def box_whisker(population_layers: list, width_emu=3429000, height_emu=3429000, tweaks=""):
     """Box and whisker — distribution from first shape, markers for subsequent layers."""
     base = population_layers[0]
-    w, h = _size_to_inches(width, height)
+    w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))
     values = [u.values[0] for u in base.units if u.values[0] is not None]
     ax.boxplot(values, vert=True, patch_artist=True, widths=0.5,

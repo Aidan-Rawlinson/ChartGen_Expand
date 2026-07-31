@@ -9,7 +9,7 @@ Two tag families, both resolved per report:
   - Per-unit tags (e.g. [selected-reporting-unit-name]) — one value per
     reporting unit, read straight off ReportContext.
   - Stat tags (workfile_config/text_stats.csv, stat_tags.py) — a short,
-    permanent id (e.g. [3], [a7]) standing in for one summary-stats value
+    permanent id (e.g. [T3], [Ta7]) standing in for one summary-stats value
     from one chart's own independently-authored cut of its cached data.
 
 Covers ordinary text frames and, as of this session, PowerPoint table

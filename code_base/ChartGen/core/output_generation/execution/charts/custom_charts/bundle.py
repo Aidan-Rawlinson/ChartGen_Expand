@@ -39,7 +39,7 @@ def _layers_to_json(population_layers: list) -> str:
 
 
 def build_bundle(base_chart_name: str, shape_type: str, population_layers: list,
-                 width: int, height: int, tweaks: str, custom_chart_code: dict = None) -> str:
+                 width_emu: int, height_emu: int, tweaks: str, custom_chart_code: dict = None) -> str:
     """
     Build the complete Custom Charts download document for one chart, as
     currently configured and rendering on screen.
@@ -72,8 +72,8 @@ This is the actual `population_layers` this chart is currently being
 called with — the same data you would need to reason about to check any
 change you make.
 
-width = {width}
-height = {height}
+width_emu = {width_emu}
+height_emu = {height_emu}
 tweaks = "{tweaks}"
 
 ```json

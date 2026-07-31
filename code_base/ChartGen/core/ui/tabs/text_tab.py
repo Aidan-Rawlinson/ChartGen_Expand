@@ -6,7 +6,7 @@ Text tab — two independent tag tables:
     resolved straight off ReportContext. One value per reporting unit,
     globally unique, presentation-wide.
 
-  - Stat tags — short, permanent ids (e.g. [3], [a7]) each standing in for
+  - Stat tags — short, permanent ids (e.g. [T3], [Ta7]) each standing in for
     one summary-stats value from one chart's own independently-authored
     cut of its cached data (hex_id + its own single-population/period
     fields + which Reference id). Not tied to any Running Order row — see

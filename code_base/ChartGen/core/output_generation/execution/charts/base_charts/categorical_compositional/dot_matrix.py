@@ -5,8 +5,8 @@ per question, each dot approx. 10%. Population layers not applicable —
 renders population-level aggregates.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks).
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks).
 """
 
 import io
@@ -26,12 +26,11 @@ YES_COL = "#4CAF50"
 NO_COL  = "#C0392B"
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -43,10 +42,10 @@ def _fig_to_bytes(fig):
     return buf
 
 
-def dot_matrix(population_layers: list, width=80, height=55, tweaks=""):
+def dot_matrix(population_layers: list, width_emu=5486400, height_emu=3771900, tweaks=""):
     """Dot matrix — filled dots per category per question, each dot ≈ 10%."""
     base = population_layers[0]
-    w, h = _size_to_inches(width, height)
+    w, h = _size_to_inches(width_emu, height_emu)
     is_yn = (len(base.metrics) > 1 and
              base.metrics[0].category_names == ["Yes", "No"])
     if is_yn:

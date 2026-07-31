@@ -379,19 +379,15 @@ def _render_chart_image(base_chart_name: str, population_layers: list, width_emu
     chart_inputs contract) — Selected-unit identity is already carried on
     the "Selected"-labelled entry in population_layers by the time this is
     called.
-    """
-    # Percent-of-the-7.5in-reference conversion every Base Chart's
-    # width/height parameters expect -- no ceiling or floor: a chart's real
-    # placed size can legitimately be smaller or larger than that
-    # reference, and clamping the rendered resolution to it caused a
-    # genuine upscale (and visible pixellation) whenever a chart's real
-    # size exceeded it. See Architecture, Structural Design Principles.
-    NARROWER_EMU = 6858000
-    width_pct  = (width_emu  / NARROWER_EMU) * 100
-    height_pct = (height_emu / NARROWER_EMU) * 100
 
+    width_emu/height_emu are passed straight through — EMU is the one real
+    unit of size in this system (Architecture, Structural Design
+    Principles); a Base Chart function converts to inches internally
+    (divide by 914400) for its own matplotlib figsize. No percent
+    conversion happens at this boundary any more.
+    """
     chart_func = get_chart_callable(base_chart_name, custom_chart_code)
-    return chart_func(population_layers, width=width_pct, height=height_pct, tweaks=tweaks)
+    return chart_func(population_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks)
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,

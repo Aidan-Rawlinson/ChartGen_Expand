@@ -19,7 +19,7 @@ built-in already does (its own inlined palette/sizing/formatting helpers,
 Decisions.md — no shared internal helpers module, each file is fully
 standalone). Only one of those functions is the entry point the system
 actually calls: whichever one carries the chart_inputs signature
-(population_layers, width, height, tweaks). The other functions are
+(population_layers, width_emu, height_emu, tweaks). The other functions are
 private helpers, exactly like every existing Base Chart already has, and
 are not counted or restricted here beyond the shared import/banned-name
 checks that apply to the whole file.
@@ -33,7 +33,7 @@ class CustomChartError(Exception):
     pass
 
 
-REQUIRED_PARAMS = ["population_layers", "width", "height", "tweaks"]
+REQUIRED_PARAMS = ["population_layers", "width_emu", "height_emu", "tweaks"]
 
 
 def _is_entry_point(func: ast.FunctionDef) -> bool:

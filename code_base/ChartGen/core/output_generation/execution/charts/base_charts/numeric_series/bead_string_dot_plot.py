@@ -4,8 +4,8 @@ Base Chart — NumericSeries. Multi-tier bead-string dot plot, one tier per
 population layer.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks) — no report_context or any other runtime object. This
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks) — no report_context or any other runtime object. This
 chart never needed one: it reads unit identity and the "Selected" label
 directly from population_layers, the same as the other charts.
 """
@@ -32,12 +32,11 @@ import matplotlib.colors as mcolors
 
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -59,7 +58,7 @@ def _format_number(value, format_modifier):
     return f"{value:,.0f}"
 
 
-def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=""):
+def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=2743200, tweaks=""):
     """Multi-tier bead-string dot plot — one tier per population layer."""
     if not population_layers:
         fig, ax = plt.subplots()
@@ -120,7 +119,7 @@ def bead_string_dot_plot(population_layers: list, width=80, height=40, tweaks=""
         already_shown.update(original_ids)
 
     n_tiers = len(tiers)
-    w, _   = _size_to_inches(width, height)
+    w, _   = _size_to_inches(width_emu, height_emu)
     TIER_GAP = 0.40; LABEL_COL = 1.6; DOT_SIZE = 38
     INCHES_PER_TIER = 0.28; MARGIN_TOP = 0.40; MARGIN_BOT = 0.25
     h = n_tiers * INCHES_PER_TIER + MARGIN_TOP + MARGIN_BOT

@@ -10,7 +10,7 @@ Unlike those two, the sheet mirrors the grid's own spreadsheet shape
 directly rather than a flat one-row-per-record table -- row 1 holds the
 table_id (A1) and column widths; column A holds row heights; the rest is
 content. Content cells get a dropdown of the workfile's current Stat Tag
-ids ("[3]" style), the same hidden-list-sheet pattern the Running Order's
+ids ("[T3]" style), the same hidden-list-sheet pattern the Running Order's
 period columns use (Architecture Decision 12) -- free text is still
 accepted alongside the dropdown, matching that same precedent (no
 showErrorMessage/errorStyle is set, so Excel doesn't reject a typed value
@@ -33,7 +33,7 @@ def write_output_table_xlsx(grid_rows: list, stat_tag_rows: list, output_path) -
     """
     Write a grid to a formatted .xlsx. stat_tag_rows (WorkfileState.
     text_stats_rows) supplies the dropdown options for content cells --
-    every current tag, shown as its literal template text ("[3]").
+    every current tag, shown as its literal template text ("[T3]").
     """
     if not OPENPYXL_AVAILABLE:
         raise ImportError("openpyxl is required to write the Output Table xlsx.")

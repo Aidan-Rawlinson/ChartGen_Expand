@@ -16,11 +16,12 @@ Layout (0-indexed internally; 1-indexed in user-facing language):
                                    2 decimal places.
   - Rows 1..N, col 0           -- row heights, % of total table height,
                                    2 decimal places.
-  - Rows 1..N, cols 1..M       -- content cells: constant text, or a Stat
-                                   Tag id ("[3]"). Chart-component cells
-                                   ("{3}") are recognised by the grammar
-                                   elsewhere but not resolved/rendered this
-                                   session -- parked (Decisions.md).
+  - Rows 1..N, cols 1..M       -- content cells: constant text, a Stat
+                                   Tag id ("[T3]"), or a Chart Store
+                                   chart-component marker ("{C3}") --
+                                   recognised and acted on by the Base
+                                   Table function itself, not resolved
+                                   here (Decision 28).
 
 Columns are named c0..cM (generic, matching the no-fixed-schema convention
 population tables already use) rather than anything content-specific.

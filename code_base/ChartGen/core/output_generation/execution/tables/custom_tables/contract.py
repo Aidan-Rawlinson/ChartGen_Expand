@@ -58,16 +58,22 @@ interpretation and produce a complete, working function.
 ## The table_inputs contract
 
 Every Base Table function receives exactly six parameters, in this order,
-and returns exactly one thing:
+and returns exactly two things:
 
-    def my_table(content, column_widths, row_heights, width=80, height=50, tweaks=""):
+    def my_table(content, column_widths, row_heights, width_emu=5486400, height_emu=3429000, tweaks=""):
         ...
-        return image_bytes
+        return image_bytes, chart_cells
 
 - **content** -- a list of rows, each row a list of strings: the table's
   own content grid, already fully resolved -- every value the person
-  authored is already plain text by the time it reaches you. There is
-  nothing left to look up or substitute.
+  authored is already plain text by the time it reaches you, with one
+  exception: a cell can hold a chart-component marker, exactly the text
+  "{{" followed by an id followed by "}}" (e.g. "{{C3}}") and nothing else.
+  Recognise this pattern yourself (a plain string check is enough --
+  starts with "{{", ends with "}}", and the text between them starts with
+  "C" -- no need for a regex library). A cell holding one of these is not
+  drawn as text at all -- see chart_cells below for what to do with it
+  instead.
 - **column_widths** -- a list of numbers, one per column, in the same
   column order as `content`. Each is that column's own width as a
   percentage of the table's total width. These numbers are expected to sum
@@ -75,13 +81,68 @@ and returns exactly one thing:
 - **row_heights** -- a list of numbers, one per row, in the same row order
   as `content`. Each is that row's own height as a percentage of the
   table's total height. Same approximate-100 expectation as column_widths.
-- **width**, **height** -- integers, the target size as a percentage of
-  the shorter dimension of the output page (not pixels, not inches, not
-  EMU).
+- **width_emu**, **height_emu** -- integers, the target size in EMU
+  (English Metric Units -- 914400 per inch), the same unit PowerPoint
+  itself stores every shape's size in. Not a percentage, not pixels -- a
+  real physical size. To convert to inches for a `matplotlib` figure's own
+  `figsize`, divide by 914400.
 - **tweaks** -- a free-text string, blank by default. Nothing in the wider
   system currently parses this string's contents -- if you want to make
   some part of the table's appearance configurable, you're free to invent
   your own small syntax inside this string and read it yourself.
+
+## Chart-component cells
+
+A cell whose content is a chart marker ("{{C3}}", say) names a chart that
+belongs in that cell -- but you never draw the chart itself. Your job for
+that cell is: don't draw any text there, but do report back the exact
+rectangle you would have drawn that cell's content in, in the same EMU
+unit as width_emu/height_emu, measured from the table's own top-left
+corner. Something else in the wider system draws the actual chart into
+that rectangle afterwards.
+
+Collect these into a dict as you go, one entry per chart-component cell
+you find, keyed by the id inside the braces (without the braces
+themselves -- "{{C3}}" becomes the key "C3"):
+
+    chart_cells = {{
+        "C3": {{"x": 1234000, "y": 456000, "width": 2000000, "height": 900000}},
+    }}
+
+If a table has no chart-component cells at all, return an empty dict --
+`{{}}` -- for this second value; never omit it or return only the image
+bytes on their own. No rotation or other transform is expected here, only
+the cell's own position and size (resizing/placement only, nothing more
+elaborate).
+
+A cell's reported rectangle is a design decision, not a geometry lookup.
+"The cell" is whatever visual area you're actually treating as usable
+content space -- if your design adds padding, margin, a border, a drop
+shadow, rounded corners, or any other deliberate inset around a chart
+marker, the reported rectangle should reflect that narrower area, not the
+raw column_widths/row_heights grid cell. If it isn't obvious which
+reading the person wants, ask them, rather than assuming the raw grid
+geometry is what they meant.
+
+Technical trap, easy to get wrong invisibly: if your `matplotlib` figure
+uses `bbox_inches="tight"` when saving -- needed whenever anything is
+deliberately drawn outside the axes via `clip_on=False`, e.g. a bleeding
+shadow or badge -- the saved canvas is NOT guaranteed to correspond 1:1
+with the nominal (width_emu, height_emu) canvas you were asked to draw.
+The crop can expand or shrink the saved image asymmetrically depending on
+what actually bled outside the axes, and a chart-cell rectangle computed
+as a naive fraction of the nominal canvas will silently drift out of
+alignment. The fix is not to avoid `bbox_inches="tight"` (it's often
+unavoidable for a design with overflowing decoration) -- it's to call
+`fig.get_tightbbox(renderer)` after all drawing is complete and remap
+every cell's data-space coordinates through the ACTUAL crop bounding box
+(plus whatever `pad_inches` you save with) before converting to EMU,
+rather than assuming your data axis maps linearly onto the declared
+canvas. If your design draws nothing outside its own axes at all, the
+simpler and preferred option is to drop `bbox_inches="tight"` entirely
+and make your axes fill the whole figure explicitly
+(`fig.add_axes([0, 0, 1, 1])`) instead of relying on `tight_layout` --
+exact, with nothing to correct for afterwards.
 
 ## Allowed imports
 
@@ -92,11 +153,13 @@ third-party package. Plan the implementation around this constraint.
 
 ## Return contract
 
-The function must return image bytes -- the same thing the built-in Base
-Table returns: a `matplotlib` figure saved to an in-memory buffer via
+The function must return a tuple of two things: image bytes, then the
+chart_cells dict described above (an empty dict if there are none). The
+image bytes are the same thing the built-in Base Table returns: a
+`matplotlib` figure saved to an in-memory buffer via
 `fig.savefig(buf, format="svg", ...)` (SVG, not PNG -- every Base Table is
-rendered as a vector image, not a raster one), with the buffer returned
-(not the figure object itself, and not a Matplotlib Axes/Figure).
+rendered as a vector image, not a raster one), with the buffer itself
+returned (not the figure object, and not a Matplotlib Axes/Figure).
 
 Font must be Calibri -- set once, near the top of the file, right after
 the matplotlib imports:
@@ -128,7 +191,7 @@ receiving your reply has no use for it repeated to them.
 You're free to add, remove, or rename helper functions as needed. The one
 rule: exactly one function in the file must be the entry point, accepting
 the six table_inputs parameters shown above (content, column_widths,
-row_heights, width, height, tweaks) -- that's the one the system will
+row_heights, width_emu, height_emu, tweaks) -- that's the one the system will
 call. Any other functions are treated as private helpers and aren't
 restricted beyond the allowed-imports rule above, which applies to the
 whole file.

@@ -5,8 +5,8 @@ approx. 1%. Population layers not applicable — renders aggregated sample
 averages.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks).
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks).
 """
 
 import io
@@ -26,12 +26,11 @@ import matplotlib.patches as mpatches
 
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -43,10 +42,10 @@ def _fig_to_bytes(fig):
     return buf
 
 
-def waffle_chart(population_layers: list, width=60, height=50, tweaks=""):
+def waffle_chart(population_layers: list, width_emu=4114800, height_emu=3429000, tweaks=""):
     """Waffle chart — 10×10 grid, each cell ≈ 1%."""
     base = population_layers[0]
-    w, h = _size_to_inches(width, height)
+    w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))
     metric = base.metrics[0]
     components = metric.component_names

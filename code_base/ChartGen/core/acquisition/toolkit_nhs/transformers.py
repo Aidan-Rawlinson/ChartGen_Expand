@@ -7,6 +7,8 @@ canonical stats computation for its shape (compute_*_stats), shared with
 population-filter recalculation.
 """
 
+from dataclasses import replace
+
 from core.shared.normalisation_containers.shapes import (
     NumericSeries, NumericSeriesUnit, ShapeStats,
     compute_numeric_series_metric_stats,
@@ -244,6 +246,52 @@ def transform_radar_chart(data, year):
 
 
 # ---------------------------------------------------------------------------
+# Title placeholder resolution
+# ---------------------------------------------------------------------------
+
+def _resolve_title(report_name, year, option, data):
+    """
+    Replace NHS toolkit title placeholders with real values.
+
+    report_name may contain literal `*` wildcard markers (stripped, as they
+    foul the replacements below) and any of the year tokens or
+    `|OPTION_TITLE|`. `option` is the 0-indexed denominatorOptionId parsed
+    from the chart's URL; charts with no denominator options simply won't
+    carry the `|OPTION_TITLE|` token in their reportName, so the lookup
+    below is only attempted when the token is present.
+    """
+    if not report_name:
+        return report_name
+
+    title = report_name.replace("*", "")
+    year_int = int(year)
+
+    replacements = {
+        "|DOUBLE_YEAR_CURRENT|":  str(year_int),
+        "|DOUBLE_YEAR_PREVIOUS|": str(year_int - 1),
+        "|DOUBLE_YEAR_MINUS_2|":  str(year_int - 2),
+        "|DOUBLE_YEAR_NEXT|":     str(year_int + 1),
+        "|SINGLE_YEAR_CURRENT|":  str(year_int)[-2:],
+        "|SINGLE_YEAR_PREVIOUS|": str(year_int - 1)[-2:],
+        "|SINGLE_YEAR_MINUS_2|":  str(year_int - 2)[-2:],
+        "|SINGLE_YEAR_MINUS_3|":  str(year_int - 3)[-2:],
+        "|SINGLE_YEAR_NEXT|":     str(year_int + 1)[-2:],
+    }
+
+    if "|OPTION_TITLE|" in title:
+        denominators = (data.get("options") or {}).get("denominators") or []
+        option_title = ""
+        if 0 <= option < len(denominators):
+            option_title = str(denominators[option].get("titleOptionName") or "").strip()
+        replacements["|OPTION_TITLE|"] = option_title
+
+    for token, value in replacements.items():
+        title = title.replace(token, value)
+
+    return title
+
+
+# ---------------------------------------------------------------------------
 # Dispatch map and entry point
 # ---------------------------------------------------------------------------
 
@@ -267,13 +315,31 @@ PROCEDURE_MAP = {
 }
 
 
-def transform(raw_json: dict, year: str):
+def transform(raw_json: dict, year: str, option: int = 0):
     """
-    Dispatch entry point. Accepts the full API response dict and year string.
-    Returns the appropriate canonical data shape, or raises if unrecognised.
+    Dispatch entry point. Accepts the full API response dict, year string,
+    and the 0-indexed denominatorOptionId parsed from the chart's URL
+    (defaults to 0 — the same default url_parser.py uses when a chart's URL
+    carries no `option` param). Returns the appropriate canonical data
+    shape, or raises if unrecognised.
+
+    Title placeholder resolution (year tokens, `|OPTION_TITLE|`, and
+    wildcard `*` stripping) is applied once here, after shape construction,
+    rather than duplicated across each per-procedure transformer.
     """
     data = raw_json["data"]
     proc = data["storedProcedure"]
     if proc not in PROCEDURE_MAP:
         raise ValueError(f"Unrecognised storedProcedure: {proc}")
-    return PROCEDURE_MAP[proc](data, year)
+    shape = PROCEDURE_MAP[proc](data, year)
+    resolved_title = _resolve_title(data.get("reportName"), year, option, data)
+    shape = replace(shape, title=resolved_title)
+
+    # Pie charts duplicate the raw title into their single metric's `name`
+    # (drawn directly onto the chart by dot_matrix.py) — reuse the title
+    # already resolved above rather than resolving it a second time.
+    if proc in ("sp_a_generic_list_pie_chart", "sp_a_generic_list_pie_chart_exclude_na"):
+        updated_metric = replace(shape.metrics[0], name=resolved_title)
+        shape = replace(shape, metrics=[updated_metric])
+
+    return shape

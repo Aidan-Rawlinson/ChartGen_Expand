@@ -5,8 +5,8 @@ from a centre axis. Population layers not applicable — renders
 population-level aggregates.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width,
-height, tweaks).
+libraries only. Receives chart_inputs only (population_layers, width_emu,
+height_emu, tweaks).
 """
 
 import io
@@ -27,12 +27,11 @@ import matplotlib.ticker as mticker
 YES_COL = "#4CAF50"
 NO_COL  = "#C0392B"
 
-NARROWER_DIM_INCHES = 7.5
+EMU_PER_INCH = 914400
 
 
-def _size_to_inches(width, height):
-    s = NARROWER_DIM_INCHES / 100
-    return width * s, height * s
+def _size_to_inches(width_emu, height_emu):
+    return width_emu / EMU_PER_INCH, height_emu / EMU_PER_INCH
 
 
 def _fig_to_bytes(fig):
@@ -50,10 +49,10 @@ def _apply_spine_style(ax):
     ax.set_axisbelow(True)
 
 
-def diverging_bar(population_layers: list, width=80, height=55, tweaks=""):
+def diverging_bar(population_layers: list, width_emu=5486400, height_emu=3771900, tweaks=""):
     """Diverging bar — Yes right / No left from centre axis."""
     base = population_layers[0]
-    w, h = _size_to_inches(width, height)
+    w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))
     questions, yes_pcts, no_pcts = [], [], []
     for metric in base.metrics:
