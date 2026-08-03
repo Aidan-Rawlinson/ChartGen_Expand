@@ -115,8 +115,24 @@ def assign_missing_chart_store_ids(rows: list, settings: dict) -> list:
     back with a blank "chart_store_id" column -- see read_chart_store_xlsx.
     Mutates settings' counter in place; caller marks the workfile dirty as
     usual.
+
+    Passes every non-blank id already in `rows` to next_chart_store_id as
+    existing_ids, so the counter resyncs against them before issuing a
+    new one -- a row uploaded with its own id already filled in (the
+    common case: re-uploading a previously-downloaded chart_store.xlsx)
+    never advances the counter itself, so without this a fresh id issued
+    afterwards could collide with one of those. The running set is
+    updated as each new id is issued too, so two blank rows in the same
+    upload can't collide with each other either.
     """
+    existing_ids = {
+        str(row.get("chart_store_id", "") or "").strip()
+        for row in rows
+        if str(row.get("chart_store_id", "") or "").strip()
+    }
     for row in rows:
         if not str(row.get("chart_store_id", "") or "").strip():
-            row["chart_store_id"] = next_chart_store_id(settings)
+            new_id = next_chart_store_id(settings, existing_ids)
+            row["chart_store_id"] = new_id
+            existing_ids.add(new_id)
     return rows

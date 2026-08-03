@@ -24,10 +24,14 @@ speculatively.
 
 from core.output_generation.execution.tables.base_tables.plain_grid import plain_grid
 from core.output_generation.execution.tables.base_tables.table_cardtile import table_cardtile
+from core.output_generation.execution.tables.base_tables.ci_grid import ci_grid
+from core.output_generation.execution.tables.base_tables.ci_cardtile import ci_cardtile
 
 TABLE_REGISTRY = {
     "plain_grid": plain_grid,
     "table_cardtile": table_cardtile,
+    "ci_grid": ci_grid,
+    "ci_cardtile": ci_cardtile,
 }
 
 

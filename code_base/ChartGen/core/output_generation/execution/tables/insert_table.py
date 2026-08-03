@@ -26,6 +26,11 @@ cell's own EMU rectangle -- never the entry's own stored size -- and
 inserted as a second picture, layered on top of the table's own, rather
 than composited into the table's own SVG (Decisions.md: charts inside
 tables are always layered PowerPoint shapes, not merged image data).
+
+A Chart Store entry's own blank populations field inherits the Running
+Order default (ctx.default_populations, set by a set_default_populations
+row earlier in the same run) -- the same inherit rule an insert_chart
+row's own blank populations field follows.
 """
 
 from dataclasses import replace as _dc_replace
@@ -57,6 +62,13 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
     if not cache_file or not base_chart_name:
         return None
 
+    # A blank populations field on the Chart Store entry means "inherit the
+    # Running Order default" (the same inherit rule any insert_chart row
+    # follows) -- ctx.default_populations is set live by a
+    # set_default_populations row earlier in this same run.
+    row_populations = str(chart_store_row.get("populations", "") or "").strip()
+    populations_str = row_populations if row_populations else ctx.default_populations
+
     try:
         data_shape, shape_type = load_shape(cache_file, workfile_state)
     except Exception:
@@ -74,7 +86,6 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
     except ValueError:
         return None
 
-    populations_str = str(chart_store_row.get("populations", "") or "").strip()
     population_layers = []
     if ctx.report_context is not None and populations_str:
         try:

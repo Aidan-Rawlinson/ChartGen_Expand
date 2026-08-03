@@ -129,8 +129,11 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
     / render pipeline, without an AssemblyContext (this runs from the
     Streamlit tab, not a report assembly run, so there's no ctx.report_context
     to consult -- mirrors how charts_tab.py's own Preview builds population
-    layers directly, with no such check either). Returns None on any
-    failure -- one broken chart cell doesn't block the rest of the preview.
+    layers directly, with no such check either). A blank populations field
+    inherits the workfile's set_default_populations row, mirroring
+    charts_tab.py's own preview_populations_str fallback. Returns None on
+    any failure -- one broken chart cell doesn't block the rest of the
+    preview.
     """
     cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
@@ -154,7 +157,21 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
     except ValueError:
         return None
 
+    # A blank populations field on the Chart Store entry means "inherit the
+    # Running Order default" -- there's no AssemblyContext here (this runs
+    # from the Streamlit tab, not a report run), so the default is read
+    # directly off the workfile's own set_default_populations row instead
+    # of ctx.default_populations, mirroring charts_tab.py's own
+    # preview_populations_str fallback.
     populations_str = str(chart_store_row.get("populations", "") or "").strip()
+    if not populations_str:
+        for ro_row in workfile_state.running_order_rows:
+            if str(ro_row.get("function", "")).strip() == "set_default_populations":
+                default_pop = str(ro_row.get("populations", "") or "").strip()
+                if default_pop:
+                    populations_str = default_pop
+                break
+
     try:
         population_layers = build_population_layers(
             data_shape, populations_str, target_rows, selected_ids

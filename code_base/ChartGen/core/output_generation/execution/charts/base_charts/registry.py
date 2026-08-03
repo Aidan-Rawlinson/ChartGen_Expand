@@ -9,6 +9,15 @@ that treats them as a set. render_chart's signature is the chart_inputs
 contract every Base Chart, built-in or custom, must accept:
 population_layers, width_emu, height_emu, tweaks. No report_context or any other
 runtime object is passed through.
+
+Before adding a new Base Chart: check the proposed registry key, file
+name, and function name against CHART_REGISTRY and the base_charts
+folder. Base Chart files arrive externally-authored (download/AI-edit/
+paste-back), so a file's own internal module docstring or function name
+may be stale or coincidentally match an existing entry — a name match is
+not evidence the file is meant to replace that entry. Flag any collision
+and confirm with the user before overwriting or reusing an existing
+key/file/function name; do not assume replacement was intended.
 """
 
 from core.output_generation.execution.charts.base_charts.numeric_series.ranked_column import ranked_column
@@ -34,6 +43,13 @@ from core.output_generation.execution.charts.base_charts.categorical_composition
 from core.output_generation.execution.charts.base_charts.timeseries.period_line_chart import period_line_chart
 from core.output_generation.execution.charts.base_charts.timeseries.median_comparison_linechart import median_comparison_linechart
 from core.output_generation.execution.charts.base_charts.timeseries.full_lines_linechart import full_lines_linechart
+from core.output_generation.execution.charts.base_charts.timeseries.sparkline1 import sparkline1
+from core.output_generation.execution.charts.base_charts.timeseries.celltest import celltest
+from core.output_generation.execution.charts.base_charts.timeseries.line_has_data import line_has_data
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_median import line_ci_median
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_2 import line_ci_2
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_5pct import line_ci_5pct
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_0_5pct import line_ci_0_5pct
 
 CHART_REGISTRY = {
     "ranked_column":        ranked_column,
@@ -56,6 +72,13 @@ CHART_REGISTRY = {
     "period_line_chart":    period_line_chart,
     "median_comparison_linechart": median_comparison_linechart,
     "full_lines_linechart": full_lines_linechart,
+    "sparkline1":           sparkline1,
+    "celltest":             celltest,
+    "line_has_data":        line_has_data,
+    "line_ci_median":       line_ci_median,
+    "line_ci_2":            line_ci_2,
+    "line_ci_5pct":         line_ci_5pct,
+    "line_ci_0_5pct":       line_ci_0_5pct,
 }
 
 

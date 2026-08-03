@@ -100,6 +100,31 @@ def write_output_table_xlsx(grid_rows: list, stat_tag_rows: list, output_path) -
     return output_path
 
 
+def _cell_text(cell) -> str:
+    """
+    The cell's own displayed text, not its raw stored value. Excel's own
+    behaviour: typing "5%" auto-applies a Percentage number format and
+    stores the underlying value as the raw float 0.05 -- the "%" is
+    purely display formatting, never part of the stored value itself.
+    cell.value alone returns 0.05, and str(0.05) is exactly "0.05" --
+    the literal bug this exists to close. Detected via cell.number_format
+    containing "%"; the value is multiplied back up by 100 and the "%"
+    appended, matching what Excel itself actually displays, not left as
+    the underlying float. round() to a sane number of places first --
+    floating point on an already-multiplied value can otherwise produce
+    something like "5.000000000000001%".
+    """
+    v = cell.value
+    if v is None:
+        return ""
+    if isinstance(v, (int, float)) and "%" in (cell.number_format or ""):
+        pct = round(v * 100, 10)
+        if pct == int(pct):
+            pct = int(pct)
+        return f"{pct}%"
+    return str(v).strip()
+
+
 def read_output_table_xlsx(path) -> list:
     """
     Read a grid .xlsx (path or file-like buffer) and return the full-
@@ -123,7 +148,6 @@ def read_output_table_xlsx(path) -> list:
     for r in range(1, max_row + 1):
         row = {}
         for c in range(1, max_col + 1):
-            v = ws.cell(row=r, column=c).value
-            row[col_key(c - 1)] = str(v).strip() if v is not None else ""
+            row[col_key(c - 1)] = _cell_text(ws.cell(row=r, column=c))
         rows.append(row)
     return rows

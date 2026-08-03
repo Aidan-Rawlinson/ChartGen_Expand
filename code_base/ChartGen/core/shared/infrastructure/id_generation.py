@@ -21,6 +21,18 @@ def to_base36(n: int) -> str:
     return "".join(reversed(digits))
 
 
+def from_base36(s: str) -> int:
+    """Inverse of to_base36 -- decodes a base-36 string back to its integer
+    value. Used defensively wherever an id's own persisted counter might
+    have fallen out of sync with ids actually already in use elsewhere
+    (e.g. rows carried in from an external source with their own ids
+    already filled in, which never advances the counter itself)."""
+    n = 0
+    for ch in s.lower():
+        n = n * 36 + TAG_ALPHABET.index(ch)
+    return n
+
+
 def next_id(settings: dict, counter_key: str) -> str:
     """
     Issue and persist the next base-36 id under the given settings counter

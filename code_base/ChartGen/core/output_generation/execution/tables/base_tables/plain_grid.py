@@ -110,6 +110,26 @@ def _text_width_inches(text, fontsize, dpi):
     return width_in
 
 
+def _text_height_inches(text, fontsize, dpi):
+    """Measures the rendered height of a string at a given font size, in
+    inches, using a disposable throwaway figure at the target DPI. A
+    string with embedded newlines (resolve.py's own "<br>" conversion)
+    renders as stacked lines -- matplotlib does this natively -- so this
+    picks up the full multi-line height, not just one line's."""
+    if not text:
+        return 0.0
+    fig = plt.figure(figsize=(1, 1), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis("off")
+    t = ax.text(0, 0, text, fontsize=fontsize)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    bbox = t.get_window_extent(renderer=renderer)
+    height_in = bbox.height / dpi
+    plt.close(fig)
+    return height_in
+
+
 def _fit_font_size(texts, available_width_inches, dpi,
                     max_size=MAX_FONT_SIZE, min_size=MIN_FONT_SIZE, step=FONT_STEP):
     """Largest font size, within bounds, at which every non-empty string
@@ -122,6 +142,41 @@ def _fit_font_size(texts, available_width_inches, dpi,
     while size > min_size:
         widest = max(_text_width_inches(t, size, dpi) for t in non_empty)
         if widest <= available_width_inches:
+            return size
+        size -= step
+    return min_size
+
+
+def _shrink_for_multiline_height(font_size, content, row_heights, h_inches, dpi,
+                                  min_size=MIN_FONT_SIZE, step=FONT_STEP):
+    """
+    A multi-line cell (resolve.py's "<br>" -> real newline conversion)
+    renders as stacked lines, which _fit_font_size never considers -- it
+    only ever measures width. This is a second, separate pass: starting
+    from the width-fit size already chosen, shrink further (never grow
+    back past it) until every cell containing a newline renders, at the
+    returned size, within its own row's full height -- otherwise the
+    overflow would sit underneath the next row's own white rectangle,
+    which is drawn afterwards and would silently cover it.
+    A chart-component cell is skipped -- it isn't drawn as text at all.
+    """
+    size = font_size
+    while size > min_size:
+        fits = True
+        for r, row in enumerate(content):
+            row_h_pct = row_heights[r] if r < len(row_heights) else 0.0
+            available_h = (row_h_pct / 100.0) * h_inches
+            for cell_text in row:
+                if not cell_text or "\n" not in cell_text:
+                    continue
+                if _chart_cell_id(cell_text):
+                    continue
+                if _text_height_inches(cell_text, size, dpi) > available_h:
+                    fits = False
+                    break
+            if not fits:
+                break
+        if fits:
             return size
         size -= step
     return min_size
@@ -154,6 +209,7 @@ def plain_grid(content: list, column_widths: list, row_heights: list,
         if row and not _chart_cell_id(row[0])
     ]
     font_size = _fit_font_size(col0_texts, available_inches, DPI)
+    font_size = _shrink_for_multiline_height(font_size, content, row_heights, h_inches, DPI)
 
     fig = plt.figure(figsize=(w_inches, h_inches))
     # The axes fill the entire figure canvas exactly ([0,0,1,1] in

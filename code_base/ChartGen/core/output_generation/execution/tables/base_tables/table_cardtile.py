@@ -62,6 +62,12 @@ BORDER_WIDTH = 0.375
 SHADOW_OFFSET_FRACTION = 0.065
 SAVE_PAD_INCHES = 0.03
 
+# The middle fraction of a body row's own height a card (and therefore
+# its text) actually occupies -- see table_cardtile's own card_y/card_h
+# calc below. Named here too so _shrink_for_multiline_height can compute
+# a body row's true available height without duplicating the 0.8 literal.
+CARD_HEIGHT_FRACTION = 0.8
+
 
 def _rounded_rect_polygon(x, y, w, h, rx, ry, n=12, **kwargs):
     rx = max(0.0, min(rx, w / 2))
@@ -210,6 +216,44 @@ def _fit_font_size(texts, available_width_inches, dpi,
     return min_size
 
 
+def _shrink_for_multiline_height(font_size, content, row_heights, h_inches, dpi,
+                                  min_size=MIN_FONT_SIZE, step=FONT_STEP):
+    """
+    A multi-line cell (resolve.py's "<br>" -> real newline conversion)
+    renders as stacked lines, which _fit_font_size never considers -- it
+    only ever measures width. This is a second, separate pass: starting
+    from the width-fit size already chosen, shrink further (never grow
+    back past it) until every cell containing a newline renders, at the
+    returned size, within its own available height -- a header row
+    (index 0) uses its full row height; a body row (index 1+) uses only
+    CARD_HEIGHT_FRACTION of it, matching the card's own inset. Otherwise
+    the overflow would sit underneath either the next row's own card or
+    (for the last row) simply outside the canvas.
+    A chart-component cell is skipped -- it isn't drawn as text at all.
+    """
+    size = font_size
+    while size > min_size:
+        fits = True
+        for r, row in enumerate(content):
+            row_h_pct = row_heights[r] if r < len(row_heights) else 0.0
+            row_h_in = (row_h_pct / 100.0) * h_inches
+            available_h = row_h_in if r == 0 else row_h_in * CARD_HEIGHT_FRACTION
+            for cell_text in row:
+                if not cell_text or "\n" not in cell_text:
+                    continue
+                if _chart_cell_id(cell_text):
+                    continue
+                if _text_height_inches(cell_text, size, dpi) > available_h:
+                    fits = False
+                    break
+            if not fits:
+                break
+        if fits:
+            return size
+        size -= step
+    return min_size
+
+
 def _prepare(content, column_widths, row_heights, width_emu, height_emu):
     n_cols = len(column_widths)
     w_inches, h_inches = _size_to_inches(width_emu, height_emu)
@@ -221,6 +265,7 @@ def _prepare(content, column_widths, row_heights, width_emu, height_emu):
 
     col0_texts = [row[0] for row in content if row and not _chart_cell_id(row[0])]
     font_size = _fit_font_size(col0_texts, available_inches, DPI)
+    font_size = _shrink_for_multiline_height(font_size, content, row_heights, h_inches, DPI)
 
     col_x = [0.0]
     for cw in column_widths:
@@ -327,7 +372,7 @@ def table_cardtile(content, column_widths, row_heights, width_emu=5486400, heigh
         _, _, y0, y1 = _cell_bounds(p, r, 0)
         row_h = y1 - y0
         card_y = y0 + row_h * 0.1
-        card_h = row_h * 0.8
+        card_h = row_h * CARD_HEIGHT_FRACTION
         offset_y = card_h * SHADOW_OFFSET_FRACTION
         offset_x = offset_y * (p["h_inches"] / p["w_inches"]) if p["w_inches"] else offset_y
 

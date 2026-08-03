@@ -1002,7 +1002,10 @@ def render_charts_tab():
                     "description":     chart_store_description,
                 }
                 if chart_store_action == "Add new entry":
-                    saved_id = next_chart_store_id(workfile_state.settings)
+                    saved_id = next_chart_store_id(
+                        workfile_state.settings,
+                        {r.get("chart_store_id") for r in workfile_state.chart_store_rows},
+                    )
                     workfile_state.chart_store_rows.append({"chart_store_id": saved_id, **field_values})
                 else:
                     saved_id = chart_store_target_choice
