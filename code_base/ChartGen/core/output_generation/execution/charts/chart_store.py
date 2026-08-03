@@ -22,7 +22,12 @@ Stat Tags/Output Tables but its own counter key -- see
 core.shared.infrastructure.id_generation.
 """
 
+from dataclasses import replace
+
 from core.shared.infrastructure.id_generation import next_id, from_base36
+from core.output_generation.execution.charts.cache_reader import load_shape
+from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
+from core.shared.normalisation_containers.population_layers import build_population_layers
 
 
 def next_chart_store_id(settings: dict, existing_ids=None) -> str:
@@ -75,3 +80,66 @@ def chart_store_row_label(row: dict, label_by_cache_file: dict) -> str:
     desc = str(row.get("description", "") or "").strip()
     base = f"{row.get('chart_store_id', '')}: {ctype} · {cache_label}"
     return f"{base} — {desc}" if desc else base
+
+
+def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state, full_unit_set: dict) -> list:
+    """
+    Resolve a Chart Store entry's own population_layers against the
+    current reporting context, independent of actually rendering it --
+    shared by the Output Tables Preview splice
+    (output_tables_tab.py::_render_chart_store_chart_preview) and the
+    Custom Tables bundle's own optional chart-detail export
+    (custom_tables/bundle.py), so the same cache-load / cut /
+    population-default-fallback / layer-build pipeline is written once,
+    not duplicated a third time.
+
+    No AssemblyContext involved -- both callers run from a Streamlit tab,
+    not a report assembly run, so a blank populations field is resolved
+    against the workfile's own set_default_populations Running Order row
+    directly, mirroring charts_tab.py's own Preview fallback (see
+    Architecture Decision 31 for the full reasoning). Returns [] on any
+    resolution failure (missing cache_file, a cache load error, an
+    unresolvable cut) -- callers treat that the same way as "nothing to
+    show", never raise.
+    """
+    cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
+    if not cache_file:
+        return []
+
+    try:
+        data_shape, shape_type = load_shape(cache_file, workfile_state)
+    except Exception:
+        return []
+
+    start_period = str(chart_store_row.get("start_period", "") or "").strip()
+    end_period = str(chart_store_row.get("end_period", "") or "").strip()
+    metric_periods_str = str(chart_store_row.get("metric_periods", "") or "").strip()
+
+    try:
+        data_shape, _, target_rows, selected_ids = prepare_chart_cut(
+            data_shape, shape_type, start_period, end_period, metric_periods_str,
+            workfile_state.tables, workfile_state.table_order, full_unit_set,
+        )
+    except ValueError:
+        return []
+
+    # A blank populations field means "inherit the Running Order default"
+    # -- see resolve_chart_store_population_layers' own docstring.
+    populations_str = str(chart_store_row.get("populations", "") or "").strip()
+    if not populations_str:
+        for ro_row in workfile_state.running_order_rows:
+            if str(ro_row.get("function", "")).strip() == "set_default_populations":
+                default_pop = str(ro_row.get("populations", "") or "").strip()
+                if default_pop:
+                    populations_str = default_pop
+                break
+
+    try:
+        population_layers = build_population_layers(
+            data_shape, populations_str, target_rows, selected_ids
+        )
+    except Exception:
+        population_layers = []
+    if not population_layers:
+        population_layers = [replace(data_shape, population_label="All")]
+    return population_layers

@@ -56,7 +56,7 @@ from core.output_generation.definition.running_order import (
     TABLE_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
     append_content_row_above_footer,
 )
-from core.output_generation.execution.charts.cache_reader import load_shape
+from core.output_generation.execution.charts.chart_store import resolve_chart_store_population_layers
 from core.output_generation.execution.charts.custom_charts import get_chart_callable
 from core.output_generation.execution.tables.base_tables import TABLE_REGISTRY
 from core.output_generation.execution.tables.custom_tables.bundle import build_bundle
@@ -80,8 +80,6 @@ from core.shared.infrastructure.page_sizing import (
 )
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
-from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
-from core.shared.normalisation_containers.population_layers import build_population_layers
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, settings, master_table
 
@@ -125,62 +123,20 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
                                        workfile_state, full_unit_set: dict):
     """
     Preview-side equivalent of insert_table.py's own
-    _render_chart_store_chart -- same cache-load / cut / population-layers
-    / render pipeline, without an AssemblyContext (this runs from the
-    Streamlit tab, not a report assembly run, so there's no ctx.report_context
-    to consult -- mirrors how charts_tab.py's own Preview builds population
-    layers directly, with no such check either). A blank populations field
-    inherits the workfile's set_default_populations row, mirroring
-    charts_tab.py's own preview_populations_str fallback. Returns None on
-    any failure -- one broken chart cell doesn't block the rest of the
-    preview.
+    _render_chart_store_chart -- population_layers resolution itself is
+    shared (chart_store.resolve_chart_store_population_layers), so this
+    function only adds what's specific to actually rendering: the
+    base_chart_name lookup and the render call at the cell's own rectangle.
+    Returns None on any failure -- one broken chart cell doesn't block the
+    rest of the preview.
     """
-    cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
-    if not cache_file or not base_chart_name:
+    if not base_chart_name:
         return None
 
-    try:
-        data_shape, shape_type = load_shape(cache_file, workfile_state)
-    except Exception:
-        return None
-
-    start_period = str(chart_store_row.get("start_period", "") or "").strip()
-    end_period = str(chart_store_row.get("end_period", "") or "").strip()
-    metric_periods_str = str(chart_store_row.get("metric_periods", "") or "").strip()
-
-    try:
-        data_shape, _, target_rows, selected_ids = prepare_chart_cut(
-            data_shape, shape_type, start_period, end_period, metric_periods_str,
-            workfile_state.tables, workfile_state.table_order, full_unit_set,
-        )
-    except ValueError:
-        return None
-
-    # A blank populations field on the Chart Store entry means "inherit the
-    # Running Order default" -- there's no AssemblyContext here (this runs
-    # from the Streamlit tab, not a report run), so the default is read
-    # directly off the workfile's own set_default_populations row instead
-    # of ctx.default_populations, mirroring charts_tab.py's own
-    # preview_populations_str fallback.
-    populations_str = str(chart_store_row.get("populations", "") or "").strip()
-    if not populations_str:
-        for ro_row in workfile_state.running_order_rows:
-            if str(ro_row.get("function", "")).strip() == "set_default_populations":
-                default_pop = str(ro_row.get("populations", "") or "").strip()
-                if default_pop:
-                    populations_str = default_pop
-                break
-
-    try:
-        population_layers = build_population_layers(
-            data_shape, populations_str, target_rows, selected_ids
-        )
-    except Exception:
-        population_layers = []
+    population_layers = resolve_chart_store_population_layers(chart_store_row, workfile_state, full_unit_set)
     if not population_layers:
-        from dataclasses import replace as _dc_replace
-        population_layers = [_dc_replace(data_shape, population_label="All")]
+        return None
 
     tweaks = str(chart_store_row.get("tweaks", "") or "").strip()
     try:
@@ -851,9 +807,20 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                 "to preview and, if you're happy with it, save as a new table type."
             )
 
+            st.session_state.setdefault("ots_bundle_include_charts", False)
+            include_charts = st.checkbox(
+                "Tick here to export charts", key="ots_bundle_include_charts",
+                help="Also include full detail (settings, source code, and live data) for "
+                     "every Chart Store entry referenced by a {Cn} marker in this table -- "
+                     "off by default, since most table edits don't touch what's inside an "
+                     "embedded chart, and resolving each one's live data has a real cost.",
+            )
+            full_unit_set_for_bundle = _current_full_unit_set(workfile_state, the_settings) if include_charts else None
+
             bundle_text = build_bundle(
                 table_type_ref, resolved["content"], resolved["column_widths"], resolved["row_heights"],
                 width_emu, height_emu, tweaks_str, workfile_state.custom_table_code,
+                include_charts=include_charts, workfile_state=workfile_state, full_unit_set=full_unit_set_for_bundle,
             )
             st.download_button(
                 "\u2b07  Download bundle for this table", data=bundle_text,
