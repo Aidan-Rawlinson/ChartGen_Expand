@@ -64,11 +64,19 @@ class TimeSeriesMetric:
 @dataclass
 class TimeSeries:
     """One or more independent numeric Metric-Series across a population, each value indexed by unit and by a shared period axis."""
-    # Metadata
+    # Descriptive fields
     title:              Optional[str]       = None
     format_modifier:    Optional[str]       = None
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
     population_table:   Optional[str]       = None  # name of the population table this data's units belong to
+
+    # Auxiliary metadata — NOT a conceptual part of the data shape itself.
+    # A side pocket for information that travels with the shape without
+    # describing what the shape actually is. Not part of the chart_inputs
+    # contract, and not normally relied on downstream — an exception is for
+    # the specific circumstance that needs it, not the norm. Carries
+    # through filtering/replace() unchanged, same as every other field.
+    metadata:           dict                = field(default_factory=lambda: {"source_url": None})
 
     # Period axis — shared across every Metric-Series in this shape
     periods:            list[TimeSeriesPeriod] = field(default_factory=list)

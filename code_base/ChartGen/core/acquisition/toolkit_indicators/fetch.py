@@ -89,7 +89,14 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             any_unmapped_org = any_unmapped_org or had_unmapped
 
             shape = transform(report_details, report_data, project_dates)
-            shape = replace(shape, population_table=submissions_timeseries_table_name(project_id))
+            # Stamp the population table, and record the source URL in the
+            # shape's own metadata (recorded once, at the point of pulling
+            # the data — see chart construction, Data Shapes).
+            shape = replace(
+                shape,
+                population_table=submissions_timeseries_table_name(project_id),
+                metadata={**shape.metadata, "source_url": row["url"]},
+            )
             shape_type = type(shape).__name__
             chart_title = str(getattr(shape, "title", "") or "").strip()
 

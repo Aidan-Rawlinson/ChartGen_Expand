@@ -126,7 +126,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Running Order Streamlit tab (master/detail UI) | Complete | Shape-filtered chart type dropdown. |
 | Control flag (row on/off) | Complete | |
 | `create_ppt` | Complete | |
-| `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `base_chart_name` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. See Chart construction, Part 5. |
+| `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `base_chart_name` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. Optional hyperlink icon, linked to the chart's own data shape's recorded source URL. See Chart construction, Part 5, and Architecture Decisions 37–38. |
 | `insert_table` | Complete | Renders a Base Table from an Output Table's grid, the same way `insert_chart` renders a chart. Resolves `table_type_ref` against the built-in library first, then a workfile's own saved Custom Tables. See Output Tables, Part 5. |
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |

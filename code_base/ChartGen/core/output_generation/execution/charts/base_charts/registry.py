@@ -26,6 +26,7 @@ from core.output_generation.execution.charts.base_charts.numeric_series.box_whis
 from core.output_generation.execution.charts.base_charts.numeric_series.frequency_histogram import frequency_histogram
 from core.output_generation.execution.charts.base_charts.numeric_series.violin_plot import violin_plot
 from core.output_generation.execution.charts.base_charts.numeric_series.bead_string_dot_plot import bead_string_dot_plot
+from core.output_generation.execution.charts.base_charts.numeric_series.column_ci_full import column_ci_full
 
 from core.output_generation.execution.charts.base_charts.numeric_compositional.ugly_bar import ugly_bar
 from core.output_generation.execution.charts.base_charts.numeric_compositional.radar_chart import radar_chart
@@ -50,6 +51,7 @@ from core.output_generation.execution.charts.base_charts.timeseries.line_ci_medi
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_2 import line_ci_2
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_5pct import line_ci_5pct
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_0_5pct import line_ci_0_5pct
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_full import line_ci_full
 
 CHART_REGISTRY = {
     "ranked_column":        ranked_column,
@@ -69,6 +71,7 @@ CHART_REGISTRY = {
     "donut_pie":            donut_pie,
     "treemap":              treemap,
     "bead_string_dot_plot": bead_string_dot_plot,
+    "column_ci_full":       column_ci_full,
     "period_line_chart":    period_line_chart,
     "median_comparison_linechart": median_comparison_linechart,
     "full_lines_linechart": full_lines_linechart,
@@ -79,6 +82,7 @@ CHART_REGISTRY = {
     "line_ci_2":            line_ci_2,
     "line_ci_5pct":         line_ci_5pct,
     "line_ci_0_5pct":       line_ci_0_5pct,
+    "line_ci_full":         line_ci_full,
 }
 
 

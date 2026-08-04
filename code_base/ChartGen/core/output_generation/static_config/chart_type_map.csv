@@ -6,6 +6,7 @@ NumericSeries,frequency_histogram,Frequency histogram — distribution shape
 NumericSeries,violin_plot,Violin plot — KDE distribution
 NumericSeries,bead_string_dot_plot,Bead-string dot plot — three-tier distribution with peer group and selected unit
 NumericSeries,celltest,Diagnostic — 50% transparent green rectangle at exactly the requested cell size, no data drawn
+NumericSeries,column_ci_full,Ranked column chart — Community Indicators report styling (selected org red, others blue, mean/median lines)
 NumericCompositional,ugly_bar,Horizontal bar — component breakdown
 NumericCompositional,radar_chart,Radar / spider chart — component values on radial axes
 NumericCompositional,donut_component,Donut chart — component proportions
@@ -28,4 +29,5 @@ TimeSeries,line_ci_median,Line Chart - CI Median — blue tick/grey cross/grey d
 TimeSeries,line_ci_2,Line Chart - CI 2 — blue tick/grey cross/grey dash: final period's submission vs threshold of 2
 TimeSeries,line_ci_5pct,Line Chart - CI 5% — blue tick/grey cross/grey dash: final period's submission vs threshold of 5%
 TimeSeries,line_ci_0_5pct,Line Chart - CI 0.5% — blue tick/grey cross/grey dash: final period's submission vs threshold of 0.5%
+TimeSeries,line_ci_full,Line chart — Community Indicators report styling, mean/median reference lines, Selected on top, plus a per-period Selected/Mean/Median table beneath the chart
 TimeSeries,celltest,Diagnostic — 50% transparent green rectangle at exactly the requested cell size, no data drawn

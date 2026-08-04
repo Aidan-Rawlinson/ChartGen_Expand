@@ -80,11 +80,18 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
 
             # Transform to canonical shape
             shape = transform(raw_json, year, option)
-            # Stamp which population table this data's units belong to. All
-            # data is submissions data today, so this is always the
-            # submissions table for the chart's own project/year — not
-            # necessarily the workfile's current master table.
-            shape = replace(shape, population_table=submissions_table_name(year, parsed["project_id"]))
+            # Stamp which population table this data's units belong to, and
+            # record the source URL in the shape's own metadata (recorded
+            # once, at the point of pulling the data — see chart construction,
+            # Data Shapes). All data is submissions data today, so
+            # population_table is always the submissions table for the
+            # chart's own project/year — not necessarily the workfile's
+            # current master table.
+            shape = replace(
+                shape,
+                population_table=submissions_table_name(year, parsed["project_id"]),
+                metadata={**shape.metadata, "source_url": row["url"]},
+            )
             shape_type = type(shape).__name__
             chart_title = str(getattr(shape, "title", "") or "").strip()
 

@@ -44,8 +44,8 @@ def time_series_to_numeric_series(shape: TimeSeries, period_ids: list) -> Numeri
     columns rather than being dropped from the output entirely.
 
     Metadata: title, format_modifier, population_table, population_label,
-    and has_valid_unit_data carry across unchanged. year is left None —
-    TimeSeries/Indicators data has no year of its own (Architecture,
+    metadata, and has_valid_unit_data carry across unchanged. year is left
+    None -- TimeSeries/Indicators data has no year of its own (Architecture,
     Decision 10), so there's nothing meaningful to set it to.
 
     Raises ValueError if any period_id in period_ids is not present on the
@@ -115,6 +115,7 @@ def time_series_to_numeric_series(shape: TimeSeries, period_ids: list) -> Numeri
         format_modifier=shape.format_modifier,
         population_label=shape.population_label,
         population_table=shape.population_table,
+        metadata=shape.metadata,
         has_valid_unit_data=shape.has_valid_unit_data,
         units=numeric_units,
         shape_stats=shape_stats,

@@ -541,8 +541,19 @@ def render_charts_tab():
                     st.session_state["cs_pending_end_period"] = str(row.get("end_period", "") or "")
                     st.session_state["cs_pending_metric_periods_str"] = str(row.get("metric_periods", "") or "")
                     st.session_state["cs_pending_tweaks_str"] = str(row.get("tweaks", "") or "")
-                    st.session_state["cs_width_pct"] = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 50.0
-                    st.session_state["cs_height_pct"] = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 50.0
+                    # A near-zero computed percentage is treated the same as
+                    # "no meaningful size stored" (fallback 50.0) rather than
+                    # passed through -- without this, a row whose width_emu/
+                    # height_emu is present but tiny relative to the page
+                    # computes to e.g. 0.03%, which the Sizing widget's own
+                    # min_value=1.0 then silently clamps to a misleading
+                    # "1.0" display -- looking like the box reverted to its
+                    # minimum even though the stored EMU value is untouched.
+                    # Mirrors output_tables_tab.py's own row-load guard.
+                    width_pct_computed = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 0.0
+                    height_pct_computed = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 0.0
+                    st.session_state["cs_width_pct"] = width_pct_computed if width_pct_computed >= 1.0 else 50.0
+                    st.session_state["cs_height_pct"] = height_pct_computed if height_pct_computed >= 1.0 else 50.0
                     st.session_state["cs_target_row_choice"] = ro_choice
 
                     # Mutually exclusive with Chart Store line — this
@@ -594,11 +605,22 @@ def render_charts_tab():
                     st.session_state["cs_pending_end_period"] = str(cstore_row.get("end_period", "") or "")
                     st.session_state["cs_pending_metric_periods_str"] = str(cstore_row.get("metric_periods", "") or "")
                     st.session_state["cs_pending_tweaks_str"] = str(cstore_row.get("tweaks", "") or "")
+                    # Same near-zero-percentage guard as the Running Order
+                    # row-load path above — see that comment for why this
+                    # matters (output_tables_tab.py's row-load path already
+                    # has the equivalent guard; this was the one load path
+                    # here that didn't).
+                    cstore_width_pct_computed = (
+                        round(emu_to_percent(cstore_w_emu, cstore_page_w, cstore_page_h), 1) if cstore_w_emu else 0.0
+                    )
+                    cstore_height_pct_computed = (
+                        round(emu_to_percent(cstore_h_emu, cstore_page_w, cstore_page_h), 1) if cstore_h_emu else 0.0
+                    )
                     st.session_state["cs_width_pct"] = (
-                        round(emu_to_percent(cstore_w_emu, cstore_page_w, cstore_page_h), 1) if cstore_w_emu else 50.0
+                        cstore_width_pct_computed if cstore_width_pct_computed >= 1.0 else 50.0
                     )
                     st.session_state["cs_height_pct"] = (
-                        round(emu_to_percent(cstore_h_emu, cstore_page_w, cstore_page_h), 1) if cstore_h_emu else 50.0
+                        cstore_height_pct_computed if cstore_height_pct_computed >= 1.0 else 50.0
                     )
                     st.session_state["cs_chart_store_target_choice"] = chart_store_choice
                     st.session_state["cs_chart_store_action"] = "Overwrite selected entry"
@@ -790,7 +812,13 @@ def render_charts_tab():
             selected_file, the_manifest, converts_to_metrics=converts_to_metrics,
             custom_chart_rows=workfile_state.custom_chart_rows,
         )
-        type_desc_by_ref = {ref: desc for ref, desc in valid_types}
+        # Dropdown shows base_chart_name itself, not the chart_type_map.csv
+        # description — the description previously shown here didn't match
+        # what's typed/seen anywhere else in the system (Running Order xlsx
+        # dropdown, code, file names all use base_chart_name), which was
+        # actively confusing rather than helpful. The description column
+        # itself is left in chart_type_map.csv/custom_chart_descriptions —
+        # just no longer surfaced in this UI.
 
         if "cs_pending_base_chart_name" in st.session_state:
             pending_ref = st.session_state.pop("cs_pending_base_chart_name")
@@ -805,7 +833,7 @@ def render_charts_tab():
         with st.expander("Select Visualisation", expanded=chart_settings_expanded):
             base_chart_name = st.selectbox(
                 "Base chart", options=[""] + valid_refs,
-                format_func=lambda v: "— select chart type —" if v == "" else type_desc_by_ref.get(v, v),
+                format_func=lambda v: "— select chart type —" if v == "" else v,
                 key="cs_base_chart_name", label_visibility="collapsed",
             )
 

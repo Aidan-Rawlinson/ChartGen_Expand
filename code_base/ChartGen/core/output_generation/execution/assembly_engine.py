@@ -37,6 +37,67 @@ from core.workfile.state.workfile_file import master_table_rows
 
 
 # ---------------------------------------------------------------------------
+# Hyperlink icon — optional, insert_chart only
+# ---------------------------------------------------------------------------
+
+DEFAULT_HYPERLINK_COLOUR = "#0563C1"   # standard Office hyperlink blue
+DEFAULT_HYPERLINK_SIZE_EMU = 360000    # ~1cm (914400 EMU/inch ÷ 2.54)
+
+
+def _hyperlink_icon_svg_bytes(colour_hex: str) -> bytes:
+    """
+    A small chain-link icon, drawn from scratch (two rounded-rect "links",
+    not traced from any icon library) -- own copy, not shared with any
+    Base Chart, since this is assembly-layer decoration, not a chart.
+    The two links are drawn with a small gap between them (pushed inward
+    from where they'd otherwise touch/overlap) rather than interlocking --
+    a deliberate simplification, open to revisiting. viewBox is a fixed
+    72x72 square regardless of the icon's actual placed size on the slide
+    -- add_svg_picture scales it to whatever width_emu/height_emu it's
+    given, same as every Base Chart's own SVG output.
+    """
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">'
+        f'<g fill="none" stroke="{colour_hex}" stroke-width="6" stroke-linecap="round">'
+        '<rect x="8" y="26" width="26" height="20" rx="10"/>'
+        '<rect x="38" y="26" width="26" height="20" rx="10"/>'
+        '</g></svg>'
+    )
+    return svg.encode("utf-8")
+
+
+def _insert_hyperlink_icon(prs: Presentation, slide_index: int,
+                            chart_left_emu: int, chart_top_emu: int, chart_width_emu: int,
+                            hyperlink_left_emu: int, hyperlink_top_emu: int,
+                            size_emu: int, colour_hex: str, source_url: str = None):
+    """
+    Draw the hyperlink icon onto the slide, positioned relative to the
+    chart's own top-right corner -- NOT an absolute slide position, so the
+    icon travels with the chart regardless of where the chart itself sits.
+    (hyperlink_left_emu, hyperlink_top_emu) of (0, 0) places the icon's own
+    top-left corner exactly at the chart's top-right corner. Drawn square:
+    size_emu is used for both width and height. Sub-step of insert_chart,
+    called after the chart image itself is already on the slide.
+
+    source_url, if given, is set as the icon shape's own click hyperlink
+    (python-pptx's click_action.hyperlink.address) -- the icon's own
+    identity as a link, not a hyperlink on the chart picture itself. A
+    blank/missing source_url still draws the icon (position/colour are
+    resolved independently of whether the data shape's own metadata has a
+    URL recorded) -- it just isn't clickable.
+    """
+    icon_left_emu = chart_left_emu + chart_width_emu + hyperlink_left_emu
+    icon_top_emu = chart_top_emu + hyperlink_top_emu
+    slide = prs.slides[slide_index]
+    icon_shape = add_svg_picture(
+        slide, _hyperlink_icon_svg_bytes(colour_hex),
+        icon_left_emu, icon_top_emu, size_emu, size_emu,
+    )
+    if source_url:
+        icon_shape.click_action.hyperlink.address = source_url
+
+
+# ---------------------------------------------------------------------------
 # Assembly context — passed through every function call in a run
 # ---------------------------------------------------------------------------
 
@@ -198,6 +259,40 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         )
     except Exception as e:
         return err_result(row, f"insert_chart: failed to insert image on slide {slide_index}: {e}")
+
+    # --- Optional hyperlink icon, positioned relative to the chart's own
+    # top-right corner. Generates only when BOTH hyperlink_left and
+    # hyperlink_top are present on the row -- blank in either means no
+    # icon at all. (0, 0) is a valid, meaningful value distinct from
+    # blank: it places the icon's own top-left corner exactly at the
+    # chart's top-right corner. hyperlink_size/hyperlink_colour each fall
+    # back to their own default independently of whether they're blank. ---
+    hyperlink_left_raw = str(row.get("hyperlink_left", "") or "").strip()
+    hyperlink_top_raw = str(row.get("hyperlink_top", "") or "").strip()
+    if hyperlink_left_raw != "" and hyperlink_top_raw != "":
+        hyperlink_left_emu = _int_or_none(hyperlink_left_raw)
+        hyperlink_top_emu = _int_or_none(hyperlink_top_raw)
+        if hyperlink_left_emu is None or hyperlink_top_emu is None:
+            return err_result(row, "insert_chart: hyperlink_left/hyperlink_top must be whole EMU numbers.")
+        hyperlink_size_emu = _int_or_none(row.get("hyperlink_size")) or DEFAULT_HYPERLINK_SIZE_EMU
+        hyperlink_colour = str(row.get("hyperlink_colour", "") or "").strip() or DEFAULT_HYPERLINK_COLOUR
+        # source_url comes from this row's own resolved data shape (the
+        # cut actually rendered, data_shape, in scope above) -- not from
+        # any particular population layer, since metadata isn't part of
+        # any single layer's own filtered view; it's the same value on
+        # every layer, carried through filter/replace() unchanged from
+        # where fetch.py recorded it.
+        source_url = (data_shape.metadata or {}).get("source_url")
+        try:
+            _insert_hyperlink_icon(
+                ctx.prs, slide_index,
+                left_emu, top_emu, width_emu,
+                hyperlink_left_emu, hyperlink_top_emu,
+                hyperlink_size_emu, hyperlink_colour,
+                source_url=source_url,
+            )
+        except Exception as e:
+            return err_result(row, f"insert_chart: failed to insert hyperlink icon on slide {slide_index}: {e}")
 
     return ok_result(row, f"Chart '{base_chart_name}' inserted (slide {slide_index + 1})")
 

@@ -305,6 +305,9 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `top_emu` | Top position in EMU — populated from template |
 | `width_emu` | Width in EMU — populated from template |
 | `height_emu` | Height in EMU — populated from template |
+| `hyperlink_left` / `hyperlink_top` | `insert_chart` only, optional. EMU offset from the chart's own top-right corner (left_emu + width_emu, top_emu) for a hyperlink icon — NOT an absolute slide position. Blank in either means no icon; (0, 0) is a valid value, distinct from blank. See Decision 38 |
+| `hyperlink_size` | `insert_chart` only, optional. Icon width/height in EMU (drawn square). Blank defaults to ~1cm (360000 EMU) |
+| `hyperlink_colour` | `insert_chart` only, optional. Hex colour string. Blank defaults to the standard Office hyperlink blue (`#0563C1`) |
 | `tweaks` | Free-text string, passed straight through to the Base Chart function's own `tweaks` parameter, uninterpreted by anything in the Running Order/assembly layer (blank = nil-length string). No Base Chart function currently reads it — see Decision 16 |
 | `notes` | Free text; user reference only, ignored at runtime |
 
@@ -483,6 +486,7 @@ Streamlit process (st.session_state)
 | `list[data shape]` | One list per `insert_chart` call — built fresh by `build_population_layers()` each time; each entry is a filtered copy of the chart's data shape, stats recalculated |
 | `population_label: str` | Field on the data shape itself — e.g. `"All"`, `"Selected"`, or a resolved peer-group value |
 | `population_table: str` | Field on the data shape itself, set once at fetch (`fetch.py`) — the name of the population table this chart's units belong to, not derived at read time |
+| `metadata: dict` | Field on the data shape itself — a side pocket for information that travels with the shape without being part of it conceptually, e.g. `source_url`. Not part of the `chart_inputs` contract; carries through filtering/`replace()` unchanged. See Decision 37 |
 
 Only `WorkfileState` (Decision 1) holds real state. `AssemblyContext`, `ReportContext`, and population-filtered data shape lists are just rebuilt from it on every run, the way any app rebuilds working objects from its underlying data rather than treating them as sources of truth in their own right. If the Streamlit process dies mid-session, everything here is gone except whatever was already saved.
 
@@ -876,3 +880,25 @@ A Custom Tables download bundle (Decision 24) previously covered the table's own
 `chart_store.py` gained `resolve_chart_store_population_layers`, extracting the cache-load/cut/population-default-fallback/layer-build pipeline the bundle needed — previously duplicated once already (the Output Tables Preview's own chart-in-cell splice); that call site now uses the same shared function instead of its own copy.
 
 The bundle's own marker-scanning regex initially required the id after `{C` to look like the auto-generated base-36 shape — confirmed wrong against a real table using hand-typed ids (`{CH1}`, `{CV1}`), which every Base Table's own `_chart_cell_id` check already treats as valid (it only checks the `{`/`}`/leading-`C` shape, nothing about what follows). Fixed to match that same, more permissive rule exactly.
+
+### Decision 36 — Charts Sheet Dropdown Shows `base_chart_name`, Not Description
+
+The "Select Visualisation" dropdown on the Charts sheet used to display each chart's `chart_type_map.csv` description rather than its `base_chart_name` — the name typed nowhere else in the system (Running Order dropdown, code, file names all use `base_chart_name`), which made the two hard to connect. The dropdown now shows `base_chart_name` directly. The `description` column itself is left in place, unused, in case it's wanted again later.
+
+### Decision 37 — `metadata` Container on Every Data Shape
+
+Each of the four canonical data shapes gained its own `metadata: dict` field (added individually per shape module, not a shared base — consistent with every other duplicated field like `format_modifier`), holding information that travels with a shape without being conceptually part of it — starting with `source_url`, defaulting to `None`. Both fetch pipelines (`toolkit_nhs/fetch.py`, `toolkit_indicators/fetch.py`) stamp `source_url` with the manifest row's own URL, right alongside where `population_table` is already stamped. It survives filtering/`replace()` automatically, the same as any other field — no special-casing needed.
+
+Two places reconstruct a shape field-by-field rather than passing a dict straight through, and needed `metadata` added explicitly or it would have silently reset to the default on every pass: `cache_reader.py`'s four `_from_dict_*` deserialisers, and `shape_transforms.py`'s TimeSeries→NumericSeries snapshot conversion. Both fixed.
+
+Not part of the `chart_inputs` contract (Decision 18) and not normally relied on downstream — available to a chart if read directly (a population layer is the shape, nothing enforces otherwise), but that's the exception, not the convention.
+
+### Decision 38 — Hyperlink Icon on `insert_chart`
+
+Four new optional Running Order columns, `insert_chart` only: `hyperlink_left`/`hyperlink_top`/`hyperlink_size`/`hyperlink_colour` (Section 5 schema). When both `hyperlink_left` and `hyperlink_top` are present (blank in either means no icon at all — `0` is a valid, present value, distinct from blank), a small chain-link icon is drawn onto the slide after the chart image itself, positioned as an EMU offset from the chart's own top-right corner rather than an absolute slide position — so it travels with the chart. `hyperlink_size` defaults to ~1cm (360000 EMU) if blank; `hyperlink_colour` defaults to the standard Office hyperlink blue (`#0563C1`).
+
+The icon is drawn from scratch (`assembly_engine._hyperlink_icon_svg_bytes`) — two rounded-rect "links" with a small gap between them, not traced from any icon library — via the same `add_svg_picture` mechanism every chart/table uses. Its own `click_action.hyperlink.address` is set to the row's data shape's own `metadata["source_url"]` (Decision 37) when present; a missing URL still draws the icon, just without a working link.
+
+### Decision 39 — Charts Sheet Sizing Guard Against Near-Zero Percentages
+
+`charts_tab.py`'s two EMU-to-percent recompute points (Running Order row load, Chart Store line load) had no floor check before writing into `cs_width_pct`/`cs_height_pct` — a genuinely small computed percentage (e.g. 0.03%) was passed straight to the Sizing widget, whose own `min_value=1.0` then silently clamped the display to "1.0", looking like the box had reverted to its minimum even though the stored EMU value was untouched. `output_tables_tab.py`'s equivalent row-load path already had this guard; `charts_tab.py` didn't. Both load paths now fall back to 50.0% when the computed value is below 1.0, matching the existing Output Tables convention.

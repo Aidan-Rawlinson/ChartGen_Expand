@@ -137,6 +137,10 @@ def write_xlsx(rows: list[dict], output_path: str,
         "top_emu":       12,
         "width_emu":     12,
         "height_emu":    12,
+        "hyperlink_left":  14,
+        "hyperlink_top":   14,
+        "hyperlink_size":  14,
+        "hyperlink_colour":14,
         "tweaks":        30,
         "notes":         40,
     }
@@ -233,7 +237,8 @@ def write_xlsx(rows: list[dict], output_path: str,
 
             # Alignment
             if col_name in ("row_id", "enabled", "slide_index",
-                            "left_emu", "top_emu", "width_emu", "height_emu"):
+                            "left_emu", "top_emu", "width_emu", "height_emu",
+                            "hyperlink_left", "hyperlink_top", "hyperlink_size"):
                 cell.alignment = centre_align
             else:
                 cell.alignment = left_align

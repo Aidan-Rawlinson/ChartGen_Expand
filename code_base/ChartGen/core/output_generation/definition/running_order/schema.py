@@ -26,6 +26,10 @@ COLUMNS = [
     "top_emu",
     "width_emu",
     "height_emu",
+    "hyperlink_left",
+    "hyperlink_top",
+    "hyperlink_size",
+    "hyperlink_colour",
     "tweaks",
     "tweaks",
     "notes",
@@ -84,3 +88,17 @@ CHART_SANDBOX_FIELDS = ["base_chart_name", "cache_file", "populations",
 # its own resolution independently, per row, at render time), just table
 # identity, table_type_ref, size, and tweaks.
 TABLE_SANDBOX_FIELDS = ["table_id", "table_type_ref", "width_emu", "height_emu", "tweaks"]
+
+# hyperlink_left/hyperlink_top/hyperlink_size/hyperlink_colour — optional,
+# insert_chart only. An icon is drawn onto the slide after the chart image
+# itself, marking that the chart links out to its own source data.
+# hyperlink_left/hyperlink_top are NOT absolute slide coordinates: they are
+# an EMU offset from the chart's own top-right corner (left_emu + width_emu,
+# top_emu) — so the icon's position travels with the chart, not the slide.
+# Blank in either one means no icon is drawn at all for this row; (0, 0) is
+# a valid, meaningful value (icon's own top-left corner sits exactly at the
+# chart's top-right corner), not the same thing as blank. hyperlink_size is
+# the icon's own width/height in EMU (drawn square) — blank defaults to
+# roughly 1cm (360000 EMU). hyperlink_colour is a hex string — blank
+# defaults to the standard Office hyperlink blue (#0563C1).
+

@@ -37,12 +37,20 @@ class NumericCompositionalMetric:
 @dataclass
 class NumericCompositional:
     """One or more Metric-Series per unit, each composed of Component-Series summing to a whole."""
-    # Metadata
+    # Descriptive fields
     title:              Optional[str]       = None
     year:               Optional[int]       = None
     format_modifier:    Optional[str]       = None
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
     population_table:   Optional[str]       = None  # name of the population table this data's units belong to (e.g. "submissions_2026_123", "nhs_organisations") — a plain reference to an existing table name, not derived at read time
+
+    # Auxiliary metadata — NOT a conceptual part of the data shape itself.
+    # A side pocket for information that travels with the shape without
+    # describing what the shape actually is. Not part of the chart_inputs
+    # contract, and not normally relied on downstream — an exception is for
+    # the specific circumstance that needs it, not the norm. Carries
+    # through filtering/replace() unchanged, same as every other field.
+    metadata:           dict                = field(default_factory=lambda: {"source_url": None})
 
     # Data — one NumericCompositionalMetric per Metric-Series
     has_valid_unit_data: bool               = True
