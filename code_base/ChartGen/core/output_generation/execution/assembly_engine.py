@@ -49,18 +49,19 @@ def _hyperlink_icon_svg_bytes(colour_hex: str) -> bytes:
     A small chain-link icon, drawn from scratch (two rounded-rect "links",
     not traced from any icon library) -- own copy, not shared with any
     Base Chart, since this is assembly-layer decoration, not a chart.
-    The two links are drawn with a small gap between them (pushed inward
-    from where they'd otherwise touch/overlap) rather than interlocking --
-    a deliberate simplification, open to revisiting. viewBox is a fixed
-    72x72 square regardless of the icon's actual placed size on the slide
-    -- add_svg_picture scales it to whatever width_emu/height_emu it's
-    given, same as every Base Chart's own SVG output.
+    The two links overlap (stroke-only rects, no fill, so the background
+    shows through in the overlap band) rather than sitting apart with a
+    gap -- matching how a real link symbol is read (the two rings joined,
+    not separate). viewBox is a fixed 72x72 square regardless of the
+    icon's actual placed size on the slide -- add_svg_picture scales it to
+    whatever width_emu/height_emu it's given, same as every Base Chart's
+    own SVG output.
     """
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">'
         f'<g fill="none" stroke="{colour_hex}" stroke-width="6" stroke-linecap="round">'
-        '<rect x="8" y="26" width="26" height="20" rx="10"/>'
-        '<rect x="38" y="26" width="26" height="20" rx="10"/>'
+        '<rect x="14" y="26" width="26" height="20" rx="10"/>'
+        '<rect x="32" y="26" width="26" height="20" rx="10"/>'
         '</g></svg>'
     )
     return svg.encode("utf-8")
@@ -85,6 +86,10 @@ def _insert_hyperlink_icon(prs: Presentation, slide_index: int,
     blank/missing source_url still draws the icon (position/colour are
     resolved independently of whether the data shape's own metadata has a
     URL recorded) -- it just isn't clickable.
+
+    Returns the icon's own shape -- insert_chart names it (CG_Link_{row_id})
+    once it's back in scope there, rather than this function knowing about
+    Running Order row identity at all.
     """
     icon_left_emu = chart_left_emu + chart_width_emu + hyperlink_left_emu
     icon_top_emu = chart_top_emu + hyperlink_top_emu
@@ -95,6 +100,7 @@ def _insert_hyperlink_icon(prs: Presentation, slide_index: int,
     )
     if source_url:
         icon_shape.click_action.hyperlink.address = source_url
+    return icon_shape
 
 
 # ---------------------------------------------------------------------------
@@ -253,10 +259,18 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
 
     # --- Insert into slide ---
     try:
-        _insert_image_at_position(
+        chart_shape = _insert_image_at_position(
             ctx.prs, slide_index,
             image_bytes, left_emu, top_emu, width_emu, height_emu
         )
+        # Named for traceback against the Running Order (Position Finder
+        # tool, running_order_tab.py) -- keyed on row_id, this row's
+        # current line number. row_id is renumbered whenever rows are
+        # inserted/reordered/deleted (row_ops.renumber_row_ids), so this
+        # name only stays accurate until the Running Order is next
+        # edited -- an accepted trade-off (Aidan's own call) rather than
+        # a genuinely stable identity like hex_id or a Stat Tag id.
+        chart_shape.name = f"CG_Chart_{row.get('row_id')}"
     except Exception as e:
         return err_result(row, f"insert_chart: failed to insert image on slide {slide_index}: {e}")
 
@@ -284,13 +298,15 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         # where fetch.py recorded it.
         source_url = (data_shape.metadata or {}).get("source_url")
         try:
-            _insert_hyperlink_icon(
+            icon_shape = _insert_hyperlink_icon(
                 ctx.prs, slide_index,
                 left_emu, top_emu, width_emu,
                 hyperlink_left_emu, hyperlink_top_emu,
                 hyperlink_size_emu, hyperlink_colour,
                 source_url=source_url,
             )
+            # Same naming convention/caveat as the chart shape above.
+            icon_shape.name = f"CG_Link_{row.get('row_id')}"
         except Exception as e:
             return err_result(row, f"insert_chart: failed to insert hyperlink icon on slide {slide_index}: {e}")
 
@@ -333,21 +349,36 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         return err_result(row, f"save_pdf: could not save .pptx before PDF export: {e}")
 
     try:
+        import pythoncom
         import comtypes.client
-        powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
-        powerpoint.Visible = 1
-        deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
-        # TEST, not yet a settled decision -- see Architecture, Structural
-        # Design Principles ("Validate only where designed"). ExportAsFixedFormat
-        # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
-        # called with default settings for everything else. Decision 26 originally
-        # moved away from this method because it produced visibly downsampled
-        # embedded images even with autoCompressPictures forced off -- revisited
-        # here at Aidan's request; that finding may still apply and is worth
-        # re-checking against raster (non-SVG) content before treating this as settled.
-        deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
-        deck.Close()
-        powerpoint.Quit()
+        # Explicit CoInitialize/CoUninitialize on this call, rather than
+        # relying on comtypes' own implicit init -- comtypes tracks "have I
+        # initialised COM?" as a module-level flag, not per-thread, and
+        # Streamlit runs each script rerun on a fresh thread. A second run
+        # landing on a new thread that's never actually had CoInitialize
+        # called on it, but where comtypes' own flag already says "done",
+        # skips initialisation and fails with "CoInitialize has not been
+        # called" the moment the COM object is actually used. Same
+        # explicit-call convention insert_from_excel.py already uses for
+        # its own COM session, for the same reason.
+        pythoncom.CoInitialize()
+        try:
+            powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
+            powerpoint.Visible = 1
+            deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
+            # TEST, not yet a settled decision -- see Architecture, Structural
+            # Design Principles ("Validate only where designed"). ExportAsFixedFormat
+            # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
+            # called with default settings for everything else. Decision 26 originally
+            # moved away from this method because it produced visibly downsampled
+            # embedded images even with autoCompressPictures forced off -- revisited
+            # here at Aidan's request; that finding may still apply and is worth
+            # re-checking against raster (non-SVG) content before treating this as settled.
+            deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
+            deck.Close()
+            powerpoint.Quit()
+        finally:
+            pythoncom.CoUninitialize()
         return ok_result(row, f"PDF saved: {pdf_path}")
     except ImportError:
         return err_result(row, "save_pdf: comtypes not available — PDF export requires Windows + PowerPoint.")
@@ -492,7 +523,10 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
     Insert an SVG image at the exact EMU position on the given slide, via
     the shared add_svg_picture dual-blip mechanism (see svg_insert.py) --
     every Base Chart returns SVG bytes (Architecture, SVG rendering
-    methodology). Sub-step of insert_chart.
+    methodology). Sub-step of insert_chart. Returns the inserted shape --
+    insert_chart names it (CG_Chart_{row_id}) once it's back in scope
+    there, rather than this function knowing about Running Order row
+    identity at all.
     """
     if slide_index >= len(prs.slides):
         raise IndexError(
@@ -500,7 +534,7 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
             f"(template has {len(prs.slides)} slides)."
         )
     slide = prs.slides[slide_index]
-    add_svg_picture(
+    return add_svg_picture(
         slide, image_bytes.read(),
         left_emu, top_emu, width_emu, height_emu,
     )

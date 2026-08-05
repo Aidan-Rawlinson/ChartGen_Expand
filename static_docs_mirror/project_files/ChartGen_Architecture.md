@@ -128,6 +128,8 @@ chartgen/
     │       │   └── insert_picture.py
     │       ├── excel/
     │       │   └── insert_from_excel.py
+    │       ├── pptx_com/
+    │       │   └── position_finder.py
     │       └── text/
     │           ├── text_engine.py, stat_tags.py
     │           └── stat_tags_xlsx.py
@@ -204,6 +206,7 @@ chartgen/
 | `core/output_generation/execution/tables/custom_tables/` | Custom Tables — user- or AI-authored Base Tables saved into a workfile. Mirrors `charts/custom_charts/` field for field (`contract.py`, `gate.py`, `resolve.py`, `bundle.py`), for the table domain rather than the chart domain — kept as its own copy, not shared, since the two rendering domains are deliberately independent. See Decision 24 |
 | `core/output_generation/execution/pictures/insert_picture.py` | `insert_picture` Running Order function |
 | `core/output_generation/execution/excel/insert_from_excel.py` | Excel COM capture (`open_excel` / `insert_from_excel` / `close_excel`) |
+| `core/output_generation/execution/pptx_com/position_finder.py` | Position Finder — a Running Order support tool, not a Running Order function; reads the currently-selected shape's live position/size off an already-open PowerPoint via COM. See Decisions 40–41 |
 | `core/output_generation/execution/text/text_engine.py` | `update_text` Running Order function — per-unit tags and Stat Tags alike, ordinary text frames and PowerPoint table cells alike. Promoted out of `assembly_engine` to its own module; the resolution logic for a Stat Tag itself lives in `stat_tags.py`, this module only builds the combined token dict and walks the presentation. See Decision 20 |
 | `core/output_generation/execution/text/stat_tags.py` | Stat Tags: `next_stat_tag` (base-36 counter, via shared `id_generation`), `layer_display_label`, `resolve_stat_cut`/`resolve_stat_tag_value` — resolves one `text_stats.csv` row to a value for the current reporting unit, via `cut_resolution.prepare_chart_cut`. Also exposes `build_stat_tag_tokens` (in `text_engine.py`, public — see below), reused by Output Tables' own cell resolution. See Decision 19 |
 | `core/output_generation/execution/text/stat_tags_xlsx.py` | Excel download/upload round-trip for `text_stats.csv` — full-replace on upload, the same pattern as the Running Order's own xlsx pair, not the manifest table's identity-merge one. See Decision 19 |
@@ -308,7 +311,7 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `hyperlink_left` / `hyperlink_top` | `insert_chart` only, optional. EMU offset from the chart's own top-right corner (left_emu + width_emu, top_emu) for a hyperlink icon — NOT an absolute slide position. Blank in either means no icon; (0, 0) is a valid value, distinct from blank. See Decision 38 |
 | `hyperlink_size` | `insert_chart` only, optional. Icon width/height in EMU (drawn square). Blank defaults to ~1cm (360000 EMU) |
 | `hyperlink_colour` | `insert_chart` only, optional. Hex colour string. Blank defaults to the standard Office hyperlink blue (`#0563C1`) |
-| `tweaks` | Free-text string, passed straight through to the Base Chart function's own `tweaks` parameter, uninterpreted by anything in the Running Order/assembly layer (blank = nil-length string). No Base Chart function currently reads it — see Decision 16 |
+| `tweaks` | Free-text string, passed straight through to the Base Chart function's own `tweaks` parameter, uninterpreted by anything in the Running Order/assembly layer (blank = nil-length string). Two Base Charts (`column_ci_full`, `line_ci_full`) now read it, each defining its own delimited syntax — see Decision 16 |
 | `notes` | Free text; user reference only, ignored at runtime |
 
 **Manifest table column schema** (`data_cache/manifest.csv`):
@@ -695,7 +698,7 @@ Every Base Chart function's `tweaks` parameter was typed as a list default (`twe
 
 **Charts sheet.** `tweaks` was added to `CHART_SANDBOX_FIELDS` (Decision 11) and given its own text-area control in the Charts sheet, populating from a bound Running Order row's `tweaks` column the same way `populations`/`metric_periods` already do, or typed directly in free-play mode.
 
-**No Base Chart function currently reads `tweaks`.** The parameter and column exist and round-trip correctly end to end; no chart's rendering behaviour currently varies with its value. This is accepted as the starting point for future per-chart tweak behaviour, not a gap to close immediately.
+**Chart-owned tweaks conventions, now in practice.** The first Base Charts to actually read `tweaks` are `column_ci_full` and `line_ci_full` — each defines its own `_parse_tweaks` (its own copy, not shared, per Decision 18's standalone-artefact convention): a `key:value^key2:value2` caret-delimited syntax, read by that chart alone. This is a de facto convention other Base Charts may follow where practical, not one ChartGen enforces or interprets anywhere outside the chart that defines it — a different chart adopting a different structure inside its own `tweaks` string is a legitimate design choice under Section 10.0's own framing, not a deviation from a standard. Both charts currently define one key, `target` (a reference line — a fixed value, or the literal text `median` to track the metric's own median line).
 
 ### Decision 17 — Base Chart Statistics Ownership Reversed to the Data Shapes
 
@@ -902,3 +905,23 @@ The icon is drawn from scratch (`assembly_engine._hyperlink_icon_svg_bytes`) —
 ### Decision 39 — Charts Sheet Sizing Guard Against Near-Zero Percentages
 
 `charts_tab.py`'s two EMU-to-percent recompute points (Running Order row load, Chart Store line load) had no floor check before writing into `cs_width_pct`/`cs_height_pct` — a genuinely small computed percentage (e.g. 0.03%) was passed straight to the Sizing widget, whose own `min_value=1.0` then silently clamped the display to "1.0", looking like the box had reverted to its minimum even though the stored EMU value was untouched. `output_tables_tab.py`'s equivalent row-load path already had this guard; `charts_tab.py` didn't. Both load paths now fall back to 50.0% when the computed value is below 1.0, matching the existing Output Tables convention.
+
+### Decision 40 — `CG_Chart_`/`CG_Link_` Shape Naming for Traceback
+
+`insert_chart` now names the two PowerPoint shapes it creates: the chart picture itself as `CG_Chart_{row_id}`, and its optional hyperlink icon (Decision 38) as `CG_Link_{row_id}`, both keyed on the Running Order row's own `row_id` at the point of insertion. `_insert_image_at_position` and `_insert_hyperlink_icon` (`assembly_engine.py`) both now return the shape they created rather than nothing, so `insert_chart` can set `.name` on each once it's back in scope.
+
+**Why this exists.** Two purposes: identifying an already-placed icon as a hyperlink icon (rather than any other picture) and finding which chart it belongs to, without a new persisted link between the two shapes — and general traceback from a shape sitting on a generated slide back to the Running Order row that put it there. The Position Finder tool (Decision 41) is the first consumer, matching a selected `CG_Link_{n}` shape back to its `CG_Chart_{n}` sibling on the same slide by name alone.
+
+**Accepted staleness, by explicit choice.** `row_id` is renumbered sequentially whenever a Running Order row is inserted, deleted, or reordered (`row_ops.renumber_row_ids`) — the same renumbering behaviour `hex_id`/Stat Tag ids (Decision 19) were deliberately designed to avoid for anchoring purposes. Naming shapes with a genuinely stable, never-reused id (a new Running Order column, following that same pattern) was considered and explicitly declined in favour of the simpler `row_id`-keyed scheme: a shape's name is accurate at generation time and immediately afterwards, and only goes stale once the Running Order it came from is next reordered or edited. Good enough for "check the chart I just placed," not a durable cross-session identity.
+
+### Decision 41 — Position Finder Tool
+
+A read-only support tool, `core/output_generation/execution/pptx_com/position_finder.py`, exposed as a collapsible "Position Finder" section directly under the Running Order tab's own content (`running_order_tab.py`) — not a Running Order function itself: it never appears as a row, isn't in `assembly_engine.FUNCTION_MAP`, and isn't touched by `run_running_order`. Exists to answer "what is this shape's actual live position/size on the currently-open slide," for copying into a Running Order row by hand.
+
+**Attaches to the running instance, never launches one.** Uses `comtypes.client.GetActiveObject("PowerPoint.Application")`, not `CreateObject` — the latter would start a fresh, empty PowerPoint instance rather than find the one the user is actually looking at. Wrapped in an explicit `pythoncom.CoInitialize()`/`CoUninitialize()` pair, the same reasoning as `save_pdf` (Decision 26's module, see that function's own comment): `comtypes`' "have I initialised COM?" state is a module-level flag, not per-thread, and Streamlit gives each script rerun a fresh thread.
+
+**Points, not EMU.** PowerPoint's COM object model reports shape `Left`/`Top`/`Width`/`Height` in points; the tool converts (`× 12700`) before returning anything, so every value it surfaces is already in the same EMU unit the Running Order itself stores (Decision 29).
+
+**Link-to-chart resolution relies entirely on Decision 40's naming.** A selected shape named `CG_Link_{n}` is looked up against its slide's own shape collection for a sibling named `CG_Chart_{n}`; if found, the tool reports `hyperlink_left`/`hyperlink_top`/`hyperlink_size` as offsets from that chart's own top-right corner — the exact same convention `insert_chart`'s own `hyperlink_left`/`hyperlink_top` columns use (Decision 38) — rather than the icon's own absolute position, so the numbers can be pasted straight into those columns. No match found (renamed, deleted, or simply not on this slide) falls back to the icon's own absolute position, with an explanatory note rather than an error.
+
+**Read-only, by design.** The tool never writes back to the open presentation, the Running Order, or anything else — it only displays what it finds via `st.metric`, for the person to copy by hand. Aidan's own framing: a support tool that lives on the Running Order tab because it exists to help author Running Order rows, but sits outside the Running Order's own structure.

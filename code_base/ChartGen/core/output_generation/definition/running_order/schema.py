@@ -31,7 +31,6 @@ COLUMNS = [
     "hyperlink_size",
     "hyperlink_colour",
     "tweaks",
-    "tweaks",
     "notes",
 ]
 

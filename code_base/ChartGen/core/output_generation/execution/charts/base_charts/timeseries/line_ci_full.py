@@ -81,10 +81,9 @@ BASELINE_COL   = "#2F3A45"   # dark grey - baseline
 AXIS_LABEL_COL = "#5B6770"   # grey - axis tick labels
 CARD_BG        = "#F0F5FC"   # outer card background (figure)
 LEGEND_BORDER  = "#E6E9ED"   # light grey - legend / table border
+TARGET_PURPLE  = "#9B30FF"   # bright purple - tweaks-driven target reference line, this chart's own copy (matches column_ci_full's)
 
 PEER_ALPHAS = [1.0, 0.7, 0.5, 0.35]
-
-VALUE_DECIMAL_PLACES = 2
 
 EMU_PER_INCH = 914400
 
@@ -165,10 +164,13 @@ def _month_label(period_label):
     return f"{month_name[:3]} {year[-2:]}"
 
 
-def _format_value(value, format_modifier, decimals=VALUE_DECIMAL_PLACES):
+def _format_value(value, format_modifier, decimals):
     """Standard Base Chart formatting rule: "P" appends "%", "C" prefixes
     "£", anything else (including "N", or blank) gets plain comma-thousands
-    formatting with no suffix at all."""
+    formatting with no suffix at all. `decimals` is always supplied by the
+    caller (this chart's table decides it once per render, per
+    _sig_fig_decimals) rather than defaulting here, since a silent default
+    would let a call site forget to think about it."""
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return "-"
     if format_modifier == "P":
@@ -241,6 +243,55 @@ def _nice_axis_bounds(max_plotted_value, target_ticks=5):
     step = _nice_number(raw_step, round_to_nearest=True)
     y_max = math.ceil(padded / step) * step
     return y_max, step
+
+
+def _parse_tweaks(tweaks: str) -> dict:
+    """
+    Parse this chart's own tweaks convention: caret-separated key:value
+    pairs (key:value^key2:value2). Owned by this Base Chart individually,
+    not enforced by ChartGen itself -- a de facto standard shared with
+    other Base Charts where practical, but a different chart adopting a
+    different structure is a legitimate design choice, not a deviation.
+    Keys are lower-cased and stripped. Values are stripped of surrounding
+    whitespace only ('target: 150', 'target:150' and 'target:   150' all
+    parse identically) -- internal casing/content of the value itself is
+    preserved verbatim, since target's own value is echoed back literally
+    in its on-chart label. Own copy, matches column_ci_full's exactly.
+    """
+    result = {}
+    if not tweaks:
+        return result
+    for part in tweaks.split("^"):
+        if ":" not in part:
+            continue
+        key, _, value = part.partition(":")
+        key = key.strip().lower()
+        value = value.strip()
+        if key:
+            result[key] = value
+    return result
+
+
+def _sig_fig_decimals(reference_value, sig_figs=3):
+    """
+    Decimal places needed for `sig_figs` significant figures against a
+    single reference value -- 3 sig figs by default, per this chart's own
+    table convention (a whole table shares one decimal count rather than
+    deciding it cell-by-cell, so its columns/rows stay aligned).
+    max(0, ...) is the floor that guarantees rounding never happens above
+    the unit level: a reference value of 5678 gives 0 decimals (rounds to
+    5678, the nearest whole unit -- never rounds away to the nearest ten
+    or hundred), rather than going negative to force a 3-sig-fig fit.
+    Reference values below 1 extend decimals the other way (0.0523 -> 4
+    decimals) under the same 3-sig-fig rule, since there's no unit-level
+    floor to protect below zero.
+    """
+    if reference_value is None:
+        return 0
+    reference_value = abs(reference_value)
+    if reference_value == 0 or math.isnan(reference_value):
+        return 0
+    return max(0, (sig_figs - 1) - math.floor(math.log10(reference_value)))
 
 
 def _apply_axes_style(ax, y_max, step):
@@ -337,6 +388,30 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             peer_series.append((peer_means, layer.population_label, alpha))
             all_values.extend(list(peer_means[~np.isnan(peer_means)]))
 
+    # --- Tweaks-driven target reference line: "target:XXXX" in this row's
+    # own tweaks string (this chart's own tweaks convention -- see
+    # _parse_tweaks). XXXX numeric -> a flat line at that value across
+    # every period. XXXX the literal text "median" (case-insensitive) ->
+    # tracks this metric's own median line exactly, drawn as its own
+    # dashed purple line on top of, not instead of, the existing solid
+    # median line. Any other/invalid value is silently ignored -- no
+    # target line drawn, chart otherwise unaffected. Label always echoes
+    # the tweak's own literal text (whatever case/wording the user
+    # typed), with exactly one space after the colon regardless of
+    # spacing in the tweak itself. ---
+    tweak_values = _parse_tweaks(tweaks)
+    target_raw = tweak_values.get("target")
+    target_series = None
+    if target_raw:
+        if target_raw.lower() == "median":
+            target_series = medians
+        else:
+            try:
+                target_series = np.full(n_periods, float(target_raw))
+                all_values.append(float(target_raw))
+            except ValueError:
+                target_series = None
+
     max_plotted = max(all_values) if all_values else 1.0
     y_max, y_step = _nice_axis_bounds(max_plotted)
 
@@ -379,7 +454,17 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
                          marker="o", markersize=4, markerfacecolor=SELECTED_COL,
                          markeredgecolor=SELECTED_COL, zorder=5)
         handles.append(line)
-        legend_labels.append(f"{selected_code} (this organisation)")
+        legend_labels.append(selected_code)
+
+    target_handle = None
+    if target_series is not None:
+        target_handle, = ax.plot(x, target_series, color=TARGET_PURPLE, linewidth=2,
+                                  linestyle="--", zorder=6)
+        # Labelled via the legend (last entry, added after the reversal
+        # below) rather than an on-chart label -- an on-chart label's
+        # position can't be guaranteed clear of other chart content
+        # (data points, other lines, the plot's own edges), whereas the
+        # legend is a fixed, reserved band the label can never clash with.
 
     # Month labels appear once only, as the table's header row below - the
     # chart's own x-axis is left unlabelled to avoid repeating them.
@@ -395,6 +480,13 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     # neighbouring band regardless of legend content length).
     reversed_handles = list(reversed(handles))
     reversed_labels = list(reversed(legend_labels))
+    # Target is appended after the reversal, not folded into `handles`
+    # beforehand, so it always lands as the legend's last (rightmost)
+    # entry regardless of how many other series are present -- reversing
+    # a list that already ended with target would instead put it first.
+    if target_handle is not None:
+        reversed_handles.append(target_handle)
+        reversed_labels.append(f"Target: {target_raw}")
     legend = fig.legend(
         reversed_handles, reversed_labels,
         loc="lower left",
@@ -412,16 +504,30 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     legend.get_frame().set_linewidth(0.8)
 
     # --- Per-period table: header row of month labels, then Selected,
-    # Mean, Median rows, aligned with the chart's plot area above. ---
+    # Mean, Median rows, aligned with the chart's plot area above. Decimal
+    # places are decided once for the whole table (not per cell, since a
+    # table with different decimal counts per row/column wouldn't align)
+    # -- driven by the mean of this table's own values (Selected, Mean,
+    # Median together, NaNs excluded), via _sig_fig_decimals. Applies
+    # equally regardless of format_modifier (P/C included), per this
+    # chart's own table convention. ---
+    table_values = []
+    if selected_y is not None:
+        table_values.extend(v for v in selected_y if not np.isnan(v))
+    table_values.extend(v for v in means if not np.isnan(v))
+    table_values.extend(v for v in medians if not np.isnan(v))
+    table_mean = float(np.mean(np.abs(table_values))) if table_values else 0.0
+    table_decimals = _sig_fig_decimals(table_mean)
+
     row_labels = []
     cell_text = []
     if selected_y is not None:
         row_labels.append(selected_code or "Selected")
-        cell_text.append([_format_value(v, base.format_modifier) for v in selected_y])
+        cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in selected_y])
     row_labels.append("Mean")
-    cell_text.append([_format_value(v, base.format_modifier) for v in means])
+    cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in means])
     row_labels.append("Median")
-    cell_text.append([_format_value(v, base.format_modifier) for v in medians])
+    cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in medians])
 
     ax_table.axis("off")
     table = ax_table.table(

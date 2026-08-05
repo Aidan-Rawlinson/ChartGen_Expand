@@ -124,9 +124,10 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Running Order .xlsx for user entry with formatting and validation (export/import) | Complete | |
 | Running Order auto-generation from template | Complete | |
 | Running Order Streamlit tab (master/detail UI) | Complete | Shape-filtered chart type dropdown. |
+| Position Finder (Running Order support tool) | Complete | Collapsible section under the Running Order tab's own content — not a Running Order function itself. Reads the currently-selected shape's live position/size off an already-open PowerPoint via COM, for copying into a Running Order row by hand. Resolves a hyperlink icon's position as an offset from its matching chart, by name (`CG_Chart_`/`CG_Link_{row_id}`), where the match is found on the same slide. Read-only — writes nothing back. See Functional Spec Section 9.7, Architecture Decisions 40–41. |
 | Control flag (row on/off) | Complete | |
 | `create_ppt` | Complete | |
-| `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `base_chart_name` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. Optional hyperlink icon, linked to the chart's own data shape's recorded source URL. See Chart construction, Part 5, and Architecture Decisions 37–38. |
+| `insert_chart` | Complete | Renders a Base Chart from cached data. Resolves `base_chart_name` against the built-in library first, then a workfile's own saved Custom Charts. Selected-unit highlighting comes from the `"Selected"`-labelled `population_layers` entry — no `report_context` is passed to a chart. Names the inserted picture `CG_Chart_{row_id}` for traceback. Optional hyperlink icon (named `CG_Link_{row_id}`), linked to the chart's own data shape's recorded source URL. See Chart construction, Part 5, and Architecture Decisions 37–38, 40. |
 | `insert_table` | Complete | Renders a Base Table from an Output Table's grid, the same way `insert_chart` renders a chart. Resolves `table_type_ref` against the built-in library first, then a workfile's own saved Custom Tables. See Output Tables, Part 5. |
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
@@ -168,7 +169,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Peer group as visualisation layer (peer token following `All`) | Complete | Full population retained; the peer group is rendered as an additional layer. Per-chart rendering of layers is prototype-level. |
 | Autotable populations (separate from chart populations) | Not built | No `table_populations` field exists on `insert_chart` rows. |
 | Multiple units from same org (distinct colour) | Not built | |
-| Tweaks — reference lines (`add_line`, `Add_Line_Label`) | Not built | |
+| Tweaks — reference lines (`add_line`, `Add_Line_Label`) | Partial | Built for two charts only (`column_ci_full`, `line_ci_full`) via each chart's own `target:XXXX` tweaks convention — a fixed value or `median` (tracks the metric's own median), drawn as a dashed reference line with its own label. Not a general mechanism available to every Base Chart — see Architecture Decision 16. |
 | Tweaks — axis control (min/max, unit, format) | Not built | Needed to produce interpretable charts. |
 | Tweak hook architecture (3 intervention points) | Not built | Design settled, but not yet implemented in code. |
 | Tweaks — conditional / group colouring | Not built | |

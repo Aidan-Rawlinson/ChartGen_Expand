@@ -291,3 +291,13 @@
 - **The icon's hyperlink and its position/colour are independent** -- a missing `metadata["source_url"]` still draws the icon at its resolved position, just without a working link.
 - **A PDF-vs-PowerPoint icon-visibility discrepancy this session was concluded to be a SharePoint sync glitch, not a code defect** -- ruled in after a clean retry with no code changes in between. No code change made as a result; noted only as a live possibility if the symptom recurs without SharePoint involved.
 - **`charts_tab.py`'s Sizing widget now guards against near-zero computed percentages** (falls back to 50.0% below 1.0), matching a guard `output_tables_tab.py` already had -- the root cause of a repeated "Sizing box reverts to its minimum" complaint.
+
+
+## Session — target tweaks, decimal formatting, shape naming, Position Finder
+
+- Tweaks syntax convention (`key:value^key2:value2`, caret-delimited) is a de facto standard other Base Charts may follow where practical, but is owned by each chart individually -- not enforced by ChartGen, and a different chart adopting a different structure is a legitimate design choice, not a deviation.
+- Target reference line colour: `#9B30FF` (bright purple), dashed.
+- Target label: literal tweak text as typed, always exactly one space after the colon regardless of input spacing.
+- Decimal-place rule for the two CI charts' shared values: 3 significant figures, `decimals = max(0, 2 - floor(log10(abs(reference_value))))` -- never rounds above the unit level. Shared decimal count within a table/key is driven by the **mean** of the relevant value set (not the min or max), and applies equally across format_modifiers (P/C included). Scope deliberately limited to `line_ci_full`'s table and `column_ci_full`'s key/annotation -- not a system-wide rollout.
+- `CG_Chart_`/`CG_Link_` shape naming is keyed on `row_id` (not a new stable id column) -- explicit user choice, accepting the name goes stale once the Running Order is reordered/edited.
+- Position Finder is read-only by design (displays values on screen; never writes back to the Running Order or the open presentation) and lives as a collapsible section under the Running Order tab's own content, titled "Position Finder" -- a support tool, not a Running Order function.

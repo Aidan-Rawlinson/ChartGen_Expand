@@ -19,8 +19,58 @@ from core.output_generation.definition.running_order import (
     build_populations_options, parse_populations_string, build_populations_string,
 )
 from core.output_generation.execution.charts.cache_reader import periods_for_cache_file
+from core.output_generation.execution.pptx_com.position_finder import get_selected_shape_position
 from core.ui.common.guidance import render_tab_header
 from core.workfile.state.session_state import ws, manifest, master_table
+
+
+def _render_position_finder():
+    """
+    Position Finder -- a Running Order support tool, not a Running Order
+    row/function itself (see position_finder.py). Lives directly under
+    the Running Order's own content on this tab, since it exists to
+    support authoring Running Order rows, but sits outside the Running
+    Order structure proper -- no row_id, not part of read_xlsx/write_xlsx,
+    not executed by run_running_order.
+    """
+    with st.expander("Position Finder"):
+        st.caption(
+            "Select a chart or link icon on the currently open PowerPoint "
+            "slide, then press the button below to read its live position "
+            "and size -- for copying into a Running Order row by hand."
+        )
+        if st.button("Get selected shape's position", key="position_finder_button"):
+            result = get_selected_shape_position()
+            if result["status"] == "error":
+                st.warning(result["message"])
+            elif result["kind"] == "chart_or_other":
+                st.caption(f"Shape: **{result['name'] or '(unnamed)'}**")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Left EMU",   result["left_emu"])
+                c2.metric("Top EMU",    result["top_emu"])
+                c3.metric("Width EMU",  result["width_emu"])
+                c4.metric("Height EMU", result["height_emu"])
+            elif result["kind"] == "link_without_chart":
+                st.caption(f"Shape: **{result['name']}**")
+                st.info(result["note"])
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Left EMU",   result["left_emu"])
+                c2.metric("Top EMU",    result["top_emu"])
+                c3.metric("Width EMU",  result["width_emu"])
+                c4.metric("Height EMU", result["height_emu"])
+            elif result["kind"] == "link_with_chart":
+                st.caption(f"Shape: **{result['name']}**  ·  matched to **{result['matched_chart_name']}**")
+                st.markdown("**As hyperlink_left / hyperlink_top / hyperlink_size** (offsets from the matched chart's own top-right corner):")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("hyperlink_left",  result["hyperlink_left_emu"])
+                c2.metric("hyperlink_top",   result["hyperlink_top_emu"])
+                c3.metric("hyperlink_size",  result["hyperlink_size_emu"])
+                with st.expander("Icon's own absolute position (if the offset above isn't what you need)"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Left EMU",   result["left_emu"])
+                    c2.metric("Top EMU",    result["top_emu"])
+                    c3.metric("Width EMU",  result["width_emu"])
+                    c4.metric("Height EMU", result["height_emu"])
 
 
 def render_running_order_tab():
@@ -29,6 +79,7 @@ def render_running_order_tab():
     ws_ro = ws()
     if not ws_ro.running_order_rows:
         st.info("No Running Order found. Upload and process a PowerPoint template in the Imports tab.")
+        _render_position_finder()
         return
 
     try:
@@ -210,6 +261,8 @@ def render_running_order_tab():
 
         if edit_clicked and sel_idx is not None:
             _row_edit_dialog(sel_idx)
+
+        _render_position_finder()
 
     except ImportError:
         st.warning("Install openpyxl and pandas to use the Running Order editor.")
