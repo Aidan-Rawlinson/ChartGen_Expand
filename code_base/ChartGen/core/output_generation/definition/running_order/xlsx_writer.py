@@ -205,6 +205,19 @@ def write_xlsx(rows: list[dict], output_path: str,
             value = row.get(col_name, "")
             if value == "" or value is None:
                 value = ""
+            if col_name == "cache_file" and value:
+                # Displayed/copy-paste value drops the ".json" suffix that's
+                # the actual cache dict key internally -- matches table_id's
+                # own bare-id convention for insert_table rows, so a value
+                # copied from one column reads consistently with the other.
+                # xlsx_reader.py adds ".json" back on read. Row-level logic
+                # above (row_cache_file, chart_refs, period_dv lookups)
+                # still uses the untrimmed value -- only this cell's display
+                # changes.
+                stripped = str(value).strip()
+                if stripped.lower().endswith(".json"):
+                    stripped = stripped[:-5]
+                value = stripped
             if col_name in ("start_period", "end_period") and value:
                 value = id_to_display.get(str(value).strip(), value)
             elif col_name == "metric_periods" and value:

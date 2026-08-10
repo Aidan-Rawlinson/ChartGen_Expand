@@ -44,8 +44,8 @@ selection surviving a rerun always still means the same row. Only an Insert
 why sandbox state referencing rows is cleared after every save.
 """
 
-import io
 import json
+import os
 from dataclasses import replace as _replace
 
 import pandas as pd
@@ -70,6 +70,7 @@ from core.output_generation.execution.charts.custom_charts import (
     get_chart_callable, merge_custom_refs_for_shape, custom_chart_descriptions,
     build_bundle,
 )
+from core.shared.infrastructure.cg_extracts import get_extracts_folder
 from core.shared.infrastructure.page_sizing import (
     percent_to_emu, emu_to_percent, get_page_size_emu,
     has_known_template_page_size, STANDARD_PAGE_SIZES_EMU, DEFAULT_STANDARD_PAGE_SIZE,
@@ -84,6 +85,7 @@ from core.shared.normalisation_containers.shapes import (
 )
 from core.shared.infrastructure.value_formatting import format_reference_value
 from core.ui.common.guidance import render_tab_header
+from core.ui.common.pickers import pick_xlsx_file
 from core.workfile.state.session_state import settings, master_table, cached_files, manifest, load_shape_ps, ws
 
 ZOOM_OPTIONS = ["0.75x", "Actual size (approximately)", "1.25x", "1.5x", "2x", "Fit to screen"]
@@ -306,9 +308,9 @@ def _render_chart_store_area(workfile_state, the_manifest, label_by_cache_file, 
     """
     The Chart Store table -- shown in the right-hand content area in place
     of the chart preview (never alongside it, per Decisions.md) while
-    "Show Chart Store" is toggled on. Read-only list, delete/download/
-    upload only -- mirrors text_tab.py's own Stat Tags table exactly, for
-    the chart-def domain instead of the stat-tag domain.
+    "Show Chart Store" is toggled on. Read-only list, delete/export/
+    import only (CG_Extracts) -- mirrors text_tab.py's own Stat Tags table
+    exactly, for the chart-def domain instead of the stat-tag domain.
     """
     st.subheader("Chart Store")
     chart_store_rows = workfile_state.chart_store_rows
@@ -364,28 +366,19 @@ def _render_chart_store_area(workfile_state, the_manifest, label_by_cache_file, 
         workfile_state.dirty = True
         st.rerun()
 
-    cstore_buffer = io.BytesIO()
-    write_chart_store_xlsx(chart_store_rows, cstore_buffer)
-    col_dl.download_button(
-        label="⬇  Download Chart Store", data=cstore_buffer.getvalue(),
-        file_name="chart_store.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
+    extracts_dir = get_extracts_folder(workfile_state.workfile_path)
 
-    if col_ul.button("⬆  Upload Chart Store", use_container_width=True):
-        st.session_state["cstore_show_uploader"] = not st.session_state.get("cstore_show_uploader", False)
+    if col_dl.button("⬇  Export Chart Store", use_container_width=True, key="cstore_export_btn"):
+        export_path = os.path.join(extracts_dir, "chart_store.xlsx")
+        write_chart_store_xlsx(chart_store_rows, export_path)
+        st.success(f"Exported to {export_path}")
 
-    if st.session_state.get("cstore_show_uploader", False):
-        uploaded_cstore = st.file_uploader(
-            "Upload Chart Store", type=["xlsx"], key="cstore_uploader",
-            label_visibility="collapsed",
-        )
-        if uploaded_cstore is not None:
-            imported_rows = read_chart_store_xlsx(io.BytesIO(uploaded_cstore.getbuffer()))
+    if col_ul.button("⬆  Import Chart Store", use_container_width=True, key="cstore_import_btn"):
+        picked_path = pick_xlsx_file(extracts_dir, "Select edited Chart Store Excel file")
+        if picked_path:
+            imported_rows = read_chart_store_xlsx(picked_path)
             workfile_state.chart_store_rows = assign_missing_chart_store_ids(imported_rows, workfile_state.settings)
             workfile_state.dirty = True
-            st.session_state["cstore_show_uploader"] = False
             st.rerun()
 
 

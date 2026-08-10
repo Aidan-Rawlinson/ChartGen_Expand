@@ -10,7 +10,6 @@ via the Excel download/upload route only, through
 manifest_table.apply_manifest_import.
 """
 
-import io
 import os
 import tempfile
 
@@ -21,8 +20,10 @@ from core.acquisition.fetch_dispatch import fetch_all
 from core.acquisition.manifest_table import (
     write_manifest_xlsx, read_manifest_xlsx, apply_manifest_import,
 )
+from core.shared.infrastructure.cg_extracts import get_extracts_folder
 from core.ui.common.compact_layout import tight_divider, tight_subheader, tight_caption
 from core.ui.common.guidance import render_tab_header
+from core.ui.common.pickers import pick_xlsx_file
 from core.workfile.state.session_state import ws, settings, save_settings
 
 TABLE_COLUMNS = [
@@ -156,45 +157,34 @@ def _render_url_table_section():
         },
     )
 
-    tight_caption("Add or remove charts via the Excel download/upload below — "
-               "download, edit (add a row with just a URL to add a chart; "
-               "delete a row to remove its chart), and upload. Cached data "
+    tight_caption("Add or remove charts via the Excel export/import below — "
+               "export, edit (add a row with just a URL to add a chart; "
+               "delete a row to remove its chart), and import. Cached data "
                "for removed charts is retained. System columns are populated "
                "at fetch.")
 
-    # --- Excel round-trip ---
+    # --- Excel round-trip, via CG_Extracts (folder alongside the .cgw) ---
+    extracts_dir = get_extracts_folder(ws_cur.workfile_path)
     col_dl, col_ul = st.columns(2)
 
     with col_dl:
-        xlsx_buffer = io.BytesIO()
-        write_manifest_xlsx(ws_cur.manifest_rows, xlsx_buffer)
-        st.download_button(
-            "⬇  Download as Excel",
-            data=xlsx_buffer.getvalue(),
-            file_name=f"{ws_cur.workfile_name or 'chartgen'}_chart_urls.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+        if st.button("⬇  Export to CG_Extracts", use_container_width=True, key="manifest_export_btn"):
+            export_path = os.path.join(extracts_dir, f"{ws_cur.workfile_name or 'chartgen'}_chart_urls.xlsx")
+            write_manifest_xlsx(ws_cur.manifest_rows, export_path)
+            st.success(f"Exported to {export_path}")
 
     with col_ul:
-        if st.button("⬆  Upload edited Excel", use_container_width=True):
-            st.session_state["manifest_show_uploader"] = not st.session_state.get("manifest_show_uploader", False)
-
-    if st.session_state.get("manifest_show_uploader", False):
-        uploaded_xlsx = st.file_uploader(
-            "Upload edited Excel", type=["xlsx"], key="manifest_xlsx_uploader",
-            label_visibility="collapsed",
-        )
-        if uploaded_xlsx is not None:
-            try:
-                imported = read_manifest_xlsx(io.BytesIO(uploaded_xlsx.getbuffer()))
-                result = apply_manifest_import(imported, workfile_state=ws_cur)
-            except Exception as e:
-                st.error(f"Excel import failed: {e}")
-                st.stop()
-            st.session_state["manifest_merge_result"] = result
-            st.session_state["manifest_show_uploader"] = False
-            st.rerun()
+        if st.button("⬆  Import from CG_Extracts", use_container_width=True, key="manifest_import_btn"):
+            picked_path = pick_xlsx_file(extracts_dir, "Select edited chart URL Excel file")
+            if picked_path:
+                try:
+                    imported = read_manifest_xlsx(picked_path)
+                    result = apply_manifest_import(imported, workfile_state=ws_cur)
+                except Exception as e:
+                    st.error(f"Excel import failed: {e}")
+                    st.stop()
+                st.session_state["manifest_merge_result"] = result
+                st.rerun()
 
 
 def _report_merge_result(result: dict):

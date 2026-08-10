@@ -20,7 +20,7 @@ Both tables are read by update_text (core.output_generation.execution.text)
 at generation time; this tab only defines/previews them.
 """
 
-import io
+import os
 
 import pandas as pd
 import streamlit as st
@@ -34,6 +34,7 @@ from core.output_generation.execution.text.stat_tags import next_stat_tag, resol
 from core.output_generation.execution.text.stat_tags_xlsx import (
     write_stat_tags_xlsx, read_stat_tags_xlsx, assign_missing_tags,
 )
+from core.shared.infrastructure.cg_extracts import get_extracts_folder
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.shared.infrastructure.value_formatting import format_reference_value
@@ -44,6 +45,7 @@ from core.shared.normalisation_containers.shapes import (
 )
 from core.ui.common.compact_layout import tight_divider, tight_subheader, tight_caption
 from core.ui.common.guidance import render_tab_header
+from core.ui.common.pickers import pick_xlsx_file
 from core.workfile.state.session_state import (
     settings, master_table, cached_files, manifest, load_shape_ps, ws,
 )
@@ -389,26 +391,17 @@ def render_text_tab():
         workfile_state.dirty = True
         st.rerun()
 
-    ts_buffer = io.BytesIO()
-    write_stat_tags_xlsx(stat_rows, ts_buffer)
-    col_dl.download_button(
-        label="⬇  Download Stat Tags", data=ts_buffer.getvalue(),
-        file_name="stat_tags.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
+    extracts_dir = get_extracts_folder(workfile_state.workfile_path)
 
-    if col_ul.button("⬆  Upload Stat Tags", use_container_width=True):
-        st.session_state["ts_show_uploader"] = not st.session_state.get("ts_show_uploader", False)
+    if col_dl.button("⬇  Export Stat Tags", use_container_width=True, key="ts_export_btn"):
+        export_path = os.path.join(extracts_dir, "stat_tags.xlsx")
+        write_stat_tags_xlsx(stat_rows, export_path)
+        st.success(f"Exported to {export_path}")
 
-    if st.session_state.get("ts_show_uploader", False):
-        uploaded_ts = st.file_uploader(
-            "Upload Stat Tags", type=["xlsx"], key="ts_uploader",
-            label_visibility="collapsed",
-        )
-        if uploaded_ts is not None:
-            imported_rows = read_stat_tags_xlsx(io.BytesIO(uploaded_ts.getbuffer()))
+    if col_ul.button("⬆  Import Stat Tags", use_container_width=True, key="ts_import_btn"):
+        picked_path = pick_xlsx_file(extracts_dir, "Select edited Stat Tags Excel file")
+        if picked_path:
+            imported_rows = read_stat_tags_xlsx(picked_path)
             workfile_state.text_stats_rows = assign_missing_tags(imported_rows, the_settings)
             workfile_state.dirty = True
-            st.session_state["ts_show_uploader"] = False
             st.rerun()

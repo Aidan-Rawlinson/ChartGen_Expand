@@ -8,7 +8,7 @@ delegated to core.output_generation.definition.running_order — this dialog
 only renders the widgets and applies the user's selection back to the row.
 """
 
-import io
+import os
 
 import streamlit as st
 
@@ -20,7 +20,9 @@ from core.output_generation.definition.running_order import (
 )
 from core.output_generation.execution.charts.cache_reader import periods_for_cache_file
 from core.output_generation.execution.pptx_com.position_finder import get_selected_shape_position
+from core.shared.infrastructure.cg_extracts import get_extracts_folder
 from core.ui.common.guidance import render_tab_header
+from core.ui.common.pickers import pick_xlsx_file
 from core.workfile.state.session_state import ws, manifest, master_table
 
 
@@ -226,9 +228,8 @@ def render_running_order_tab():
             edit_label, disabled=(sel_idx is None), type="secondary", use_container_width=True,
         )
 
-        ro_buffer = io.BytesIO()
         # Only cache files actually referenced by an insert_chart row need
-        # a period list — built once per download rather than for every
+        # a period list — built once per export rather than for every
         # cached file in the workfile.
         periods_by_cache_file = {}
         for r in rows:
@@ -236,27 +237,20 @@ def render_running_order_tab():
                 cf = str(r.get("cache_file") or "").strip()
                 if cf and cf not in periods_by_cache_file:
                     periods_by_cache_file[cf] = periods_for_cache_file(cf, ws_ro)
-        write_xlsx(rows, ro_buffer, manifest=the_manifest, periods_by_cache_file=periods_by_cache_file,
-                  custom_chart_rows=ws_ro.custom_chart_rows)
-        col_dl.download_button(
-            label="⬇  Download Running Order", data=ro_buffer.getvalue(),
-            file_name="running_order.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
 
-        if col_ul.button("⬆  Upload Running Order", use_container_width=True):
-            st.session_state["ro_show_uploader"] = not st.session_state.get("ro_show_uploader", False)
+        extracts_dir = get_extracts_folder(ws_ro.workfile_path)
 
-        if st.session_state.get("ro_show_uploader", False):
-            uploaded_ro = st.file_uploader(
-                "Upload Running Order", type=["xlsx"], key="ro_uploader",
-                label_visibility="collapsed",
-            )
-            if uploaded_ro is not None:
-                ws_ro.running_order_rows = read_xlsx(io.BytesIO(uploaded_ro.getbuffer()))
+        if col_dl.button("⬇  Export Running Order", use_container_width=True, key="ro_export_btn"):
+            export_path = os.path.join(extracts_dir, "running_order.xlsx")
+            write_xlsx(rows, export_path, manifest=the_manifest, periods_by_cache_file=periods_by_cache_file,
+                      custom_chart_rows=ws_ro.custom_chart_rows)
+            st.success(f"Exported to {export_path}")
+
+        if col_ul.button("⬆  Import Running Order", use_container_width=True, key="ro_import_btn"):
+            picked_path = pick_xlsx_file(extracts_dir, "Select edited Running Order Excel file")
+            if picked_path:
+                ws_ro.running_order_rows = read_xlsx(picked_path)
                 ws_ro.dirty = True
-                st.session_state["ro_show_uploader"] = False
                 st.rerun()
 
         if edit_clicked and sel_idx is not None:

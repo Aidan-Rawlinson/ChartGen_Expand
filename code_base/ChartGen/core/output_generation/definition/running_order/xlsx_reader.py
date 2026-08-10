@@ -50,6 +50,22 @@ def _extract_metric_periods(value) -> str:
     return "^".join(i for i in ids if i)
 
 
+def _restore_json_suffix(value) -> str:
+    """
+    Add back the ".json" suffix xlsx_writer.py strips from the cache_file
+    cell on export -- the actual cache dict key needs it, but the user
+    types/pastes the bare hex id. A blank cell or the literal "none" stays
+    as-is; a value already ending ".json" (an old export, or typed in full
+    by hand) is left untouched rather than double-suffixed.
+    """
+    text = str(value or "").strip()
+    if not text or text.lower() == "none":
+        return text
+    if text.lower().endswith(".json"):
+        return text
+    return f"{text}.json"
+
+
 def read_xlsx(path: str) -> list[dict]:
     """
     Read the Running Order .xlsx and return a list of row dicts.
@@ -76,6 +92,7 @@ def read_xlsx(path: str) -> list[dict]:
         row_dict["start_period"] = _extract_period_id(row_dict.get("start_period", ""))
         row_dict["end_period"] = _extract_period_id(row_dict.get("end_period", ""))
         row_dict["metric_periods"] = _extract_metric_periods(row_dict.get("metric_periods", ""))
+        row_dict["cache_file"] = _restore_json_suffix(row_dict.get("cache_file", ""))
         rows.append(row_dict)
 
     return rows

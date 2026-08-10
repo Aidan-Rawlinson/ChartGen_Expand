@@ -16,7 +16,7 @@ selection and is shown only once an actual table is selected; there is no
 second, independent selector anywhere else on the tab.
 
 Edit Grid is content authoring: the raw c0..cN grid, resize, Update, Excel
-Download/Upload. Preview is a sandbox mirroring the Charts sheet's own
+Export/Import (CG_Extracts). Preview is a sandbox mirroring the Charts sheet's own
 mechanics wherever the concepts match: table type (built-in + Custom
 Tables), tweaks, sizing (percent of the shorter page dimension, converting
 to EMU only at save time -- core.shared.infrastructure.page_sizing),
@@ -45,8 +45,8 @@ would for any other row needing attention.
 """
 
 import base64
-import io
 import json
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -74,6 +74,7 @@ from core.output_generation.execution.tables.grid_xlsx import (
     write_output_table_xlsx, read_output_table_xlsx,
 )
 from core.output_generation.execution.tables.resolve import resolve_output_table
+from core.shared.infrastructure.cg_extracts import get_extracts_folder
 from core.shared.infrastructure.page_sizing import (
     percent_to_emu, emu_to_percent, get_page_size_emu,
     has_known_template_page_size, STANDARD_PAGE_SIZES_EMU, DEFAULT_STANDARD_PAGE_SIZE,
@@ -81,6 +82,7 @@ from core.shared.infrastructure.page_sizing import (
 from core.shared.infrastructure.report_context import build_report_context
 from core.shared.infrastructure.soft_parents import resolve_full_unit_set
 from core.ui.common.guidance import render_tab_header
+from core.ui.common.pickers import pick_xlsx_file
 from core.workfile.state.session_state import ws, settings, master_table
 
 NEW_TABLE_OPTION = "+ New Output Table"
@@ -597,28 +599,22 @@ def _render_grid_editor(workfile_state, table_id, grid_rows):
         else:
             st.success("Grid updated.")
 
-    xlsx_buffer = io.BytesIO()
-    write_output_table_xlsx(grid_rows, workfile_state.text_stats_rows, xlsx_buffer)
-    col_dl.download_button(
-        "\u2b07  Download as Excel",
-        data=xlsx_buffer.getvalue(),
-        file_name=f"{table_id}_grid.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-        key=f"ot_grid_download_{table_id}",
-    )
+    extracts_dir = get_extracts_folder(workfile_state.workfile_path)
 
-    if col_ul.button("\u2b06  Upload edited Excel", use_container_width=True, key=f"ot_grid_upload_toggle_{table_id}"):
-        st.session_state["ot_show_grid_uploader"] = not st.session_state.get("ot_show_grid_uploader", False)
+    if col_dl.button(
+        "\u2b07  Export to CG_Extracts", use_container_width=True, key=f"ot_grid_export_{table_id}",
+    ):
+        export_path = os.path.join(extracts_dir, f"{table_id}_grid.xlsx")
+        write_output_table_xlsx(grid_rows, workfile_state.text_stats_rows, export_path)
+        st.success(f"Exported to {export_path}")
 
-    if st.session_state.get("ot_show_grid_uploader", False):
-        uploaded_xlsx = st.file_uploader(
-            "Upload edited Excel", type=["xlsx"], key=f"ot_grid_xlsx_uploader_{table_id}",
-            label_visibility="collapsed",
-        )
-        if uploaded_xlsx is not None:
+    if col_ul.button(
+        "\u2b06  Import from CG_Extracts", use_container_width=True, key=f"ot_grid_import_{table_id}",
+    ):
+        picked_path = pick_xlsx_file(extracts_dir, "Select edited grid Excel file")
+        if picked_path:
             try:
-                imported_grid = read_output_table_xlsx(io.BytesIO(uploaded_xlsx.getbuffer()))
+                imported_grid = read_output_table_xlsx(picked_path)
             except Exception as e:
                 st.error(f"Excel import failed: {e}")
                 st.stop()
@@ -630,7 +626,6 @@ def _render_grid_editor(workfile_state, table_id, grid_rows):
                     idx_row["columns"] = str(n_cols)
                     break
             workfile_state.dirty = True
-            st.session_state["ot_show_grid_uploader"] = False
             warnings = validate_grid(imported_grid)
             st.session_state["ot_grid_import_warnings"] = warnings
             st.rerun()

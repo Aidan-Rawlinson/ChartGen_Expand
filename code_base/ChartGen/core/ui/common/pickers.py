@@ -46,3 +46,26 @@ def pick_workfile_file() -> str:
         return path or ""
     except Exception:
         return ""
+
+
+def pick_xlsx_file(initial_dir: str, title: str = "Select Excel file") -> str:
+    """
+    Open a native Windows file picker for .xlsx files, defaulted to
+    initial_dir (CG_Extracts) -- the user can still browse elsewhere.
+    Returns the full path or empty string if cancelled.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes("-topmost", True)
+        path = filedialog.askopenfilename(
+            title=title,
+            initialdir=initial_dir,
+            filetypes=[("Excel workbook", "*.xlsx"), ("All files", "*.*")],
+        )
+        root.destroy()
+        return path or ""
+    except Exception:
+        return ""
