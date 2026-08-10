@@ -16,7 +16,7 @@ Covers the core report generation pipeline: data acquisition, chart construction
 
 - **Package architecture** — packages interact through defined interfaces; swapping one package requires changes only within that package and its config.
 - **Stable data contracts** — the Running Order passes canonical data structures to the Chart Engine regardless of charting library; chart type refs and tweaks are the Chart Engine's concern only.
-- **Normalisation of chart data** — raw API data is normalised into one of four canonical shapes before any chart, table, or text function touches it. Chart type validity is enforced at authoring time.
+- **Normalisation of chart data** — raw API data is normalised into one of five canonical shapes before any chart, table, or text function touches it. Chart type validity is enforced at authoring time.
 - **PowerPoint is just the output format** — the system produces `.pptx`/`.pdf`; it does not distinguish use cases at output time.
 - **Data is pre-fetched** — all data is fetched prior to output processing.
 - **Outputs created only by Running Order functions** — each output is created by the functions specified on the Running Order. This is a complete set of instructions and not supported by any function not listed on the Running Order.
@@ -208,7 +208,7 @@ Chart data is normalised into a small set of canonical data shapes. All downstre
 
 ### 8.2 Canonical Data Shapes
 
-Four shapes are implemented — three matching the stored procedure groups present in the TBN NHS API, plus TimeSeries, which comes from the separate Indicators toolkit API (Section 7.4) instead:
+Five shapes are implemented — three matching the stored procedure groups present in the TBN NHS API, TimeSeries (from the separate Indicators toolkit API, Section 7.4), and PairedSurveyData (for per-unit collections of individual paired-value records, e.g. Sunderland/Modified Barthel patient start/end scores):
 
 | Shape | Description |
 |-------|-------------|
@@ -216,14 +216,19 @@ Four shapes are implemented — three matching the stored procedure groups prese
 | **NumericCompositional** | One or more Metric-Series whose Component-Series sum to a whole (e.g. radar/spider chart data). |
 | **CategoricalCompositional** | One or more Metric-Series (questions) with categorical Component-Series summing to a whole (e.g. yes/no, ethnicity breakdown). |
 | **TimeSeries** | One or more independent numeric Metric-Series, one value per unit per metric per period, across a period axis shared by every Metric-Series in the shape. |
+| **PairedSurveyData** | Per unit, a collection of individual records each carrying a start/end value pair, rather than a single value or a set of proportional components. Stats are pooled across every record across every unit, not averaged from pre-computed per-unit stats. Always exactly one Metric-Series. |
 
 Every shape carries flags indicating where its data is incomplete, so consumers know upfront which operations aren't possible rather than discovering it at build time.
+
+**PairedSurveyData has no Base Chart yet.** It can be built, cached, filtered, and have its summary stats read, but no chart type reference in `chart_type_map.csv` currently accepts it, so it cannot yet be assigned to a Running Order row. It also has no transformer populating it from real API data, and no Summary Stat Tags (Section 12.1) integration — see Section 8.3.
 
 ### 8.3 Data Shapes and Chart Type Validity
 
 Each chart type reference in the Chart Engine declares the data shape(s) it accepts. The Running Order editor uses this to constrain chart type options to valid combinations for the selected data. Invalid pairings — a bar chart against compositional data, a radar chart against a single-metric dataset — are prevented at authoring time rather than discovered at batch runtime.
 
 TimeSeries has three (`period_line_chart`, `median_comparison_linechart`, `full_lines_linechart`) — it fetches, caches, and renders correctly. Cutting to a period range is built (Section 10.7); converting selected periods into a NumericSeries snapshot is also built (Section 10.8), letting a TimeSeries cache file feed any NumericSeries chart type as well.
+
+PairedSurveyData currently has zero valid chart types — no Base Chart accepts it yet (Section 10.1). A Running Order row assigned a PairedSurveyData cache file has no `base_chart_name` option to choose until a chart type is built for it.
 
 ---
 
@@ -318,7 +323,7 @@ The tool never writes back to the presentation, the Running Order, or anything e
 
 ### 10.0 Data Visualisation (Charting) — Design Philosophy
 
-ChartGen's charting process is built on a standardised data contract, not a fixed set of visualisations. Data is normalised into one of four canonical shapes (Section 8) before any chart touches it; every chart, in turn, receives that data in a single standardised form and returns a picture in a single standardised form. Because the contract on both sides is fixed, what happens between them is not: any visualisation Python's charting libraries can produce can be added to the system without changing anything else in it.
+ChartGen's charting process is built on a standardised data contract, not a fixed set of visualisations. Data is normalised into one of five canonical shapes (Section 8) before any chart touches it; every chart, in turn, receives that data in a single standardised form and returns a picture in a single standardised form. Because the contract on both sides is fixed, what happens between them is not: any visualisation Python's charting libraries can produce can be added to the system without changing anything else in it.
 
 This is why the actual code for a single visualisation — a **Base Chart** — sits outside ChartGen's own core process rather than inside it. A Base Chart is a self-contained rendering function, not application logic: it depends on nothing else in the codebase, and nothing else in the codebase depends on its internals. It receives **chart_inputs** — a fixed four-parameter call: `population_layers` (an ordered list of filtered data-shape copies, one per resolved population token — Section 10.4), `width_emu`/`height_emu` (EMU directly — Architecture Decision 29), and `tweaks` (below) — and returns image bytes; what happens in between is entirely its own concern.
 
@@ -328,7 +333,7 @@ The `tweaks` string (Section 10.3) follows from the same principle. It is a free
 
 Each chart is identified in the Running Order by a **chart type reference** (e.g. `ranked_column`). This reference resolves first against the built-in library (`chart_type_map.csv`); if not found there, against the workfile's own saved Custom Charts (Section 10.9). Chart type references are reusable across projects, though a saved Custom Chart is scoped to the workfile it was saved in.
 
-The system ships with 20 built-in Base Chart functions across the four canonical data shapes — NumericSeries, NumericCompositional, CategoricalCompositional, and TimeSeries — extendable per-workfile via Custom Charts (Section 10.9).
+The system ships with 20 built-in Base Chart functions across the four canonical data shapes with chart coverage — NumericSeries, NumericCompositional, CategoricalCompositional, and TimeSeries — extendable per-workfile via Custom Charts (Section 10.9). A fifth shape, PairedSurveyData (Section 8.2), exists but has no Base Chart yet.
 
 ### 10.2 Base Chart Library
 

@@ -417,3 +417,31 @@ Reworked every Excel export/import round-trip across the app — chart URL manif
 New: `core/shared/infrastructure/cg_extracts.get_extracts_folder` (creates the folder if missing). Extended: `core/ui/common/pickers.pick_xlsx_file`, a native `tkinter` Open dialog defaulted to `CG_Extracts`, mirroring the existing `.cgw` picker pattern. No reader/writer function needed changes — all already accepted a plain path. Six tabs converted to a matching Export/Import-button pair: `imports_tab.py`, `charts_tab.py`, `output_tables_tab.py`, `populations_tab.py`, `running_order_tab.py`, `text_tab.py`. Running Order was missed on the first implementation pass and added after the user caught the gap during testing; a subsequent full-codebase search confirmed no further browser-widget Excel round-trips remained (only the out-of-scope Custom Charts/Custom Tables `.md` bundle downloads and the unrelated PowerPoint template uploader still use the old widgets). A leftover dead `io.BytesIO()` line from the Running Order edit was caught and removed before close-down.
 
 Governed docs updated: Architecture (new Decision 42), Feature List, Functional Spec (Imports, Populations, Running Order, Output Tables, Chart Store, Stat Tags sections). Glossary and Primer untouched.
+
+
+## Session: Data-shape mapping for 26 NHS-database chart types + PairedSurveyData design
+
+Design-only session, no code changed. User supplied a table of 26 NHS-database chart types (Standard, Survey, Cross-service groups), each tied to a stored procedure name, and asked to resolve each to a canonical data shape before any visualisation/Base Chart discussion -- explicitly sequenced request (data shapes only, in order, survey rows last).
+
+Checked `toolkit_nhs/transformers.py`'s `PROCEDURE_MAP` and `toolkit_indicators/transformers.py` before asking anything, establishing 10 of the 26 as already supported in code. Worked through the remaining 16 with the user in buckets:
+
+- Multi-Metric-Series barcharts (General Summary, Vacancy Rate) -- NumericSeries, no new shape needed (the shape already supports multiple named metrics per unit).
+- Clustered compositional + benchmark -- NumericCompositional, second Metric-Series carries a local benchmark.
+- List-based stacked barchart -- CategoricalCompositional, structurally identical to the existing yn_chart multi-question pattern.
+- Median and percentage-change timeseries -- TimeSeries (flagged, not assumed: this codebase's TimeSeries is fed only by the separate Indicators toolkit, not NHS toolkit SP dispatch by name).
+- Scatter plot, Opening Hours -- NumericSeries.
+- Four of five survey SPs -- NumericCompositional (list/Yes-No values becoming counts).
+- Cross-service charts (3 SPs) -- map to the existing non-cross-service shapes, no new shape, but need a new capability (below).
+
+The fifth survey SP (Sunderland/Modified Barthel chart) needed a genuinely new shape -- per-unit collections of individual patient records (start/end score pairs), with stats pooled across every record across every unit rather than averaged from per-unit stats. Checked patient-identifiability against TBN data-handling rules before treating "patient name" as a real field -- confirmed it's a positional label ("Patient 1"), not PII. Designed the new shape, **PairedSurveyData**, through the same question-first process used for the original four shapes: confirmed always exactly one Metric-Series (so it follows NumericSeries's flat-units structural pattern, not the metrics-list pattern), confirmed the patient label carries no further meaning, and settled the stats block scope (count_with_data/count_null plus mean_start/mean_end only, deliberately minimal). Full dataclass skeleton agreed; nothing built.
+
+Also designed (not yet coded): a per-unit `metadata: dict` on the shared `Unit` base class, needed for cross-service charts. Reasoned through why the existing peer-group mechanism (population-table columns, resolved in `population_layers.py`) can't hold this -- service membership varies per fetch, not a standing attribute of unit identity -- so it has to travel on the per-unit record itself. Two rounds of clarification (structure, then scope) before settling on: shared `Unit` base, all four existing shapes, fully open-ended dict, no predefined key schema.
+
+Along the way, explaining the still-unresolved radar `has_valid_unit_data=False` caveat surfaced that the flag is entirely inert in current code -- set and cache-round-tripped everywhere, never read by anything to change behaviour. Reframed by the user as the real underlying issue (Base Charts need proper support for single-unit-only charts) and banked as a separate future task, not solved this session.
+
+Gave the user the full 26-row mapping twice on request -- once as a markdown table, once as tab-separated text for pasting into Excel.
+
+
+## Session continuation: PairedSurveyData built
+
+After the design above was agreed, user asked for PairedSurveyData to actually be added to the system (the initial close-down draft had described it as designed-only, which the user caught -- worth being precise about design vs build going forward). Built: new module `core/shared/normalisation_containers/shapes/paired_survey_data.py` with the full dataclass set (`PairedObservation`, `PairedSurveyDataUnit`, `PairedSurveyDataStats`, `PairedSurveyData`) and its `compute_*`/`filter_*`/`*_summary_stats` functions, following the existing four shapes' pattern exactly. Wired into `dispatch.py` (`filter_shape`, `summary_stats`, `shape_units`, `unit_has_data`), `shapes/__init__.py` exports, and `cache_reader.py` (new `_from_dict_paired_survey_data` + `DESERIALISE_MAP` entry) -- cache write needed no change, already generic. Confirmed still missing: a transformer to populate it from real API data, a Base Chart to render it, and a `reference_ids.py` entry for Summary Stat Tags -- none of those were part of this session's scope.

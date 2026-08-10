@@ -19,6 +19,9 @@ from core.shared.normalisation_containers.shapes.timeseries import (
     TimeSeries, filter_time_series, time_series_summary_stats,
     filter_time_series_periods,
 )
+from core.shared.normalisation_containers.shapes.paired_survey_data import (
+    PairedSurveyData, filter_paired_survey_data, paired_survey_data_summary_stats,
+)
 
 
 def filter_shape(shape, unit_ids: set):
@@ -31,6 +34,8 @@ def filter_shape(shape, unit_ids: set):
         return filter_categorical_compositional(shape, unit_ids)
     elif isinstance(shape, TimeSeries):
         return filter_time_series(shape, unit_ids)
+    elif isinstance(shape, PairedSurveyData):
+        return filter_paired_survey_data(shape, unit_ids)
     raise TypeError(f"Unknown shape type: {type(shape)}")
 
 
@@ -56,6 +61,8 @@ def summary_stats(shape) -> dict:
         return categorical_summary_stats(shape)
     elif isinstance(shape, TimeSeries):
         return time_series_summary_stats(shape)
+    elif isinstance(shape, PairedSurveyData):
+        return paired_survey_data_summary_stats(shape)
     raise TypeError(f"Unknown shape type: {type(shape)}")
 
 
@@ -75,14 +82,14 @@ def shape_units(shape) -> list:
     """
     Return the list of Unit-like objects (unit_id/unit_code) making up a
     shape's actual population — the same unit list ShapeStats' own counts
-    are already computed from. NumericSeries carries a single shape-level
-    units list; the other three shapes carry one units list per
-    metric-series, but every metric-series within one shape instance
-    shares the same population (the existing count_units calculation
-    already assumes this — see the filter_* functions), so metrics[0].units
-    stands in for the shape as a whole.
+    are already computed from. NumericSeries and PairedSurveyData each
+    carry a single shape-level units list; the other three shapes carry
+    one units list per metric-series, but every metric-series within one
+    shape instance shares the same population (the existing count_units
+    calculation already assumes this — see the filter_* functions), so
+    metrics[0].units stands in for the shape as a whole.
     """
-    if isinstance(shape, NumericSeries):
+    if isinstance(shape, (NumericSeries, PairedSurveyData)):
         return shape.units
     elif isinstance(shape, (NumericCompositional, CategoricalCompositional, TimeSeries)):
         return shape.metrics[0].units if shape.metrics else []
@@ -101,10 +108,13 @@ def unit_has_data(unit) -> bool:
     already makes at shape level, exposed here per unit. NumericSeries,
     NumericCompositional, and TimeSeries units carry a `values` list (any
     entry present counts as data); CategoricalCompositionalUnit carries a
-    single `response` field instead.
+    single `response` field instead; PairedSurveyDataUnit carries a
+    `records` list (any record with a start or end value counts as data).
     """
     if hasattr(unit, "values"):
         return any(v is not None for v in unit.values)
     if hasattr(unit, "response"):
         return unit.response is not None
+    if hasattr(unit, "records"):
+        return any(r.start_value is not None or r.end_value is not None for r in unit.records)
     return False

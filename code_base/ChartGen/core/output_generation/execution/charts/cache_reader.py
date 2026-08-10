@@ -14,6 +14,7 @@ from core.shared.normalisation_containers.shapes import (
     CategoricalCompositionalUnit, CategoricalCompositionalMetricStats,
     TimeSeries, TimeSeriesPeriod, TimeSeriesMetric, TimeSeriesUnit,
     TimeSeriesMetricPeriodStats,
+    PairedSurveyData, PairedSurveyDataUnit, PairedObservation, PairedSurveyDataStats,
 )
 
 
@@ -135,11 +136,34 @@ def _from_dict_time_series(d):
     )
 
 
+def _from_dict_paired_survey_data(d):
+    units = [
+        PairedSurveyDataUnit(
+            unit_code=u["unit_code"],
+            unit_id=u["unit_id"],
+            records=[PairedObservation(**r) for r in u.get("records", [])],
+        )
+        for u in d.get("units", [])
+    ]
+    return PairedSurveyData(
+        title=d.get("title"),
+        year=d.get("year"),
+        format_modifier=d.get("format_modifier"),
+        population_table=d.get("population_table"),
+        metadata=d.get("metadata", {"source_url": None}),
+        has_valid_unit_data=d.get("has_valid_unit_data", True),
+        units=units,
+        shape_stats=ShapeStats(**d.get("shape_stats", {})),
+        stats=PairedSurveyDataStats(**d.get("stats", {})),
+    )
+
+
 DESERIALISE_MAP = {
     "NumericSeries":            _from_dict_numeric_series,
     "NumericCompositional":     _from_dict_numeric_compositional,
     "CategoricalCompositional": _from_dict_categorical_compositional,
     "TimeSeries":               _from_dict_time_series,
+    "PairedSurveyData":         _from_dict_paired_survey_data,
 }
 
 

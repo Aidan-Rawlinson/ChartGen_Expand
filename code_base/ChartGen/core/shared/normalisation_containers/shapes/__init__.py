@@ -1,11 +1,15 @@
 """
 shapes/
 Canonical data shapes for ChartGen — NumericSeries, NumericCompositional,
-CategoricalCompositional, and TimeSeries — split into one module per shape
-(plus a common.py for the shared Unit/ShapeStats base, a dispatch.py for
-filter_shape/summary_stats, and a reference_ids.py for id-tagged stat rows).
-This __init__ re-exports the full public API so external call sites are
-unaffected by the split.
+CategoricalCompositional, TimeSeries, and PairedSurveyData — split into one
+module per shape (plus a common.py for the shared Unit/ShapeStats base, a
+dispatch.py for filter_shape/summary_stats, and a reference_ids.py for
+id-tagged stat rows). This __init__ re-exports the full public API so
+external call sites are unaffected by the split.
+
+PairedSurveyData is not yet wired into reference_ids.py (Summary Stat Tags)
+— no REFERENCE_ROW_CONVERTERS entry exists for it yet. Its
+summary_stats()/dispatch.py wiring is otherwise complete.
 
 Each shape module owns the calculation-phase logic for its shape,
 independent of any visualisation: the single canonical Metric-Series stats
@@ -71,6 +75,15 @@ from core.shared.normalisation_containers.shapes.timeseries import (
     filter_time_series,
     filter_time_series_periods,
 )
+from core.shared.normalisation_containers.shapes.paired_survey_data import (
+    PairedObservation,
+    PairedSurveyDataUnit,
+    PairedSurveyDataStats,
+    PairedSurveyData,
+    compute_paired_survey_data_stats,
+    paired_survey_data_summary_stats,
+    filter_paired_survey_data,
+)
 from core.shared.normalisation_containers.shapes.reference_ids import (
     reference_rows_for_shape_type,
 )
@@ -114,5 +127,12 @@ __all__ = [
     "units_by_layer",
     "unit_has_data",
     "apply_period_range",
+    "PairedObservation",
+    "PairedSurveyDataUnit",
+    "PairedSurveyDataStats",
+    "PairedSurveyData",
+    "compute_paired_survey_data_stats",
+    "paired_survey_data_summary_stats",
+    "filter_paired_survey_data",
     "reference_rows_for_shape_type",
 ]
