@@ -43,13 +43,24 @@ def write_xlsx(rows: list[dict], output_path: str,
     (running_order_tab.py) via cache_reader.periods_for_cache_file, since
     it requires reading actual cached data, not just the manifest. Only
     cache files actually referenced by an insert_chart row need an entry.
+    Used only to build the start_period/end_period/metric_periods dropdown
+    option lists.
 
-    start_period/end_period are written and validated as
-    "period_label(period_id)" rather than a bare id — the id alone tells
-    the user nothing, and a bare label (e.g. "Jan 24") risks Excel silently
-    reinterpreting the cell as a date. The parenthesised id also makes the
-    value self-describing on read-back (xlsx_reader.py extracts it), so
-    the cell keeps working even if periods are reordered between exports.
+    start_period/end_period/metric_periods are written exactly as stored
+    on the row — no derivation, no lookup, nothing recomputed here. The
+    canonical stored value is whatever the person actually picked or
+    typed: typically "period_label(period_id)" (e.g. "July 2025(1338)")
+    from a dropdown pick, or a bare id typed by hand. The numeric id is
+    extracted back out only at the point a chart's cut is actually
+    resolved (core.shared.infrastructure.period_ids.extract_period_id,
+    called once from cut_resolution.prepare_chart_cut) — never here, and
+    never on read either (xlsx_reader.py). An earlier version derived the
+    label fresh at export time by checking whether the id was still in
+    that row's cache_file's current period list, which meant it silently
+    reverted to a bare id the moment a report's own period range moved
+    past it, discarding a deliberate choice for a reason unconnected to
+    that choice (see Decisions.md). Storing the full string as the
+    canonical value, unmodified, avoids that entirely.
     """
     if not OPENPYXL_AVAILABLE:
         raise ImportError("openpyxl is required to write the Running Order xlsx.")
@@ -59,14 +70,18 @@ def write_xlsx(rows: list[dict], output_path: str,
     ws = wb.active
     ws.title = "Running Order"
 
-    # --- Hidden list sheet for start_period/end_period dropdowns ---
-    # Excel's inline list formula1 (used for function/base_chart_name/etc.)
-    # is capped at 255 characters — fine for a handful of options, not for
-    # a chart's full period history. Each distinct cache_file's period
-    # options get their own column here (consecutive — column 1 for the
-    # first cache_file encountered, column 2 for the next, and so on);
-    # start_period and end_period both validate against the same column
-    # for a given cache_file, since they share one option list.
+    # --- Hidden list sheet for start_period/end_period/metric_periods
+    # dropdowns -- options are "period_label(period_id)", matching the
+    # canonical stored form exactly (see module docstring), so picking
+    # from the dropdown produces the same string the Charts sheet itself
+    # would store. Excel's inline list formula1 (used for function/
+    # base_chart_name/etc.) is capped at 255 characters — fine for a
+    # handful of options, not for a chart's full period history. Each
+    # distinct cache_file's period options get their own column here
+    # (consecutive — column 1 for the first cache_file encountered,
+    # column 2 for the next, and so on); start_period, end_period, and
+    # metric_periods all validate against the same column for a given
+    # cache_file, since they share one option list. ---
     period_list_ws = wb.create_sheet("_period_lists")
     period_list_ws.sheet_state = "hidden"
 
@@ -193,13 +208,6 @@ def write_xlsx(rows: list[dict], output_path: str,
         row_cache_file = str(row.get("cache_file") or "").strip()
         if row_cache_file.lower() == "none":
             row_cache_file = ""
-        row_periods = periods_by_cache_file.get(row_cache_file, []) if func == "insert_chart" else []
-        # Canonical storage is period_id alone; the cell shows
-        # "period_label(period_id)" so the user sees a real label instead
-        # of an id, and so the id survives a round-trip unambiguously.
-        # A stored id no longer among the current periods (stale/legacy)
-        # is shown as-is rather than dropped silently.
-        id_to_display = {pid: f"{label}({pid})" for pid, label in row_periods}
 
         for col_idx, col_name in enumerate(COLUMNS, start=1):
             value = row.get(col_name, "")
@@ -218,17 +226,9 @@ def write_xlsx(rows: list[dict], output_path: str,
                 if stripped.lower().endswith(".json"):
                     stripped = stripped[:-5]
                 value = stripped
-            if col_name in ("start_period", "end_period") and value:
-                value = id_to_display.get(str(value).strip(), value)
-            elif col_name == "metric_periods" and value:
-                # metric_periods can hold several ids in one cell ('^'-joined).
-                # The per-row dropdown (below) still offers a single period
-                # at a time — Excel's list validation has no multi-select —
-                # but a cell already holding more than one (Charts sheet, or
-                # typed by hand) keeps working; each token gets the same
-                # "label(id)" treatment for readability and round-trip safety.
-                tokens = str(value).split("^")
-                value = "^".join(id_to_display.get(t.strip(), t.strip()) for t in tokens if t.strip())
+            # start_period/end_period/metric_periods are written exactly
+            # as stored -- see module docstring for why nothing is
+            # derived or rewritten here.
             cell = ws.cell(row=excel_row, column=col_idx, value=value)
             cell.border = border
             cell.font = disabled_font if not is_enabled else normal_font

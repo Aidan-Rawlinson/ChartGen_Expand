@@ -48,20 +48,30 @@ def time_series_to_numeric_series(shape: TimeSeries, period_ids: list) -> Numeri
     None -- TimeSeries/Indicators data has no year of its own (Architecture,
     Decision 10), so there's nothing meaningful to set it to.
 
-    Raises ValueError if any period_id in period_ids is not present on the
-    shape (a typo or a period since dropped) — this halts the row rather
-    than silently producing a narrower or wrong-shaped result.
+    A period_id not present on the shape (a typo, or a period this
+    report's own data simply doesn't have -- see Decisions.md) is not
+    treated as an error. Rather than refuse to produce a shape at all, it
+    becomes its own output metric with every unit's value set to None --
+    the same "no data" state any other missing value already produces
+    everywhere downstream (every Base Chart already handles a metric with
+    no data for some or all units gracefully -- see the chart_inputs
+    contract). Whether and how to represent that visually is each Base
+    Chart's own concern, not something resolved here; ChartGen's job is
+    to hand over the data faithfully, including the fact that this
+    particular period doesn't exist for this report. A missing id keeps
+    its own given position among that metric's output columns (after
+    every id that *did* resolve, in their shape-chronological order) --
+    there's no chronological position to sort it into, since it isn't a
+    real period on this shape at all. Its label falls back to the bare
+    id itself, in parentheses, since there's no period_label to read.
     """
     index_by_id = {p.period_id: i for i, p in enumerate(shape.periods)}
-    missing = [pid for pid in period_ids if pid not in index_by_id]
-    if missing:
-        raise ValueError(
-            f"period_id(s) not found on this TimeSeries shape: {', '.join(missing)}"
-        )
+    found_ids = [pid for pid in period_ids if pid in index_by_id]
+    missing_ids = list(dict.fromkeys(pid for pid in period_ids if pid not in index_by_id))
 
     # Dedupe, then chronological order (the shape's own period order), not
     # whatever order period_ids happen to be given in.
-    selected_indices = sorted({index_by_id[pid] for pid in period_ids})
+    selected_indices = sorted({index_by_id[pid] for pid in found_ids})
 
     # Master unit population — union across all source metrics, first-seen order.
     master_order = []
@@ -72,24 +82,29 @@ def time_series_to_numeric_series(shape: TimeSeries, period_ids: list) -> Numeri
                 seen_ids.add(u.unit_id)
                 master_order.append((u.unit_id, u.unit_code))
 
-    # Output columns: (metric, period_index) pairs, metric-major.
+    # Output columns: (metric, period_index-or-None) pairs, metric-major --
+    # every resolved period first (shape-chronological order), then every
+    # unresolved id (its own given order), per metric.
     columns = []
     metric_names = []
     for metric in shape.metrics:
         unit_by_id = {u.unit_id: u for u in metric.units}
         for idx in selected_indices:
-            columns.append(unit_by_id)
+            columns.append((unit_by_id, idx))
             period_label = shape.periods[idx].period_label
             metric_names.append(f"{metric.name or 'Metric'} ({period_label})")
-
-    period_index_by_column = [idx for _ in shape.metrics for idx in selected_indices]
+        for pid in missing_ids:
+            columns.append((unit_by_id, None))
+            metric_names.append(f"{metric.name or 'Metric'} ({pid})")
 
     numeric_units = []
     for unit_id, unit_code in master_order:
         values = []
-        for col_i, unit_by_id in enumerate(columns):
+        for unit_by_id, period_idx in columns:
+            if period_idx is None:
+                values.append(None)
+                continue
             src_unit = unit_by_id.get(unit_id)
-            period_idx = period_index_by_column[col_i]
             values.append(
                 src_unit.values[period_idx]
                 if (src_unit is not None and period_idx < len(src_unit.values))

@@ -6,6 +6,7 @@ Authentication and API calls to the NHS Benchmarking members API.
 import requests
 
 from core.shared.infrastructure.constants import coerce_row
+from core.acquisition.toolkit_nhs.submission_codes import normalise_submission_code
 
 BASE_URL = "https://membersapi.nhsbenchmarking.nhs.uk"
 ORGANISATION_ID = 232  # Default org used to retrieve full population data
@@ -81,7 +82,7 @@ def get_submissions(project_id: int, year: int, token: str, include_org_level: b
 
         rows.append({
             "submission_id": s.get("submissionId", ""),
-            "submission_code": s.get("submissionCode", ""),
+            "submission_code": normalise_submission_code(s.get("submissionCode", "")),
             "submission_name": s.get("submissionName", ""),
             "submission_year": s.get("submissionYear", ""),
             "project_id": s.get("projectId", ""),

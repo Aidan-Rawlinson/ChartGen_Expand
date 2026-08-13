@@ -67,8 +67,12 @@ def run_batch(rows: list, units_to_run: list, all_units: list,
 
         err_msg = ""
         if result["status"] != "ok":
-            errs = [e["message"] for e in result["log"] if e["status"] == "error"]
-            err_msg = errs[0] if errs else "Unknown error"
+            errs = [e for e in result["log"] if e["status"] == "error"]
+            if errs:
+                first = errs[0]
+                err_msg = f"Row {first.get('row_id', '?')}: {first['message']}"
+            else:
+                err_msg = "Unknown error"
 
         log_entry = {
             "idx":     pop_idx,

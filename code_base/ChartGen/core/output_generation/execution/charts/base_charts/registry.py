@@ -47,10 +47,13 @@ from core.output_generation.execution.charts.base_charts.timeseries.full_lines_l
 from core.output_generation.execution.charts.base_charts.timeseries.sparkline1 import sparkline1
 from core.output_generation.execution.charts.base_charts.timeseries.celltest import celltest
 from core.output_generation.execution.charts.base_charts.timeseries.line_has_data import line_has_data
-from core.output_generation.execution.charts.base_charts.timeseries.line_ci_median import line_ci_median
-from core.output_generation.execution.charts.base_charts.timeseries.line_ci_2 import line_ci_2
-from core.output_generation.execution.charts.base_charts.timeseries.line_ci_5pct import line_ci_5pct
-from core.output_generation.execution.charts.base_charts.timeseries.line_ci_0_5pct import line_ci_0_5pct
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_least_median import line_ci_at_least_median
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_most_median import line_ci_at_most_median
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_most_2 import line_ci_at_most_2
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_most_5pct import line_ci_at_most_5pct
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_0 import line_ci_0
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_least_90pct import line_ci_at_least_90pct
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_100pct import line_ci_100pct
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_full import line_ci_full
 
 CHART_REGISTRY = {
@@ -78,10 +81,13 @@ CHART_REGISTRY = {
     "sparkline1":           sparkline1,
     "celltest":             celltest,
     "line_has_data":        line_has_data,
-    "line_ci_median":       line_ci_median,
-    "line_ci_2":            line_ci_2,
-    "line_ci_5pct":         line_ci_5pct,
-    "line_ci_0_5pct":       line_ci_0_5pct,
+    "line_ci_at_least_median": line_ci_at_least_median,
+    "line_ci_at_most_median":  line_ci_at_most_median,
+    "line_ci_at_most_2":       line_ci_at_most_2,
+    "line_ci_at_most_5pct":    line_ci_at_most_5pct,
+    "line_ci_0":               line_ci_0,
+    "line_ci_at_least_90pct":  line_ci_at_least_90pct,
+    "line_ci_100pct":          line_ci_100pct,
     "line_ci_full":         line_ci_full,
 }
 

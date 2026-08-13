@@ -1,19 +1,19 @@
 """
-line_ci_median.py
+line_ci_0.py
 Base Chart -- TimeSeries, diagnostic variant, one of the "CI" family
-alongside line_ci_2/line_ci_5pct/line_ci_0_5pct. Three-way indicator, all
-checking only the Selected unit's own submission value in the FINAL
-period (never any other period):
+alongside line_ci_at_least_median/line_ci_at_most_median/line_ci_at_most_2/
+line_ci_at_most_5pct/line_ci_at_least_90pct/line_ci_100pct. Three-way
+indicator, checking only the Selected unit's own submission value in the
+FINAL period (never any other period):
 
-  - blue circle, white tick    -- passes: (final submission value +
-                                  0.0001) >= the final period's population
-                                  median (from the scope/"All" layer,
-                                  population_layers[0])
+  - blue circle, white tick    -- passes: abs(final submission value) <=
+                                  0.0001 (i.e. the value is zero, or as
+                                  good as, allowing only for the kind of
+                                  tiny float noise random data-extraction
+                                  errors introduce)
   - orange circle, white cross -- fails that same check
   - grey circle, white dash    -- no submission value for the final
-                                  period at all (or no median to compare
-                                  against), so pass/fail can't be
-                                  evaluated
+                                  period at all
 
 The circle's own fill colour carries the pass/fail/no-data signal; the
 symbol inside it is always white, never the fill's own colour scheme.
@@ -21,9 +21,11 @@ The fail colour is a genuine complement of the pass colour -- same HLS
 lightness/saturation as the blue, opposite hue -- not just "an orange"
 picked freehand.
 
-The +0.0001 is deliberate, not a floating-point tolerance in the usual
-"isclose" sense -- a value exactly equal to the median is meant to pass,
-and this is the specified way to make that so under float comparison.
+Unlike the other fixed-threshold CI variants (line_ci_at_most_2,
+line_ci_at_most_5pct, line_ci_at_least_90pct), the epsilon here is
+applied symmetrically (abs, not a one-sided +/-) -- the target value (0)
+sits at the very edge of the data's normal range, so noise could push a
+true-zero reading very slightly either side of it.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
 libraries only. Receives chart_inputs only (population_layers, width_emu,
@@ -48,6 +50,7 @@ MARK_COLOUR = "white"
 
 CIRCLE_DIAMETER_FRACTION = 0.72  # matches line_has_data's own current sizing
 
+THRESHOLD = 0
 EPSILON = 0.0001
 
 
@@ -80,19 +83,6 @@ def _final_submission_value(population_layers):
     return None
 
 
-def _final_median(population_layers):
-    """The scope layer's (population_layers[0]) own median for the final
-    period -- None if there's no scope layer, no metric, or no
-    period_stats to read it from."""
-    if not population_layers:
-        return None
-    base = population_layers[0]
-    metric = base.metrics[0] if base.metrics else None
-    if metric is None or not metric.period_stats:
-        return None
-    return metric.period_stats[-1].median
-
-
 def _draw_mark(ax, cx, cy, r, result):
     lw = max(1.2, r * 72 * 0.12)
     if result == "pass":
@@ -112,7 +102,7 @@ def _draw_mark(ax, cx, cy, r, result):
                 color=MARK_COLOUR, linewidth=lw, solid_capstyle="round", zorder=2)
 
 
-def line_ci_median(population_layers: list, width_emu=2736215, height_emu=684054, tweaks=""):
+def line_ci_0(population_layers: list, width_emu=2736215, height_emu=684054, tweaks=""):
     w_in, h_in = _size_to_inches(width_emu, height_emu)
 
     fig, ax = plt.subplots(figsize=(w_in, h_in))
@@ -125,11 +115,10 @@ def line_ci_median(population_layers: list, width_emu=2736215, height_emu=684054
     r = (min(w_in, h_in) / 2) * CIRCLE_DIAMETER_FRACTION
 
     final_value = _final_submission_value(population_layers)
-    final_median = _final_median(population_layers)
 
-    if final_value is None or final_median is None:
+    if final_value is None:
         result = "no_data"
-    elif (final_value + EPSILON) >= final_median:
+    elif abs(final_value - THRESHOLD) <= EPSILON:
         result = "pass"
     else:
         result = "fail"

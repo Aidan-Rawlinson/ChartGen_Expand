@@ -12,14 +12,16 @@ same way every other shape computes stats against whatever population layer
 gets resolved, just applied once per period rather than once for the whole
 shape (see timeseries.py).
 
-Only periods the project's own visible-dates list marks as visible
-(outputAvailability <= today) are kept — mirroring the source VBA's own
-filter exactly. availableDates' own order is trusted as chronological, not
-re-sorted — same call the VBA makes (that order isn't guaranteed
-documented behaviour, but the VBA has relied on it without issue).
+Every date in availableDates is kept, in its own given order (trusted as
+chronological, not re-sorted). No outputAvailability/visibility filtering
+is applied — that rule (mirrored from the source VBA) turned out not to
+fit this system: it computed visibility against the fetch's own run date,
+so a period's presence on the cached shape depended on exactly when Fetch
+happened to be run, not on anything about the data itself. A period could
+be baked out of a shape at fetch time and never come back without a
+re-fetch, breaking any Running Order row whose metric_periods referenced
+it. Scrapped rather than reworked.
 """
-
-from datetime import date, datetime
 
 from core.shared.normalisation_containers.shapes.timeseries import (
     TimeSeries, TimeSeriesPeriod, TimeSeriesMetric, TimeSeriesUnit,
@@ -35,35 +37,13 @@ def _optional_float(value):
         return None
 
 
-def _visible_date_ids(project_dates: list) -> set:
-    """Return the set of dateIds whose outputAvailability has already passed."""
-    today = date.today()
-    visible = set()
-    for d in project_dates:
-        avail = d.get("outputAvailability")
-        if not avail:
-            continue
-        try:
-            avail_date = datetime.fromisoformat(str(avail)[:10]).date()
-        except ValueError:
-            continue
-        if avail_date <= today:
-            visible.add(d.get("dateId"))
-    return visible
-
-
-def transform(report_details: dict, report_data: dict, project_dates: list) -> "TimeSeries":
+def transform(report_details: dict, report_data: dict) -> "TimeSeries":
     """
     Build a TimeSeries shape (a single Metric-Series, per the current
     "one metric per fetch" API shape — the shape itself supports more, for
     whenever a fetch spans several).
     """
-    visible_ids = _visible_date_ids(project_dates)
-
-    kept_periods = [
-        d for d in report_data.get("availableDates", [])
-        if d.get("dateId") in visible_ids
-    ]
+    kept_periods = report_data.get("availableDates", [])
 
     periods = [
         TimeSeriesPeriod(period_id=str(d["dateId"]), period_label=str(d.get("dateName", "")))

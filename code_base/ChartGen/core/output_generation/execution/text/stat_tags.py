@@ -122,7 +122,12 @@ def resolve_stat_cut(hex_id: str, populations_str: str, start_period: str, end_p
             data_shape, shape_type, start_period, end_period, metric_periods_str,
             workfile_state.tables, workfile_state.table_order, full_unit_set,
         )
-    except ValueError:
+    except Exception:
+        # An unresolvable metric_periods id no longer raises here (see
+        # time_series_to_numeric_series' own docstring) — the resulting
+        # Reference id simply carries no data, resolved further down as
+        # "-" the same as any other missing value, rather than the whole
+        # tag going unresolved. Genuinely unexpected failures only now.
         return [], shape_type
 
     population_layers = []

@@ -25,9 +25,12 @@ TimeSeries,median_comparison_linechart,Line chart — median per population laye
 TimeSeries,full_lines_linechart,Line chart — every unit in the largest population as a light grey line, Selected/peer lines highlighted on top
 TimeSeries,sparkline1,Sparkline — population median and Selected unit value across every period, no axes
 TimeSeries,line_has_data,Line chart - HasData — grey circle with white tick (data present) or cross (no data), for the Selected unit's submission
-TimeSeries,line_ci_median,Line Chart - CI Median — blue tick/grey cross/grey dash: final period's submission vs population median
-TimeSeries,line_ci_2,Line Chart - CI 2 — blue tick/grey cross/grey dash: final period's submission vs threshold of 2
-TimeSeries,line_ci_5pct,Line Chart - CI 5% — blue tick/grey cross/grey dash: final period's submission vs threshold of 5%
-TimeSeries,line_ci_0_5pct,Line Chart - CI 0.5% — blue tick/grey cross/grey dash: final period's submission vs threshold of 0.5%
+TimeSeries,line_ci_at_least_median,Line Chart - CI At Least Median — blue tick/orange cross/grey dash: final period's submission vs population median (pass if submission >= median)
+TimeSeries,line_ci_at_most_median,Line Chart - CI At Most Median — blue tick/orange cross/grey dash: final period's submission vs population median (pass if submission <= median)
+TimeSeries,line_ci_at_most_2,Line Chart - CI At Most 2 — blue tick/orange cross/grey dash: final period's submission vs threshold of 2 (pass if submission <= 2)
+TimeSeries,line_ci_at_most_5pct,Line Chart - CI At Most 5% — blue tick/orange cross/grey dash: final period's submission vs threshold of 5% (pass if submission <= 5)
+TimeSeries,line_ci_0,Line Chart - CI Zero — blue tick/orange cross/grey dash: final period's submission vs zero (pass if submission is zero, or very close)
+TimeSeries,line_ci_at_least_90pct,Line Chart - CI At Least 90% — blue tick/orange cross/grey dash: final period's submission vs threshold of 90% (pass if submission >= 90)
+TimeSeries,line_ci_100pct,Line Chart - CI 100% — blue tick/orange cross/grey dash: final period's submission vs 100% (pass if submission is 100%, or very close)
 TimeSeries,line_ci_full,Line chart — Community Indicators report styling, mean/median reference lines, Selected on top, plus a per-period Selected/Mean/Median table beneath the chart
 TimeSeries,celltest,Diagnostic — 50% transparent green rectangle at exactly the requested cell size, no data drawn

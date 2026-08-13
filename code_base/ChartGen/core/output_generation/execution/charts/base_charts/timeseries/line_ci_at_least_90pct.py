@@ -1,12 +1,13 @@
 """
-line_ci_2.py
+line_ci_at_least_90pct.py
 Base Chart -- TimeSeries, diagnostic variant, one of the "CI" family
-alongside line_ci_median/line_ci_5pct/line_ci_0_5pct. Three-way
-indicator, checking only the Selected unit's own submission value in the
-FINAL period (never any other period):
+alongside line_ci_at_least_median/line_ci_at_most_median/line_ci_at_most_2/
+line_ci_at_most_5pct/line_ci_0/line_ci_100pct. Three-way indicator,
+checking only the Selected unit's own submission value in the FINAL
+period (never any other period):
 
-  - blue circle, white tick    -- passes: (final submission value -
-                                  0.0001) <= 2
+  - blue circle, white tick    -- passes: (final submission value +
+                                  0.0001) >= 90
   - orange circle, white cross -- fails that same check
   - grey circle, white dash    -- no submission value for the final
                                   period at all
@@ -17,9 +18,14 @@ The fail colour is a genuine complement of the pass colour -- same HLS
 lightness/saturation as the blue, opposite hue -- not just "an orange"
 picked freehand.
 
-The -0.0001 is deliberate, not a floating-point tolerance in the usual
-"isclose" sense -- a value exactly equal to 2 is meant to pass, and this
-is the specified way to make that so under float comparison.
+The threshold (90) is a raw value, not a fraction (e.g. 0.9) -- matches
+how a percentage-formatted metric's own values are already stored (the
+format_modifier "P" adds the "%" sign at display time; the underlying
+number is already on a 0-100 scale).
+
+The +0.0001 is deliberate, not a floating-point tolerance in the usual
+"isclose" sense -- a value exactly equal to 90 is meant to pass, and
+this is the specified way to make that so under float comparison.
 
 Standalone artefact: no imports from ChartGen's own code, third-party
 libraries only. Receives chart_inputs only (population_layers, width_emu,
@@ -44,7 +50,7 @@ MARK_COLOUR = "white"
 
 CIRCLE_DIAMETER_FRACTION = 0.72  # matches line_has_data's own current sizing
 
-THRESHOLD = 2
+THRESHOLD = 90
 EPSILON = 0.0001
 
 
@@ -96,7 +102,7 @@ def _draw_mark(ax, cx, cy, r, result):
                 color=MARK_COLOUR, linewidth=lw, solid_capstyle="round", zorder=2)
 
 
-def line_ci_2(population_layers: list, width_emu=2736215, height_emu=684054, tweaks=""):
+def line_ci_at_least_90pct(population_layers: list, width_emu=2736215, height_emu=684054, tweaks=""):
     w_in, h_in = _size_to_inches(width_emu, height_emu)
 
     fig, ax = plt.subplots(figsize=(w_in, h_in))
@@ -112,7 +118,7 @@ def line_ci_2(population_layers: list, width_emu=2736215, height_emu=684054, twe
 
     if final_value is None:
         result = "no_data"
-    elif (final_value - EPSILON) <= THRESHOLD:
+    elif (final_value + EPSILON) >= THRESHOLD:
         result = "pass"
     else:
         result = "fail"

@@ -120,7 +120,14 @@ def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state,
             data_shape, shape_type, start_period, end_period, metric_periods_str,
             workfile_state.tables, workfile_state.table_order, full_unit_set,
         )
-    except ValueError:
+    except Exception:
+        # Genuinely unexpected failures only now (e.g. a malformed cut) --
+        # an unresolvable metric_periods id no longer raises here (see
+        # time_series_to_numeric_series' own docstring); it comes through
+        # as a real metric with no data. Callers of this function treat
+        # any resolution failure the same as "nothing to show" (this
+        # function's own docstring), so still returning [] here rather
+        # than propagating.
         return []
 
     # A blank populations field means "inherit the Running Order default"

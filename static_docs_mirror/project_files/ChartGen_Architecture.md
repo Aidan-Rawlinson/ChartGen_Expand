@@ -297,9 +297,9 @@ A table is free to add `Name()` columns beyond this spine; it may not add any ot
 | `table_id` | Output Table id this row renders (blank for non-table rows). See Decision 23 |
 | `table_type_ref` | Base Table function name, e.g. `plain_grid` (blank for non-table rows) |
 | `populations` | Per-row populations string, overriding the project default (blank to use the default) |
-| `start_period` | Period_id, TimeSeries rows only — inclusive range start (blank = from the first period). See Decision 12 |
-| `end_period` | Period_id, TimeSeries rows only — inclusive range end (blank = to the last period). See Decision 12 |
-| `metric_periods` | `^`-delimited period_id(s), TimeSeries rows only — converts the row to a NumericSeries snapshot before rendering (blank = no conversion). See Decision 12 |
+| `start_period` | Period value, TimeSeries rows only — inclusive range start, stored exactly as picked or typed (blank = from the first period). See Decisions 12, 44 |
+| `end_period` | Period value, TimeSeries rows only — inclusive range end, stored exactly as picked or typed (blank = to the last period). See Decisions 12, 44 |
+| `metric_periods` | `^`-delimited period value(s), TimeSeries rows only — converts the row to a NumericSeries snapshot before rendering (blank = no conversion). See Decisions 12, 44, 45 |
 | `image_path` | Source image path for `insert_picture`; may contain `[code]`/`[id]` tokens |
 | `excel_path` | Workbook path for `open_excel` / `insert_from_excel` / `close_excel` |
 | `export_range` | Excel named range captured as an image by `insert_from_excel` |
@@ -630,7 +630,7 @@ Two TimeSeries-only Running Order columns, both added this session: `start_perio
 
 **Excel dropdowns via a hidden list sheet, not an inline formula.** Excel's inline list validation (used for `function`/`base_chart_name`/etc.) is capped at 255 characters — fine for a handful of options, not for a chart's full period history. A hidden sheet (`_period_lists`) holds each distinct cache_file's period options in its own column (consecutive — column 1 for the first cache_file encountered, and so on); `start_period`, `end_period`, and `metric_periods` all validate against the same column for a given cache_file, one shared `DataValidation` object per cache_file rather than a fresh list per row. The dropdown itself is always single-value (Excel has no multi-select list validation) — `metric_periods` is the one column where more than one may be wanted, so a cell already holding a `^`-delimited value (Charts sheet multi-select, or typed by hand) isn't blocked by the dropdown being there; it just makes adding or replacing one value easy without knowing a period_id.
 
-**Display format.** Cells show `period_label(period_id)` rather than a bare id (meaningless to the user) or a bare label (Excel risks reinterpreting e.g. "Jan 24" as a date). The parenthesised id is what `xlsx_reader.py` extracts back into canonical storage on import; a cell that doesn't match the pattern (blank, or free text typed over the dropdown) resolves to nothing, the same "unresolvable → nothing" rule as an unresolvable population token.
+**Display format, and storage model (superseded — see Decision 44).** The original design here derived a display label fresh from a live lookup at export time; that has since been replaced entirely — see Decision 44.
 
 ### Decision 13 — Yellow Box Resolution Without Placeholder Containment
 
@@ -948,4 +948,37 @@ The four canonical data shapes (Decision-era design, Functional Spec Section 8.2
 
 **Not yet done.** No `REFERENCE_ROW_CONVERTERS` entry in `reference_ids.py` — PairedSurveyData doesn't participate in Summary Stat Tags yet. No transformer populates one from `sp_a_generic_survey_sunderland_score_chart`'s actual API response — the shape can be built, filtered, and read, but nothing fetches real data into it yet. No Base Chart accepts it, so `chart_type_map.csv` has no row for it and a Running Order can't yet assign a chart type to a PairedSurveyData cache file.
 
-**Separately identified, not resolved by this decision:** `has_valid_unit_data` (set on every shape, `False` only for the radar family — Functional Spec Section 8.2) was found to be inert — carried through caching and filtering unchanged, but never read anywhere to change behaviour. The real underlying gap was reframed as Base Charts needing proper support for charts that only ever show one unit's values at a time (the radar family's actual behaviour) — banked as a future task, not addressed here.
+`has_valid_unit_data` is set on every shape (default `True`); no consumer reads it to change behaviour.
+
+### Decision 44 — Period-Field Storage Model: Store Verbatim, Extract Once at Point of Use
+
+`start_period`/`end_period`/`metric_periods` (Decision 12) previously had their display label derived fresh from a live lookup against that row's own `cache_file`'s current period list, every time the Running Order xlsx was exported. This meant the label silently reverted to a bare id the moment a report's own period range moved past that id — discarding a deliberate, already-made choice for a reason entirely unconnected to that choice. An intermediate design tried storing the id and its label in separate columns; reverted, at the user's explicit direction, in favour of the simpler model below, which keeps the xlsx looking exactly as it always had.
+
+**The model now:** these three fields store exactly what the person picked or typed — typically `period_label(period_id)` from a dropdown (e.g. `"July 2025(1338)"`), or a bare id typed by hand — as a single value each. Nothing in the Running Order or Charts sheet ever rewrites, reconstructs, or re-derives this string once it's picked. `xlsx_writer.py`/`xlsx_reader.py` are pure passthrough for these fields — no derivation on write, no parsing on read.
+
+**Numeric extraction happens in exactly one place system-wide:** `cut_resolution.prepare_chart_cut`, via new helpers in `shared/infrastructure/period_ids.py` (`extract_period_id`, `extract_metric_period_ids`, `build_period_display`, `extract_period_label`). Every caller (`insert_chart`, the Charts sheet, Stat Tags, Chart Store, Output Tables) continues to pass its own row's raw stored value straight through, unmodified — none of them needed changing, since the extraction moved to the one function they all already funnel through.
+
+**The Charts sheet preserves a stored value it can't currently resolve, rather than silently rebuilding it label-less.** When previewing a bound row, if the live shape can't resolve a label for an id that's unchanged from what the row already had stored, the Charts sheet keeps the exact previously-stored string rather than overwriting it on the next Save — otherwise an unrelated re-save (resizing, changing chart type) would silently strip a label the moment a report's own period range moved past it.
+
+**Root fact established, not a bug:** each Indicators report has its own independent period-numbering scheme. The same calendar month can be a different `period_id` in two different reports — confirmed directly against the live toolkit. `metric_periods`/`start_period`/`end_period` are per-report values; there is no shared, cross-report period-id space.
+
+### Decision 45 — `metric_periods` Referencing an Unresolvable Period Is a "No Data" Case, Not an Error
+
+`shape_transforms.time_series_to_numeric_series` previously raised `ValueError` if any `metric_periods` id wasn't present on the shape, halting the whole `insert_chart` row (or the equivalent Charts sheet/Stat Tags/Chart Store/Output Tables resolution). Given Decision 44 above — a period genuinely not existing on a particular report is an expected, per-report fact, not a data-entry mistake — a hard failure was the wrong response.
+
+**Now:** an unresolvable id becomes its own output metric, with every unit's value set to `None` — the same "no data" state any other missing value already produces gracefully everywhere downstream (every Base Chart already handles a metric with no data for some or all units, per the `chart_inputs` contract). Its label falls back to the bare id itself, in parentheses, since there's no real period_label to read. ChartGen's job is to hand the data over faithfully, including the fact that a particular period doesn't exist for a given report; what a chart does with that is that chart's own concern, never ChartGen's to manage.
+
+Removed the exception handling this created, now dead, in `assembly_engine.py`, `charts_tab.py`, `text_tab.py`, `chart_store.py`, `insert_table.py`, and `stat_tags.py` — each previously had its own `try/except ValueError` specifically for this case.
+
+### Decision 46 — `outputAvailability` Filtering Removed from the Indicators Toolkit Fetch
+
+`toolkit_indicators/transformers.py` previously filtered `availableDates` to only periods where `outputAvailability <= today`, mirroring a rule from the source VBA this system replaced. This didn't fit ChartGen: visibility depended on *when Fetch happened to run*, not on anything about the data itself, so a period could be permanently baked out of a cached shape's period list depending purely on fetch timing — silently breaking any Running Order row referencing it, with no way to recover short of a re-fetch.
+
+**Now:** every date the API returns in `availableDates` is kept, in the API's own given order, with no filtering at all. `fetch.py`'s corresponding `project_dates` extraction, now unused, was removed rather than left as a dead parameter.
+
+### Decision 47 — NHS Submission Code Normalisation
+
+The NHS toolkit API's own `submissionCode` field is inconsistent in how it pads the numeric part of a code — sometimes correctly zero-padded (`"PH050"`), sometimes right-padded with a trailing space instead (`"PH50 "`), for what should be the identical code. Left unfixed, this surfaced as a genuine data-quality defect wherever a `unit_code` was read from this field.
+
+**Fixed via a single shared helper**, `toolkit_nhs/submission_codes.py` (`normalise_submission_code`): trims whitespace, then re-pads a `LETTER LETTER + digits` code to a minimum 3-digit numeric part. Applied everywhere a raw `submissionCode` becomes a ChartGen `unit_code` — all NHS transformers reading it, and `api_client.get_submissions` (so the population/submissions table carries the same corrected codes, not just individual chart data).
+

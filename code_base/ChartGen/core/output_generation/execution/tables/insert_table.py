@@ -83,7 +83,13 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
             data_shape, shape_type, start_period, end_period, metric_periods_str,
             workfile_state.tables, workfile_state.table_order, ctx.full_unit_set or {},
         )
-    except ValueError:
+    except Exception:
+        # An unresolvable metric_periods id no longer raises here (see
+        # time_series_to_numeric_series' own docstring) — it comes
+        # through as a real metric with no data. Genuinely unexpected
+        # failures only now; still returns None rather than propagating,
+        # per this function's own "one broken chart cell doesn't abort
+        # the whole table" contract.
         return None
 
     population_layers = []

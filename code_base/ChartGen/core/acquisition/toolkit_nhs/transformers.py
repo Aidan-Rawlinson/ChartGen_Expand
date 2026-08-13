@@ -18,6 +18,7 @@ from core.shared.normalisation_containers.shapes import (
     CategoricalCompositionalUnit,
     compute_categorical_metric_stats,
 )
+from .submission_codes import normalise_submission_code
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ def transform_bar_chart(data, year):
     for item in year_data:
         values = [_optional_float(item.get(f"response{i+1}")) for i in range(n_metrics)]
         units.append(NumericSeriesUnit(
-            unit_code=item.get("submissionCode") or "",
+            unit_code=normalise_submission_code(item.get("submissionCode")),
             unit_id=_unit_id_str(item.get("submissionId")),
             values=values,
         ))
@@ -113,7 +114,7 @@ def transform_pie_chart(data, year):
 
     units = [
         CategoricalCompositionalUnit(
-            unit_code=item.get("submissionCode") or "",
+            unit_code=normalise_submission_code(item.get("submissionCode")),
             unit_id=_unit_id_str(item.get("submissionId")),
             response=item.get("response"),
         )
@@ -173,7 +174,7 @@ def transform_yn_chart(data, year):
             raw = item.get("response")
             response = raw if raw not in (None, "-", " ") else None
             units.append(CategoricalCompositionalUnit(
-                unit_code=item.get("submissionCode") or "",
+                unit_code=normalise_submission_code(item.get("submissionCode")),
                 unit_id=_unit_id_str(item.get("submissionId")),
                 response=response,
             ))
@@ -208,21 +209,41 @@ def transform_yn_chart(data, year):
 def transform_radar_chart(data, year):
     """
     Radar/skill mix chart.
-    yearData rows are segments (not units) — submissionCode is the segment label.
-    response1 = sample average; response2 = unit value (null without a selected unit).
-    has_valid_unit_data = False for this shape.
+
+    yearData rows are population-level segment stats (segmentName,
+    averageValue) — not units, and carry no per-submission fields at all.
+
+    tableData rows are already full per-submission data: one row per real
+    submission, with response1..responseN values, each paired with a
+    response{i}Name giving the segment it belongs to. One row per report
+    represents the network's own aggregate (submissionCode is null there,
+    not a real submitting unit) and is excluded.
     """
     year_data = data.get("yearData", {}).get(year, [])
+    table_data = data.get("tableData", {}).get(year, [])
 
-    segment_names = [item["submissionCode"] for item in year_data]
-    sample_avg_values = [_optional_float(item.get("response1")) for item in year_data]
-    count_with_data = sum(1 for v in sample_avg_values if v is not None)
+    n_segments = 0
+    if table_data:
+        i = 1
+        while f"response{i}" in table_data[0]:
+            n_segments += 1
+            i += 1
+        segment_names = [table_data[0].get(f"response{i+1}Name") for i in range(n_segments)]
+    else:
+        segment_names = [item.get("segmentName") for item in year_data]
 
-    units = [NumericCompositionalUnit(
-        unit_code="SAMPLE_AVG",
-        unit_id="0",
-        values=sample_avg_values,
-    )]
+    units = []
+    for item in table_data:
+        code = item.get("submissionCode")
+        if code is None:
+            # Network-level aggregate row, not a real submitting unit.
+            continue
+        values = [_optional_float(item.get(f"response{i+1}")) for i in range(n_segments)]
+        units.append(NumericCompositionalUnit(
+            unit_code=normalise_submission_code(code),
+            unit_id=_unit_id_str(item.get("submissionId")),
+            values=values,
+        ))
 
     metric = NumericCompositionalMetric(
         name=data.get("reportName"),
@@ -235,12 +256,79 @@ def transform_radar_chart(data, year):
         title=data.get("reportName"),
         year=int(year),
         format_modifier=data.get("formatModifier"),
-        has_valid_unit_data=False,
+        has_valid_unit_data=True,
         metrics=[metric],
         shape_stats=ShapeStats(
             count_metric_series=1,
-            count_units=1,
-            count_units_with_any_data=1 if count_with_data > 0 else 0,
+            count_units=len(units),
+            count_units_with_any_data=sum(
+                1 for u in units if any(v is not None for v in u.values)
+            ),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# sp_a_generic_radar_to_dual_bar → NumericCompositional (per-unit via cycling)
+# ---------------------------------------------------------------------------
+
+def transform_radar_to_dual_bar(data, year, per_unit_responses=None):
+    """
+    "Radar to dual bar" chart. Unlike sp_a_generic_radar_chart, this
+    procedure never returns per-submission data in a single call:
+    tableData is always empty ({}), and yearData rows are one per
+    segment/category (population-level only) — confusingly, the segment
+    label is carried in a field still called submissionCode, not a real
+    submission code. response1 is the sample average; response2 is null
+    unless a specific organisation_id is passed to the call, in which case
+    it becomes that organisation's own value.
+
+    per_unit_responses, when supplied, is a list of (unit_code, unit_id,
+    values) tuples built by cycling get_chart_data once per organisation
+    and reading each call's response2 per segment (see fetch.py's cycling
+    helper). When present, these become the shape's real per-unit data and
+    has_valid_unit_data is True. When absent (e.g. no submissions table
+    available yet), falls back to a single synthetic SAMPLE_AVG unit,
+    has_valid_unit_data False.
+    """
+    year_data = data.get("yearData", {}).get(year, [])
+
+    segment_names = [item.get("submissionCode") for item in year_data]
+    sample_avg_values = [_optional_float(item.get("response1")) for item in year_data]
+
+    if per_unit_responses:
+        units = [
+            NumericCompositionalUnit(unit_code=code, unit_id=uid, values=values)
+            for code, uid, values in per_unit_responses
+        ]
+        has_valid_unit_data = True
+    else:
+        units = [NumericCompositionalUnit(
+            unit_code="SAMPLE_AVG",
+            unit_id="0",
+            values=sample_avg_values,
+        )]
+        has_valid_unit_data = False
+
+    metric = NumericCompositionalMetric(
+        name=data.get("reportName"),
+        component_names=segment_names,
+        units=units,
+        stats=compute_numeric_compositional_metric_stats(units),
+    )
+
+    return NumericCompositional(
+        title=data.get("reportName"),
+        year=int(year),
+        format_modifier=data.get("formatModifier"),
+        has_valid_unit_data=has_valid_unit_data,
+        metrics=[metric],
+        shape_stats=ShapeStats(
+            count_metric_series=1,
+            count_units=len(units),
+            count_units_with_any_data=sum(
+                1 for u in units if any(v is not None for v in u.values)
+            ),
         ),
     )
 
@@ -311,17 +399,25 @@ PROCEDURE_MAP = {
     "sp_a_generic_list_pie_chart":                              transform_pie_chart,
     "sp_a_generic_list_pie_chart_exclude_na":                   transform_pie_chart,
     "sp_a_generic_radar_chart":                                 transform_radar_chart,
-    "sp_a_generic_radar_to_dual_bar":                           transform_radar_chart,
+    "sp_a_generic_radar_to_dual_bar":                           transform_radar_to_dual_bar,
 }
 
+# Procedures with no per-submission data in a single call — fetch.py cycles
+# get_chart_data once per organisation for these and passes the results in
+# as transform()'s per_unit_responses. Every other procedure ignores it.
+CYCLE_PROCS = {"sp_a_generic_radar_to_dual_bar"}
 
-def transform(raw_json: dict, year: str, option: int = 0):
+
+def transform(raw_json: dict, year: str, option: int = 0, per_unit_responses=None):
     """
     Dispatch entry point. Accepts the full API response dict, year string,
     and the 0-indexed denominatorOptionId parsed from the chart's URL
     (defaults to 0 — the same default url_parser.py uses when a chart's URL
     carries no `option` param). Returns the appropriate canonical data
     shape, or raises if unrecognised.
+
+    per_unit_responses is only meaningful for CYCLE_PROCS (see
+    transform_radar_to_dual_bar) and is ignored for every other procedure.
 
     Title placeholder resolution (year tokens, `|OPTION_TITLE|`, and
     wildcard `*` stripping) is applied once here, after shape construction,
@@ -331,7 +427,10 @@ def transform(raw_json: dict, year: str, option: int = 0):
     proc = data["storedProcedure"]
     if proc not in PROCEDURE_MAP:
         raise ValueError(f"Unrecognised storedProcedure: {proc}")
-    shape = PROCEDURE_MAP[proc](data, year)
+    if proc in CYCLE_PROCS:
+        shape = transform_radar_to_dual_bar(data, year, per_unit_responses=per_unit_responses)
+    else:
+        shape = PROCEDURE_MAP[proc](data, year)
     resolved_title = _resolve_title(data.get("reportName"), year, option, data)
     shape = replace(shape, title=resolved_title)
 

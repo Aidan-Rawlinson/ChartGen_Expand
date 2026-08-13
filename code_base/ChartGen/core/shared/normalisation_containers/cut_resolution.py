@@ -32,7 +32,7 @@ per caller (cache_file vs hex_id, different "not found" handling) that
 folding it in here would trade three clear call sites for one blurry one.
 """
 
-from core.shared.infrastructure.period_ids import parse_metric_periods_string
+from core.shared.infrastructure.period_ids import parse_metric_periods_string, extract_period_id, extract_metric_period_ids
 from core.shared.normalisation_containers.shapes import apply_period_range
 from core.shared.normalisation_containers.shape_transforms import maybe_convert_periods_to_metrics
 
@@ -49,6 +49,20 @@ def prepare_chart_cut(
     current reporting unit — everything build_population_layers needs
     except the populations string itself, which the caller supplies
     separately (see module docstring for why).
+
+    start_period/end_period/metric_periods_str are accepted exactly as
+    stored on a Running Order row/Chart Store entry/Stat Tag — typically
+    "period_label(period_id)" from a dropdown pick (e.g.
+    "July 2025(1338)"), or a bare id typed by hand; extract_period_id/
+    extract_metric_period_ids (core.shared.infrastructure.period_ids)
+    pull the bare id back out here, once, at the point a cut is actually
+    resolved. This is deliberately the one place that extraction happens:
+    every caller can keep passing its own row's raw stored value straight
+    through, unmodified, rather than each one reimplementing the same
+    parsing. Doing this here rather than at file read/write time also
+    means the stored string itself is never rewritten or reconstructed by
+    this pipeline (see running_order.schema's own note on why that
+    matters).
 
     start_period/end_period trim the shape's period axis first (TimeSeries
     only, no-op otherwise); metric_periods_str then converts the (possibly
@@ -76,16 +90,21 @@ def prepare_chart_cut(
         own `units`/`selected_ids` parameters, ready to pass straight
         through.
 
-    Raises ValueError if metric_periods names a period_id not present on
-    the (period-range-trimmed) shape — the same exception
-    maybe_convert_periods_to_metrics itself raises; not caught here so each
-    caller keeps its own existing policy for surfacing it.
+    Never raises for a metric_periods id that isn't on the (period-range-
+    trimmed) shape — that id's own output metric simply carries no data
+    for any unit, the same "no data" state any other missing value
+    already produces gracefully everywhere downstream (see
+    time_series_to_numeric_series' own docstring for why this is handled
+    at the Base Chart level, not refused here).
     """
+    start_period = extract_period_id(start_period)
+    end_period = extract_period_id(end_period)
+
     if start_period or end_period:
         data_shape = apply_period_range(data_shape, start_period, end_period)
 
     effective_shape_type = shape_type
-    metric_period_ids = parse_metric_periods_string(metric_periods_str or "")
+    metric_period_ids = parse_metric_periods_string(extract_metric_period_ids(metric_periods_str) or "")
     if metric_period_ids:
         data_shape = maybe_convert_periods_to_metrics(data_shape, metric_period_ids)
         effective_shape_type = "NumericSeries"

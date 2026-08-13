@@ -239,20 +239,15 @@ def render_text_tab():
                 # trim, metric-periods conversion, and population-table/
                 # target-rows/selected-ids resolution, shared with
                 # insert_chart and the Charts sheet
-                # (cut_resolution.prepare_chart_cut). ---
-                try:
-                    shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
-                        shape, shape_type, start_period, end_period, metric_periods_str,
-                        workfile_state.tables, workfile_state.table_order, full_unit_set,
-                    )
-                except ValueError as e:
-                    st.error(f"Metric-periods conversion failed: {e}")
-                    metric_period_ids = []
-                    metric_periods_str = ""
-                    shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
-                        shape, shape_type, start_period, end_period, metric_periods_str,
-                        workfile_state.tables, workfile_state.table_order, full_unit_set,
-                    )
+                # (cut_resolution.prepare_chart_cut). An unresolvable
+                # metric_periods id no longer raises here (see
+                # time_series_to_numeric_series' own docstring) — the
+                # resulting Reference id simply carries no data, same as
+                # any other missing value. ---
+                shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
+                    shape, shape_type, start_period, end_period, metric_periods_str,
+                    workfile_state.tables, workfile_state.table_order, full_unit_set,
+                )
 
                 # --- Population — a single token, not a multiselect. A stat
                 # tag resolves to one value, so it only ever needs one

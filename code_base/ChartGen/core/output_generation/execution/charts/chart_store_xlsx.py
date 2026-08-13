@@ -51,8 +51,8 @@ def write_chart_store_xlsx(chart_store_rows: list, output_path) -> str:
 
     col_widths = {
         "chart_store_id": 12, "base_chart_name": 22, "cache_file": 16,
-        "populations": 24, "start_period": 12, "end_period": 12,
-        "metric_periods": 16, "width_emu": 12, "height_emu": 12,
+        "populations": 24, "start_period": 16, "end_period": 16,
+        "metric_periods": 40, "width_emu": 12, "height_emu": 12,
         "tweaks": 30, "description": 40,
     }
 

@@ -3,8 +3,6 @@ xlsx_reader.py
 Reads a Running Order .xlsx back into row dicts.
 """
 
-import re
-
 from core.output_generation.definition.running_order.schema import COLUMNS, SCOPE_VALUES
 from core.shared.infrastructure.constants import coerce_row
 
@@ -14,40 +12,30 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-_PERIOD_ID_PATTERN = re.compile(r"\(([^()]+)\)\s*$")
 
+def _period_cell_to_str(value) -> str:
+    """
+    A start_period/end_period/metric_periods cell's value, read back
+    exactly as stored -- whatever the person picked or typed, typically
+    "period_label(period_id)" (e.g. "July 2025(1338)") from a dropdown
+    pick, or a bare id typed by hand. No parsing, no extraction happens
+    here; the numeric id is pulled back out only where a chart's cut is
+    actually resolved (core.shared.infrastructure.period_ids.
+    extract_period_id/extract_metric_period_ids, via
+    cut_resolution.prepare_chart_cut) — never at file read time, so this
+    stored string is never rewritten.
 
-def _extract_period_id(value) -> str:
+    Guards against one real environment fact, not a hypothetical: a bare
+    id typed directly into one of these cells may come back from Excel as
+    a genuine numeric type rather than text. str(1338.0) gives "1338.0",
+    not "1338" — a real mismatch against the plain string ids extraction
+    later expects. A whole-number float is rendered without its trailing
+    ".0"; anything else (blank, already a string, a genuinely fractional
+    number) is just str()'d and stripped.
     """
-    Extract the trailing (period_id) from a written
-    'period_label(period_id)' start_period/end_period cell — the canonical
-    stored value is the id alone. A blank cell, or one that doesn't match
-    the pattern (e.g. free text typed over the dropdown), returns '' rather
-    than guessing at an id: an unresolved period_id already falls back to
-    an empty period range at insert_chart time (same "unresolvable ->
-    nothing" rule as an unresolvable population token), so there's no
-    silent wrong-match risk either way.
-    """
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    m = _PERIOD_ID_PATTERN.search(text)
-    return m.group(1).strip() if m else ""
-
-
-def _extract_metric_periods(value) -> str:
-    """
-    Parse a '^'-joined 'period_label(period_id)^period_label(period_id)...'
-    metric_periods cell back into a '^'-joined list of ids. Each token is
-    extracted independently via _extract_period_id — a malformed token
-    (free text typed over what was a composite label) is dropped rather
-    than guessed at, same leniency as a single start_period/end_period cell.
-    """
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    ids = [_extract_period_id(tok) for tok in text.split("^")]
-    return "^".join(i for i in ids if i)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value or "").strip()
 
 
 def _restore_json_suffix(value) -> str:
@@ -89,9 +77,9 @@ def read_xlsx(path: str) -> list[dict]:
         if scope not in SCOPE_VALUES:
             scope = "normal"
         row_dict["scope"] = scope
-        row_dict["start_period"] = _extract_period_id(row_dict.get("start_period", ""))
-        row_dict["end_period"] = _extract_period_id(row_dict.get("end_period", ""))
-        row_dict["metric_periods"] = _extract_metric_periods(row_dict.get("metric_periods", ""))
+        row_dict["start_period"] = _period_cell_to_str(row_dict.get("start_period", ""))
+        row_dict["end_period"] = _period_cell_to_str(row_dict.get("end_period", ""))
+        row_dict["metric_periods"] = _period_cell_to_str(row_dict.get("metric_periods", ""))
         row_dict["cache_file"] = _restore_json_suffix(row_dict.get("cache_file", ""))
         rows.append(row_dict)
 

@@ -61,7 +61,6 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             if project_id not in project_data_cache:
                 project_data_cache[project_id] = get_project_submissions_data(project_id, token)
             project_data = project_data_cache[project_id]
-            project_dates = project_data["projectDates"]
             user_organisations = project_data.get("userOrganisations", [])
 
             # Live org-id mapping and real submission names — sourced from
@@ -88,7 +87,7 @@ def fetch_all(token: str, *, workfile_state, on_progress=None) -> list[dict]:
             )
             any_unmapped_org = any_unmapped_org or had_unmapped
 
-            shape = transform(report_details, report_data, project_dates)
+            shape = transform(report_details, report_data)
             # Stamp the population table, and record the source URL in the
             # shape's own metadata (recorded once, at the point of pulling
             # the data — see chart construction, Data Shapes).

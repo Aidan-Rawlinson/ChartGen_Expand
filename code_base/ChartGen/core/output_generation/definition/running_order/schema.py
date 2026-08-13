@@ -61,17 +61,28 @@ BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 # here rather than a rework of the sync logic itself. width_emu/height_emu
 # are always edited via the sandbox's percent-of-page-size unit
 # (core.shared.infrastructure.page_sizing), never as raw EMU.
-# start_period/end_period store period_id (stable identity), not the
-# display label — only meaningful for a TimeSeries cache_file; blank means
-# the full period range, the same "blank = inherit/default" convention as
-# populations.
-# metric_periods is a different concept — a '^'-delimited list of one or
-# more individual period_ids (not a range) that converts a TimeSeries
-# cache_file into a snapshot NumericSeries at insert_chart time (see
-# core.shared.normalisation_containers.shape_transforms), one output metric
-# per source Metric-Series x selected period. Blank means no conversion —
-# the row renders as an ordinary TimeSeries chart, same as before this
-# field existed.
+# start_period/end_period/metric_periods store the value exactly as the
+# person picked or typed it -- for a period picked via a dropdown, that's
+# "period_label(period_id)" (e.g. "July 2025(1338)"), the same composite
+# text the Running Order xlsx dropdown offers; for one typed by hand, the
+# bare id alone works equally well. The Running Order and Charts sheet
+# never rewrite or reconstruct this string once it's picked -- an earlier
+# version derived the label fresh from a live lookup every export, which
+# meant it silently reverted to a bare id the moment a report's own period
+# range moved past that id, discarding a deliberate choice for a reason
+# that had nothing to do with the choice itself (see Decisions.md).
+# Extracting the numeric period_id back out of this stored string -- for
+# actual data resolution, not for display -- happens once, at the point a
+# chart's cut is actually resolved (core.shared.infrastructure.period_ids.
+# extract_period_id/extract_metric_period_ids), not at file read/write
+# time; a bare id with no label extracts to itself unchanged.
+# metric_periods is a different concept from start_period/end_period — a
+# '^'-delimited list of one or more individual periods (not a range) that
+# converts a TimeSeries cache_file into a snapshot NumericSeries at
+# insert_chart time (see core.shared.normalisation_containers.
+# shape_transforms), one output metric per source Metric-Series x selected
+# period. Blank means no conversion — the row renders as an ordinary
+# TimeSeries chart, same as before this field existed.
 # tweaks is a free-text string passed straight through to the Base Chart
 # function's own `tweaks` parameter (Decisions.md), uninterpreted by
 # anything in the Running Order/assembly layer. Blank means "no tweaks" —

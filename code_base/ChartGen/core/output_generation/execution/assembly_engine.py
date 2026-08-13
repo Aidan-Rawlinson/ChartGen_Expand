@@ -112,11 +112,14 @@ class AssemblyContext:
         self.prs: Presentation = None
         self.output_path: str = ""
         self.template_path: str = ""
-        # No consumer reads this list today — batch_process.py only pulls the
-        # first error message out of it, then discards the rest. Left in
-        # deliberately rather than stripped: a full per-row (function/status/
-        # message) log of one report's run could be genuinely useful for
-        # future debugging/diagnostics, if a real consumer is ever built.
+        # No consumer reads this full list today — batch_process.py's
+        # per-unit run log only surfaces the first error, now prefixed
+        # with its own row_id (see results.py's err_result and
+        # batch_process.py) so a failure is attributable to a specific
+        # row even from a one-line summary. Left in deliberately rather
+        # than stripped: a full per-row (function/status/message) log of
+        # one report's run could be genuinely useful for future
+        # debugging/diagnostics, if a real consumer is ever built.
         self.log: list[dict] = []
         self.report_context = None      # set by run_running_order
         self.full_unit_set: dict = {}   # {table_name: [row, ...]} for the current reporting unit, set by run_running_order
@@ -220,19 +223,20 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     # stat tags — see that module. data_shape comes back trimmed/converted
     # regardless of whether any layers are actually resolved below, so the
     # "no populations" fallback reflects those same trims rather than
-    # reverting to the untrimmed shape. ---
+    # reverting to the untrimmed shape. An unresolvable metric_periods id
+    # doesn't raise (see time_series_to_numeric_series' own docstring) —
+    # it comes through as a real metric with no data for any unit, for
+    # the Base Chart itself to handle, the same as any other missing
+    # value. ---
     start_period = str(row.get("start_period", "") or "").strip()
     end_period = str(row.get("end_period", "") or "").strip()
     metric_periods_str = str(row.get("metric_periods", "") or "").strip()
     workfile_state = settings.get("workfile_state")
 
-    try:
-        data_shape, _, target_rows, selected_ids = prepare_chart_cut(
-            data_shape, shape_type, start_period, end_period, metric_periods_str,
-            workfile_state.tables, workfile_state.table_order, ctx.full_unit_set,
-        )
-    except ValueError as e:
-        return err_result(row, f"insert_chart: metric_periods conversion failed: {e}")
+    data_shape, _, target_rows, selected_ids = prepare_chart_cut(
+        data_shape, shape_type, start_period, end_period, metric_periods_str,
+        workfile_state.tables, workfile_state.table_order, ctx.full_unit_set,
+    )
 
     population_layers = []
     if render_context is not None and populations_str:

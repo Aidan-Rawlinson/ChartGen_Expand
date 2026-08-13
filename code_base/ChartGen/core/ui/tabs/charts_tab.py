@@ -58,6 +58,9 @@ from core.output_generation.definition.running_order import (
     parse_metric_periods_string, build_metric_periods_string,
     CHART_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
 )
+from core.shared.infrastructure.period_ids import (
+    extract_period_id, extract_metric_period_ids, extract_period_label, build_period_display,
+)
 from core.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from core.output_generation.execution.charts.cache_reader import cache_files_sorted_by_chart_ref
 from core.output_generation.execution.charts.chart_store import next_chart_store_id, chart_store_row_label
@@ -530,9 +533,15 @@ def render_charts_tab():
                     st.session_state["cs_pending_shape_choice"] = label_by_cache_file.get(cache_file)
                     st.session_state["cs_pending_base_chart_name"] = str(row.get("base_chart_name", "") or "")
                     st.session_state["cs_pending_populations_str"] = str(row.get("populations", "") or "")
-                    st.session_state["cs_pending_start_period"] = str(row.get("start_period", "") or "")
-                    st.session_state["cs_pending_end_period"] = str(row.get("end_period", "") or "")
-                    st.session_state["cs_pending_metric_periods_str"] = str(row.get("metric_periods", "") or "")
+                    # Widget state needs the bare period_id (it matches
+                    # options against the live shape's own period_ids);
+                    # the row's own stored value may carry a display label
+                    # too ("July 2025(1338)") -- extracted here for the
+                    # widget only, never rewritten back onto the row
+                    # itself (see schema.py's own note on why).
+                    st.session_state["cs_pending_start_period"] = extract_period_id(row.get("start_period", ""))
+                    st.session_state["cs_pending_end_period"] = extract_period_id(row.get("end_period", ""))
+                    st.session_state["cs_pending_metric_periods_str"] = extract_metric_period_ids(row.get("metric_periods", ""))
                     st.session_state["cs_pending_tweaks_str"] = str(row.get("tweaks", "") or "")
                     # A near-zero computed percentage is treated the same as
                     # "no meaningful size stored" (fallback 50.0) rather than
@@ -594,9 +603,9 @@ def render_charts_tab():
                     st.session_state["cs_pending_shape_choice"] = label_by_cache_file.get(cstore_cache_file)
                     st.session_state["cs_pending_base_chart_name"] = str(cstore_row.get("base_chart_name", "") or "")
                     st.session_state["cs_pending_populations_str"] = str(cstore_row.get("populations", "") or "")
-                    st.session_state["cs_pending_start_period"] = str(cstore_row.get("start_period", "") or "")
-                    st.session_state["cs_pending_end_period"] = str(cstore_row.get("end_period", "") or "")
-                    st.session_state["cs_pending_metric_periods_str"] = str(cstore_row.get("metric_periods", "") or "")
+                    st.session_state["cs_pending_start_period"] = extract_period_id(cstore_row.get("start_period", ""))
+                    st.session_state["cs_pending_end_period"] = extract_period_id(cstore_row.get("end_period", ""))
+                    st.session_state["cs_pending_metric_periods_str"] = extract_metric_period_ids(cstore_row.get("metric_periods", ""))
                     st.session_state["cs_pending_tweaks_str"] = str(cstore_row.get("tweaks", "") or "")
                     # Same near-zero-percentage guard as the Running Order
                     # row-load path above — see that comment for why this
@@ -693,50 +702,133 @@ def render_charts_tab():
         # converting periods into metrics changes which chart types are
         # valid (NumericSeries's, not TimeSeries's). Options are built from
         # this shape's own period list so the user only ever picks a label,
-        # never types an id. ---
+        # never types an id.
+        #
+        # Whatever is actually stored on a bound row (start_period,
+        # end_period, metric_periods) is used exactly as given, with no
+        # clamping against this shape's own period list — this preview
+        # must call prepare_chart_cut with the same values insert_chart
+        # would use for this same row, or it isn't actually previewing the
+        # output. A stored id that isn't among this shape's own periods is
+        # still added to each widget's own option list (so Streamlit has a
+        # legal value to display — it can't hold a value outside its own
+        # options) rather than dropped; the value itself is never altered.
+        # If that id doesn't resolve, prepare_chart_cut below raises the
+        # same error insert_chart would, surfaced via st.error rather than
+        # silently discarded. ---
+        # --- Original stored period fields for whichever entity is bound
+        # (Running Order row or Chart Store line) — the raw string exactly
+        # as last saved, e.g. "July 2025(1338)". Used below purely as a
+        # fallback so a composite string already stored isn't rebuilt
+        # without its label just because this render's live shape doesn't
+        # happen to resolve that id for a fresh lookup -- see the
+        # composite-string-building comments further down. Empty dict in
+        # free-play mode (nothing bound), which correctly gives "" for
+        # every fallback lookup -- free-play has no prior stored value to
+        # protect. ---
+        if bound_row_idx is not None:
+            _orig_period_row = ro_rows[bound_row_idx]
+        elif st.session_state.get("cs_bound_chart_store_id") in chart_store_by_id:
+            _orig_period_row = chart_store_by_id[st.session_state["cs_bound_chart_store_id"]]
+        else:
+            _orig_period_row = {}
+        _orig_start_period_raw = str(_orig_period_row.get("start_period", "") or "")
+        _orig_start_period_id = extract_period_id(_orig_start_period_raw)
+        _orig_end_period_raw = str(_orig_period_row.get("end_period", "") or "")
+        _orig_end_period_id = extract_period_id(_orig_end_period_raw)
+        _orig_metric_periods_raw = str(_orig_period_row.get("metric_periods", "") or "")
+        _orig_raw_by_metric_period_id = {
+            extract_period_id(tok): tok
+            for tok in _orig_metric_periods_raw.split("^") if tok.strip()
+        }
+
         start_period = ""
         end_period = ""
         metric_period_ids = []
+        # These are what actually get written back to the row on Save --
+        # see the composite-string-building comments below for how each
+        # is built.
+        start_period_to_save = ""
+        end_period_to_save = ""
+        metric_periods_to_save = ""
         if shape_type == "TimeSeries" and shape.periods:
             period_ids = [p.period_id for p in shape.periods]
             label_by_period_id = {p.period_id: p.period_label for p in shape.periods}
 
             if "cs_pending_start_period" in st.session_state:
-                pending_start = st.session_state.pop("cs_pending_start_period")
-                st.session_state["cs_start_period"] = pending_start if pending_start in period_ids else ""
+                st.session_state["cs_start_period"] = st.session_state.pop("cs_pending_start_period")
             if "cs_pending_end_period" in st.session_state:
-                pending_end = st.session_state.pop("cs_pending_end_period")
-                st.session_state["cs_end_period"] = pending_end if pending_end in period_ids else ""
+                st.session_state["cs_end_period"] = st.session_state.pop("cs_pending_end_period")
             st.session_state.setdefault("cs_start_period", "")
             st.session_state.setdefault("cs_end_period", "")
-            # Clamp — a prior shape's periods may not include the current selection.
-            if st.session_state["cs_start_period"] not in ([""] + period_ids):
-                st.session_state["cs_start_period"] = ""
-            if st.session_state["cs_end_period"] not in ([""] + period_ids):
-                st.session_state["cs_end_period"] = ""
+
+            start_period_options = [""] + period_ids
+            if st.session_state["cs_start_period"] not in start_period_options:
+                start_period_options.append(st.session_state["cs_start_period"])
+            end_period_options = [""] + period_ids
+            if st.session_state["cs_end_period"] not in end_period_options:
+                end_period_options.append(st.session_state["cs_end_period"])
 
             def _period_format(v):
-                return "(full range)" if v == "" else label_by_period_id.get(v, v)
+                if v == "":
+                    return "(full range)"
+                # Prefer this shape's own live label; fall back to
+                # whatever label this same id was already stored with
+                # (rather than showing a bare number) if the live shape
+                # doesn't currently recognise it -- display only, doesn't
+                # affect what's actually saved below.
+                return (
+                    label_by_period_id.get(v)
+                    or (extract_period_label(_orig_start_period_raw) if v == _orig_start_period_id else "")
+                    or (extract_period_label(_orig_end_period_raw) if v == _orig_end_period_id else "")
+                    or v
+                )
 
             with st.expander("Period Range", expanded=False):
                 st.caption("Start period")
                 start_period = st.selectbox(
-                    "Start period", options=[""] + period_ids, format_func=_period_format,
+                    "Start period", options=start_period_options, format_func=_period_format,
                     key="cs_start_period", label_visibility="collapsed",
                 )
                 st.caption("End period")
                 end_period = st.selectbox(
-                    "End period", options=[""] + period_ids, format_func=_period_format,
+                    "End period", options=end_period_options, format_func=_period_format,
                     key="cs_end_period", label_visibility="collapsed",
                 )
-                if start_period and end_period and period_ids.index(start_period) > period_ids.index(end_period):
+                if (start_period and end_period and start_period in period_ids and end_period in period_ids
+                        and period_ids.index(start_period) > period_ids.index(end_period)):
                     st.warning("Start period is after end period — this resolves to an empty range.")
+
+            # The string actually saved is built here, at the one moment
+            # a label is known with certainty (this widget's own live
+            # shape.periods) — "period_label(period_id)" when a live
+            # label resolves. If it doesn't (this id isn't among the live
+            # shape's own periods) but the id is exactly what this entity
+            # already had stored, the previously stored string is kept
+            # completely unchanged rather than rebuilt without its label
+            # -- re-saving for an unrelated reason (resizing, chart type)
+            # must not silently strip a label a report's own period range
+            # has since moved past. A genuinely new, unresolvable pick
+            # falls back to the bare id, same as typing one by hand.
+            start_period_to_save = (
+                build_period_display(start_period, label_by_period_id.get(start_period, ""))
+                if label_by_period_id.get(start_period) else
+                (_orig_start_period_raw if start_period == _orig_start_period_id else start_period)
+            )
+            end_period_to_save = (
+                build_period_display(end_period, label_by_period_id.get(end_period, ""))
+                if label_by_period_id.get(end_period) else
+                (_orig_end_period_raw if end_period == _orig_end_period_id else end_period)
+            )
 
             # Widget-options-only trim — mirrors what prepare_chart_cut
             # will do to the real shape below (a cheap, pure, idempotent
             # operation); needed here only so the Convert-to-Metrics
             # multiselect offers the periods actually left in range, not
-            # the full unrestricted list.
+            # the full unrestricted list. A stale start_period/end_period
+            # never raises here (filter_time_series_periods falls back to
+            # an empty range on an unmatched id) — only metric_periods
+            # itself can raise, below.
             _widget_scope_shape = shape
             if start_period or end_period:
                 _widget_scope_shape = apply_period_range(shape, start_period, end_period)
@@ -745,21 +837,32 @@ def render_charts_tab():
 
             if "cs_pending_metric_periods_str" in st.session_state:
                 pending_mp_str = st.session_state.pop("cs_pending_metric_periods_str")
-                pending_mp_ids = parse_metric_periods_string(pending_mp_str)
-                st.session_state["cs_metric_periods"] = [
-                    pid for pid in pending_mp_ids if pid in period_ids_in_scope
-                ]
+                st.session_state["cs_metric_periods"] = parse_metric_periods_string(pending_mp_str)
             st.session_state.setdefault("cs_metric_periods", [])
-            st.session_state["cs_metric_periods"] = [
-                pid for pid in st.session_state["cs_metric_periods"] if pid in period_ids_in_scope
-            ]
+
+            metric_period_options = list(period_ids_in_scope)
+            for pid in st.session_state["cs_metric_periods"]:
+                if pid not in metric_period_options:
+                    metric_period_options.append(pid)
 
             with st.expander("Convert to Metrics", expanded=False):
                 metric_period_ids = st.multiselect(
-                    "Periods", options=period_ids_in_scope,
+                    "Periods", options=metric_period_options,
                     format_func=lambda v: label_by_period_id_in_scope.get(v, v),
                     key="cs_metric_periods", label_visibility="collapsed",
                 )
+
+            # Same "build with a live label when one resolves, otherwise
+            # keep exactly what was already stored for that same id"
+            # rule as start_period_to_save/end_period_to_save above — one
+            # composite (or bare) token per selected id, same order,
+            # '^'-joined to match metric_periods itself.
+            metric_periods_to_save = "^".join(
+                build_period_display(pid, label_by_period_id_in_scope.get(pid, ""))
+                if label_by_period_id_in_scope.get(pid) else
+                _orig_raw_by_metric_period_id.get(pid, pid)
+                for pid in metric_period_ids
+            )
         else:
             # Not TimeSeries, or no periods on this shape — clear any stale
             # selection so a later TimeSeries load doesn't inherit it.
@@ -775,22 +878,15 @@ def render_charts_tab():
         # --- Resolve this cut of the data shape — period-range trim,
         # metric-periods conversion, and population-table/target-rows/
         # selected-ids resolution, shared with insert_chart and stat tags
-        # (cut_resolution.prepare_chart_cut). On a metric_periods failure,
-        # clear the selection and retry with none, the same recovery the
-        # inline version used to do. ---
-        try:
-            shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
-                shape, shape_type, start_period, end_period, metric_periods_str,
-                workfile_state.tables, workfile_state.table_order, full_unit_set,
-            )
-        except ValueError as e:
-            st.error(f"Metric-periods conversion failed: {e}")
-            metric_period_ids = []
-            metric_periods_str = ""
-            shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
-                shape, shape_type, start_period, end_period, metric_periods_str,
-                workfile_state.tables, workfile_state.table_order, full_unit_set,
-            )
+        # (cut_resolution.prepare_chart_cut). An unresolvable
+        # metric_periods id no longer raises here (see
+        # time_series_to_numeric_series' own docstring) — it comes
+        # through as a real metric with no data, same as any other
+        # missing value, for the Base Chart itself to handle. ---
+        shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
+            shape, shape_type, start_period, end_period, metric_periods_str,
+            workfile_state.tables, workfile_state.table_order, full_unit_set,
+        )
         converts_to_metrics = (effective_shape_type != shape_type)
 
         # --- Chart type — filtered to this shape (or, if metric_periods
@@ -954,9 +1050,9 @@ def render_charts_tab():
                     "base_chart_name": lambda: base_chart_name,
                     "cache_file":     lambda: selected_file,
                     "populations":    lambda: populations_str,
-                    "start_period":   lambda: start_period,
-                    "end_period":     lambda: end_period,
-                    "metric_periods": lambda: metric_periods_str,
+                    "start_period":   lambda: start_period_to_save,
+                    "end_period":     lambda: end_period_to_save,
+                    "metric_periods": lambda: metric_periods_to_save,
                     "width_emu":      lambda: width_emu,
                     "height_emu":     lambda: height_emu,
                     "tweaks":         lambda: tweaks_str,
@@ -1014,9 +1110,9 @@ def render_charts_tab():
                     "base_chart_name": base_chart_name,
                     "cache_file":      selected_file,
                     "populations":     populations_str,
-                    "start_period":    start_period,
-                    "end_period":      end_period,
-                    "metric_periods":  metric_periods_str,
+                    "start_period":    start_period_to_save,
+                    "end_period":      end_period_to_save,
+                    "metric_periods":  metric_periods_to_save,
                     "width_emu":       width_emu,
                     "height_emu":      height_emu,
                     "tweaks":          tweaks_str,
