@@ -52,6 +52,30 @@ formatting. The source bundle this chart was converted from hardcoded
 display convention; that was wrong against real data (an "N"-modifier
 metric was being shown with a false "%" suffix) and has been replaced
 with the standard rule.
+
+--- "12m" tweak ---
+This chart is not told the report's own period range (chart_inputs
+contract — no report_context reaches a Base Chart). The report this
+chart is normally used in covers a fixed 12-month year, but early in
+that year the underlying data may only actually exist for the last few
+months. The "12m" bare flag (no colon/value — just the literal text
+"12m" somewhere in the tweaks string) tells this chart to always present
+a full 12-month axis regardless of how many real periods it was actually
+given: whatever real periods exist occupy the most recent (rightmost)
+months, and however many months are short of 12 get synthesised at the
+front as empty, hatched "no data" months. This is presentation only —
+no data is invented, no real value is altered, nothing is filtered. As
+real months accumulate over the year this shrinks on its own; nothing
+about this logic needs revisiting as the year progresses. If given more
+than 12 real periods, only the most recent 12 are shown (same "most
+recent 12, working backwards" rule, no synthesis needed). Every real
+per-period series (mean, median, Selected, each peer group, the target
+line) is padded/trimmed identically via _apply_padding so they all stay
+aligned to the same 12-month axis. The synthetic months' own labels are
+calculated by stepping calendar-month-backwards from the first real
+period's own label; if that label doesn't parse as "Month YYYY", padding
+is skipped entirely for that render (chart still draws, just without the
+synthetic months) rather than guessing.
 """
 
 import io
@@ -71,6 +95,7 @@ matplotlib.use("Agg")
 matplotlib.rcParams["font.family"] = "Calibri"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import matplotlib.patches as mpatches
 
 SELECTED_COL   = "#DA291C"   # NHS Red - this organisation
 MEAN_COL       = "#009639"   # NHS Green (dark) - mean
@@ -82,6 +107,15 @@ AXIS_LABEL_COL = "#5B6770"   # grey - axis tick labels
 CARD_BG        = "#F0F5FC"   # outer card background (figure)
 LEGEND_BORDER  = "#E6E9ED"   # light grey - legend / table border
 TARGET_PURPLE  = "#9B30FF"   # bright purple - tweaks-driven target reference line, this chart's own copy (matches column_ci_full's)
+
+# "12m" tweak — synthetic/no-data month styling. GREYED_HATCH_COL drives
+# both the chart's axvspan hatch and the table's "n/a" cell hatch, so the
+# two greyed regions read as the same visual concept rather than two
+# unrelated design choices. GREYED_DIVIDER_COL is deliberately the same
+# colour again — one muted grey standing for "inactive", not a second
+# accent colour to track.
+GREYED_HATCH_COL   = "#E9EDF0"
+GREYED_DIVIDER_COL = "#E9EDF0"
 
 PEER_ALPHAS = [1.0, 0.7, 0.5, 0.35]
 
@@ -110,6 +144,20 @@ _content_width  = 1.0 - (2 * MARGIN) - LABEL_GUTTER
 _content_bottom = MARGIN
 _content_top    = 1.0 - MARGIN
 
+# "Month YYYY" parsing/stepping for the "12m" tweak's synthetic months —
+# matched on the month name's first three letters, case-insensitive, the
+# same recognition rule _month_label already uses for display, so
+# anything this chart already displays correctly also parses correctly
+# here.
+_MONTH_ABBR_TO_NUM = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+_MONTH_NUM_TO_NAME = {
+    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+    7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December",
+}
+
 
 def _hex_to_rgb(hex_colour):
     hex_colour = hex_colour.lstrip("#")
@@ -131,10 +179,10 @@ def _tint(hex_colour, strength):
     return _rgb_to_hex((r, g, b))
 
 
-PLOT_BG        = _tint(CARD_BG, 0.25)    # plot area background, 25% of current strength
-TABLE_CELL_BG  = _tint(CARD_BG, 0.25)    # table body cell background, matching the plot area
-HEADER_BG      = _tint(OTHER_COL, 0.35)  # table header row, deliberately toned down
-ROWLABEL_BG    = _tint("#EFF5FC", 0.6)   # table row-label background, kept a little more visible
+PLOT_BG          = _tint(CARD_BG, 0.25)         # plot area background, 25% of current strength
+TABLE_CELL_BG    = _tint(CARD_BG, 0.25)         # table body cell background, matching the plot area
+HEADER_BG        = _tint(OTHER_COL, 0.35)       # table header row, deliberately toned down
+ROWLABEL_BG      = _tint("#EFF5FC", 0.6)        # table row-label background, kept a little more visible
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -162,6 +210,68 @@ def _month_label(period_label):
     if not year.isdigit():
         return period_label
     return f"{month_name[:3]} {year[-2:]}"
+
+
+def _parse_period_label(period_label):
+    """
+    Parse a period label of the form 'Month YYYY' (e.g. 'April 2026')
+    into (year, month) ints, or None if it doesn't match that shape.
+    "12m" tweak support — see _build_padding_labels.
+    """
+    parts = period_label.split()
+    if len(parts) != 2:
+        return None
+    month_name, year_str = parts
+    if not year_str.isdigit():
+        return None
+    month_num = _MONTH_ABBR_TO_NUM.get(month_name[:3].lower())
+    if month_num is None:
+        return None
+    return int(year_str), month_num
+
+
+def _months_before(year, month, steps):
+    """(year, month) for `steps` calendar months before the given (year, month). steps=1 is the immediately preceding month. "12m" tweak support."""
+    zero_based = (year * 12 + (month - 1)) - steps
+    return zero_based // 12, (zero_based % 12) + 1
+
+
+def _build_padding_labels(first_real_label, n_pad):
+    """
+    Full 'Month YYYY' labels for n_pad synthetic periods immediately
+    preceding first_real_label, oldest first. Returns None if
+    first_real_label doesn't parse -- caller skips padding entirely in
+    that case rather than guessing at calendar months. "12m" tweak
+    support.
+    """
+    parsed = _parse_period_label(first_real_label)
+    if parsed is None:
+        return None
+    year, month = parsed
+    labels = []
+    for steps in range(n_pad, 0, -1):
+        y, m = _months_before(year, month, steps)
+        labels.append(f"{_MONTH_NUM_TO_NAME[m]} {y}")
+    return labels
+
+
+def _apply_padding(arr, n_pad, window_size):
+    """
+    Trim `arr` to its last `window_size` elements (no-op if arr is
+    already that length or shorter), then prepend `n_pad` NaNs. Used to
+    align every real per-period series (mean, median, Selected, each
+    peer group, target) onto the same final period axis uniformly --
+    "12m" tweak support, but a genuine no-op (window_size=len(arr),
+    n_pad=0) whenever the tweak isn't active, so this is always safe to
+    call. Returns None unchanged (some series, e.g. selected_y, are
+    legitimately None).
+    """
+    if arr is None:
+        return None
+    trimmed = arr[-window_size:] if window_size < len(arr) else arr
+    if n_pad:
+        return np.concatenate([np.full(n_pad, np.nan), trimmed])
+    return trimmed
 
 
 def _format_value(value, format_modifier, decimals):
@@ -248,21 +358,28 @@ def _nice_axis_bounds(max_plotted_value, target_ticks=5):
 def _parse_tweaks(tweaks: str) -> dict:
     """
     Parse this chart's own tweaks convention: caret-separated key:value
-    pairs (key:value^key2:value2). Owned by this Base Chart individually,
-    not enforced by ChartGen itself -- a de facto standard shared with
-    other Base Charts where practical, but a different chart adopting a
-    different structure is a legitimate design choice, not a deviation.
-    Keys are lower-cased and stripped. Values are stripped of surrounding
-    whitespace only ('target: 150', 'target:150' and 'target:   150' all
-    parse identically) -- internal casing/content of the value itself is
-    preserved verbatim, since target's own value is echoed back literally
-    in its on-chart label. Own copy, matches column_ci_full's exactly.
+    pairs (key:value^key2:value2), OR a bare flag with no colon at all
+    (e.g. "12m") -- a bare flag's presence alone is the signal, stored as
+    True so a truthy check (`if tweak_values.get("12m")`) behaves the
+    same way as every key:value tweak. Owned by this Base Chart
+    individually, not enforced by ChartGen itself -- a de facto standard
+    shared with other Base Charts where practical, but a different chart
+    adopting a different structure is a legitimate design choice, not a
+    deviation. Keys are lower-cased and stripped. Values are stripped of
+    surrounding whitespace only ('target: 150', 'target:150' and
+    'target:   150' all parse identically) -- internal casing/content of
+    the value itself is preserved verbatim, since target's own value is
+    echoed back literally in its on-chart label.
     """
     result = {}
     if not tweaks:
         return result
     for part in tweaks.split("^"):
+        part = part.strip()
+        if not part:
+            continue
         if ":" not in part:
+            result[part.lower()] = True
             continue
         key, _, value = part.partition(":")
         key = key.strip().lower()
@@ -316,12 +433,47 @@ def _empty_chart(width_emu, height_emu):
     return _fig_to_bytes(fig)
 
 
-def _style_table(table, has_selected_row):
+def _style_table(table, has_selected_row, n_pad, ax_table):
     """Apply Community Indicators submission-table styling, toned down per
     this chart's own convention: a softened header row, pale row-label
-    cells, light grey borders, colour-coded value text per row."""
+    cells, light grey borders, colour-coded value text per row. n_pad
+    ("12m" tweak) hatches the first n_pad data columns' body cells (their
+    "n/a" columns) to match the chart's own hatched band -- same fill as
+    an ordinary body cell, with light grey hatch lines (the same colour
+    as the chart's own hatch, GREYED_HATCH_COL) showing through
+    underneath the "n/a" text. A Table draws as a single atomic block --
+    each cell's own fill, then its own text -- regardless of the cell's
+    or text's individual zorder relative to other artists, so a hatch
+    added as a separate overlay patch on ax_table can only end up
+    entirely above the whole table (covering the "n/a" text, an earlier
+    version's mistake) or entirely below it (then hidden under the
+    cell's own opaque fill) -- it can never land between the cell's fill
+    and its text via zorder alone. The hatch is therefore set directly
+    on the cell itself (guaranteeing it draws before that cell's own
+    text, within the same atomic step), which has one side effect: a
+    Cell's hatch colour and its border colour are the same underlying
+    property (edgecolor), so setting the hatch also recolours the
+    border. A second, border-only rectangle (transparent fill, ordinary
+    LEGEND_BORDER edge, no hatch) is then drawn on top of the whole
+    table to restore the correct border colour without covering the
+    text -- it only paints the cell's outline, not its interior, so the
+    "n/a" text and the hatch beneath it are untouched. A cell's real
+    position/size isn't settled until draw time (matplotlib auto-sizes
+    table columns against rendered text), so that border rectangle is
+    positioned from get_window_extent() -- the same authoritative,
+    post-layout bounding box matplotlib itself relies on -- converted
+    from display pixels into ax_table's own data coordinates, rather
+    than from the cell's own get_x/get_y/get_width/get_height/
+    get_transform, which don't reliably compose for this purpose (an
+    earlier version read those directly and got a rectangle collapsed
+    to a few pixels, identical for every cell). Header cells for those
+    columns are left alone, since the month label itself is still real
+    and informative even though the data beneath it isn't."""
     table.auto_set_font_size(False)
     table.set_fontsize(7.5)
+
+    renderer = ax_table.figure.canvas.get_renderer()
+    border_zorder = table.get_zorder() + 1
 
     row_colours = []
     if has_selected_row:
@@ -339,13 +491,26 @@ def _style_table(table, has_selected_row):
             cell.set_facecolor(ROWLABEL_BG)
             cell.set_text_props(fontweight="bold", fontsize=7,
                                  color=row_colours[row - 1])
+        elif n_pad and col < n_pad:
+            cell.set_facecolor(TABLE_CELL_BG)
+            cell.set_edgecolor(GREYED_HATCH_COL)
+            cell.set_hatch("///")
+            cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7, style="italic")
+            bbox_display = cell.get_window_extent(renderer)
+            bbox_data = bbox_display.transformed(ax_table.transData.inverted())
+            border_overlay = mpatches.Rectangle(
+                (bbox_data.x0, bbox_data.y0), bbox_data.width, bbox_data.height,
+                facecolor="none", edgecolor=LEGEND_BORDER, linewidth=0.8,
+                zorder=border_zorder,
+            )
+            ax_table.add_patch(border_overlay)
         else:
             cell.set_facecolor(TABLE_CELL_BG)
             cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7)
 
 
 def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
-    """Line chart of one Metric-Series across every period — mean and median reference lines, a highlighted line per subsequent layer (Selected or peer group), and a per-period table of Selected/Mean/Median values beneath the chart. Chart, legend and table each occupy a fixed, non-overlapping band within a single consistent outer margin. CI report styling."""
+    """Line chart of one Metric-Series across every period — mean and median reference lines, a highlighted line per subsequent layer (Selected or peer group), and a per-period table of Selected/Mean/Median values beneath the chart. Chart, legend and table each occupy a fixed, non-overlapping band within a single consistent outer margin. CI report styling. "12m" tweak pads/trims onto a fixed 12-month axis, most recent months rightmost, missing early months shown as an empty hatched band."""
     if not population_layers:
         return _empty_chart(width_emu, height_emu)
 
@@ -354,14 +519,10 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     if metric is None or not base.periods:
         return _empty_chart(width_emu, height_emu)
 
-    month_labels = [_month_label(p.period_label) for p in base.periods]
-    n_periods = len(base.periods)
-    x = np.arange(n_periods)
+    n_real = len(base.periods)
 
     medians = _to_nan_array([ps.median for ps in metric.period_stats])
     means = _to_nan_array([ps.mean for ps in metric.period_stats])
-
-    all_values = list(means[~np.isnan(means)]) + list(medians[~np.isnan(medians)])
 
     selected_y = None
     selected_code = None
@@ -380,13 +541,11 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
                 # the unit's own identity is always shown, even when it
                 # has no display code.
                 selected_code = unit.unit_code or unit.unit_id
-                all_values.extend(list(selected_y[~np.isnan(selected_y)]))
         else:
             peer_means = _to_nan_array([ps.mean for ps in layer_metric.period_stats])
             alpha = PEER_ALPHAS[peer_alpha_idx % len(PEER_ALPHAS)]
             peer_alpha_idx += 1
             peer_series.append((peer_means, layer.population_label, alpha))
-            all_values.extend(list(peer_means[~np.isnan(peer_means)]))
 
     # --- Tweaks-driven target reference line: "target:XXXX" in this row's
     # own tweaks string (this chart's own tweaks convention -- see
@@ -407,10 +566,57 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             target_series = medians
         else:
             try:
-                target_series = np.full(n_periods, float(target_raw))
-                all_values.append(float(target_raw))
+                target_series = np.full(n_real, float(target_raw))
             except ValueError:
                 target_series = None
+
+    # --- "12m" tweak: pad/trim every real per-period series onto a fixed
+    # 12-month axis, most recent real month rightmost. window_size/n_pad
+    # default to a no-op (window_size=n_real, n_pad=0) when the tweak
+    # isn't active, so _apply_padding is always safe to call below
+    # regardless of whether "12m" is set. See module docstring. ---
+    pad_to_12 = bool(tweak_values.get("12m"))
+    window_size = n_real
+    n_pad = 0
+    padded_labels = []
+    windowed_periods = base.periods
+
+    if pad_to_12:
+        window_size = min(n_real, 12)
+        windowed_periods = base.periods[-window_size:] if window_size < n_real else base.periods
+        wanted_pad = 12 - window_size
+        if wanted_pad > 0:
+            built_labels = _build_padding_labels(windowed_periods[0].period_label, wanted_pad)
+            if built_labels is not None:
+                n_pad = wanted_pad
+                padded_labels = built_labels
+            # else: first real period's label didn't parse as "Month YYYY"
+            # -- skip padding entirely for this render (n_pad stays 0)
+            # rather than guessing at calendar months.
+
+    means = _apply_padding(means, n_pad, window_size)
+    medians = _apply_padding(medians, n_pad, window_size)
+    selected_y = _apply_padding(selected_y, n_pad, window_size)
+    peer_series = [(_apply_padding(pm, n_pad, window_size), label, alpha)
+                   for pm, label, alpha in peer_series]
+    target_series = _apply_padding(target_series, n_pad, window_size)
+
+    n_periods = len(means)
+    x = np.arange(n_periods)
+    month_labels = [_month_label(l) for l in padded_labels] + \
+                   [_month_label(p.period_label) for p in windowed_periods]
+
+    # y-axis scale is computed AFTER padding/trimming, from the final
+    # displayed series only -- a period trimmed off by "12m" (more than
+    # 12 real months given) must not be able to inflate the axis for
+    # months that are no longer even shown.
+    all_values = list(means[~np.isnan(means)]) + list(medians[~np.isnan(medians)])
+    if selected_y is not None:
+        all_values.extend(list(selected_y[~np.isnan(selected_y)]))
+    for pm, _, _ in peer_series:
+        all_values.extend(list(pm[~np.isnan(pm)]))
+    if target_series is not None:
+        all_values.extend(list(target_series[~np.isnan(target_series)]))
 
     max_plotted = max(all_values) if all_values else 1.0
     y_max, y_step = _nice_axis_bounds(max_plotted)
@@ -430,6 +636,19 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     ax_table = fig.add_axes([_content_left, table_bottom, _content_width, TABLE_HEIGHT])
     ax.set_facecolor(PLOT_BG)
     ax_table.set_facecolor(CARD_BG)
+
+    # --- "12m" tweak: hatched band over the synthetic no-data months,
+    # plus a dashed divider marking exactly where real data begins.
+    # facecolor "none" (transparent) so the ordinary gridlines still show
+    # through between the hatch strokes -- this reads as "switched off",
+    # not "broken" or "an error". zorder sits just above the gridlines
+    # (0) but below the baseline (1) and every plotted line (2+), so the
+    # hatch never draws over real content. ---
+    if n_pad:
+        ax.axvspan(-0.5, n_pad - 0.5, facecolor="none", edgecolor=GREYED_HATCH_COL,
+                   hatch="///", linewidth=0, zorder=0.5)
+        ax.axvline(n_pad - 0.5, color=GREYED_DIVIDER_COL, linewidth=1,
+                   linestyle=(0, (4, 3)), zorder=0.6)
 
     handles = []
     legend_labels = []
@@ -510,7 +729,12 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     # -- driven by the mean of this table's own values (Selected, Mean,
     # Median together, NaNs excluded), via _sig_fig_decimals. Applies
     # equally regardless of format_modifier (P/C included), per this
-    # chart's own table convention. ---
+    # chart's own table convention. "12m" tweak: the first n_pad columns
+    # get the literal text "n/a" in every row instead of the ordinary
+    # "-" no-data marker, and are greyed/hatched by _style_table -- there
+    # is by definition no real value to show for a synthetic month, so
+    # this is distinguished from an ordinary missing value within real
+    # data. ---
     table_values = []
     if selected_y is not None:
         table_values.extend(v for v in selected_y if not np.isnan(v))
@@ -519,15 +743,21 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     table_mean = float(np.mean(np.abs(table_values))) if table_values else 0.0
     table_decimals = _sig_fig_decimals(table_mean)
 
+    def _row_cells(values):
+        return [
+            "n/a" if i < n_pad else _format_value(v, base.format_modifier, table_decimals)
+            for i, v in enumerate(values)
+        ]
+
     row_labels = []
     cell_text = []
     if selected_y is not None:
         row_labels.append(selected_code or "Selected")
-        cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in selected_y])
+        cell_text.append(_row_cells(selected_y))
     row_labels.append("Mean")
-    cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in means])
+    cell_text.append(_row_cells(means))
     row_labels.append("Median")
-    cell_text.append([_format_value(v, base.format_modifier, table_decimals) for v in medians])
+    cell_text.append(_row_cells(medians))
 
     ax_table.axis("off")
     table = ax_table.table(
@@ -540,6 +770,14 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
         loc="upper center",
         bbox=[0.0, 0.0, 1.0, 1.0],
     )
-    _style_table(table, selected_y is not None)
+    # "12m" tweak: a table's real cell positions/sizes aren't finalised
+    # until the figure is actually drawn (matplotlib auto-sizes columns
+    # against rendered text at draw time) -- reading cell geometry any
+    # earlier returns stale placeholder values, which is what was
+    # producing a near-zero-size hatch overlay identical for every cell.
+    # Forcing a draw pass here resolves real column widths/positions
+    # first, so _style_table's hatch overlay reads genuine cell bounds.
+    fig.canvas.draw()
+    _style_table(table, selected_y is not None, n_pad, ax_table)
 
     return _fig_to_bytes(fig)

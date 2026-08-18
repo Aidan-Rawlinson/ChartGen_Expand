@@ -458,3 +458,19 @@ After the design above was agreed, user asked for PairedSurveyData to actually b
 - Changed `metric_periods` referencing an unresolvable period from a hard `ValueError` (halting the whole row) to a real "no data" metric (`None` values, same as any other missing value) -- at the user's explicit direction that this is a Base Chart's own concern, not ChartGen's to manage. Removed the resulting dead exception handling in `assembly_engine.py`, `charts_tab.py`, `text_tab.py`, `chart_store.py`, `insert_table.py`, `stat_tags.py`.
 - Corrected a stale Architecture.md paragraph claiming `has_valid_unit_data` is `False` for the radar family.
 </content>
+
+## Session -- Export Picture button (Charts sheet)
+
+Added an Export Picture button to the Charts sheet's left rail, below Zoom. On click, re-renders the sandbox's currently configured chart (respecting an unsaved Custom Charts preview override) and writes the SVG to the ChartGen Exports folder as `{base_chart_name}_{timestamp}.svg`. Disabled with a caption when no chart type is selected.
+
+Three design choices confirmed before building: SVG format (native output, not rasterised), left-rail placement near Zoom, and a timestamped filename to avoid overwrites on repeat export.
+
+Files changed: `core/ui/tabs/charts_tab.py`. Feature List updated with one new row (Charts sheet section); no Architecture Decision raised, as nothing existing changed shape.
+</content>
+
+## Session -- Project Folder button; SVG font/scaling exploration (reverted)
+
+Added a "Project Folder" button to the bottom of the sidebar, below Version/Sign Out -- opens the currently open workfile's folder in Windows Explorer via `os.startfile`, disabled with no workfile open. Files changed: `core/ui/workfile/sidebar.py`. Feature List updated with one new row; no Architecture Decision raised.
+
+Separately, explored two questions: how SVG font embedding behaves through PowerPoint's PDF export pathway, and how font sizes scale when an SVG canvas is drawn oversized then shrunk into a smaller picture frame. Built three test artefacts to demonstrate this end to end -- `line_ci_full2`/`column_ci_full2` (real SVG `<text>` instead of glyph outlines) and `line_ci_full3` (a "draw at 4x, shrink on insert" bodge requiring a temporary hardcoded special case in `assembly_engine.insert_chart`). All three, their registry/chart_type_map wiring, and the assembly_engine special case were fully removed at the user's request once testing was complete. No lasting code or doc changes from this thread.
+</content>

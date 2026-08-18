@@ -131,3 +131,15 @@ def render_sidebar():
                 for k in list(st.session_state.keys()):
                     del st.session_state[k]
                 st.rerun()
+
+        _group_spacer()
+
+        # Opens the folder containing the currently open workfile in
+        # Windows Explorer. Only meaningful with a workfile open, since
+        # there's no "project folder" concept otherwise. os.startfile is
+        # safe here specifically because ChartGen runs locally, one user
+        # per machine (run_chartgen.bat) -- it would open Explorer on the
+        # server instead of the user's own PC under a hosted, multi-user
+        # deployment.
+        if st.button("Project Folder", use_container_width=True, disabled=not has_workfile):
+            os.startfile(os.path.dirname(w.workfile_path))

@@ -28,6 +28,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | File version compatibility check | Complete | See Functional Spec Section 5.1. Hard refuse on an incompatible file version id; no migration attempted. |
 | Read-Only workfile access | Complete | See Architecture Decision 6. Offered on every Open regardless of lock state; enforcement is shallow (Save disabled only). |
 | Sidebar file operations (New, Open, Save, Save As, Save and Close, Close Without Saving) | Complete | See Architecture Decision 6. |
+| "Project Folder" button (sidebar) | Complete | Bottom of the sidebar, below Version/Sign Out. Opens the current workfile's own folder in Windows Explorer (`os.startfile`); disabled with no workfile open. Relies on ChartGen running locally, one user per machine (`run_chartgen.bat`) — would open Explorer on the server instead of the user's own PC under a hosted, multi-user deployment. |
 | Outputs folder structure (`outputs/pptx/`, `outputs/pdf/`) | Complete | Auto-created alongside the workfile on first run. |
 | SharePoint/OneDrive compatibility | Complete | See Architecture Decision 8. |
 
@@ -145,6 +146,7 @@ Structured in pipeline order: application/session foundations, then workfile set
 | Charts sheet sandbox state persistence (Save/reopen) | Complete | The sandbox's own current control values (bound row, cache file, chart type, populations, period range/metric-periods, tweaks, sizing, save-action/target) are captured into `settings["charts_sheet_state"]` on Save/Save As/Save and Close and restored once per Open — independent of whether they've been committed to a Running Order row via "Save to Running Order". Zoom (already screen-only) and an in-progress Custom Charts paste-back are excluded. See Architecture Decision 21. |
 | Charts sheet summary stats display | Complete | One table per (population layer × metric-series), with a short per-shape-type reference id (e.g. `Mn`, `1Mna`, `P2a`) alongside each statistic, read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
 | Charts sheet unit list display | Complete | One table per population layer — unit id, code, name — read directly off the same population layers passed to the chart. See Functional Spec Section 9.4, Architecture Decisions 15 and 17. |
+| Charts sheet Export Picture | Complete | Left rail button, next to Zoom. Re-renders the sandbox's current chart (respecting an unsaved Custom Charts preview override) and writes the SVG to `CG_Extracts` as `{base_chart_name}_{timestamp}.svg`. Disabled with a caption until a chart type is selected. |
 
 ---
 

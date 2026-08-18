@@ -331,3 +331,13 @@ Every Excel export/import round-trip (chart URL manifest, Running Order, Chart S
 - **Each Indicators toolkit report has its own independent period-numbering scheme.** The same calendar month can be a different `period_id` in two different reports -- confirmed directly against the live toolkit, not inferred. Not a bug; a fact about the source system that the period-field storage model above now correctly accommodates.
 - **`metric_periods` referencing a period a report doesn't have is a "no data" case, not an error.** ChartGen's job is to hand over the data faithfully, including the fact that a particular period doesn't exist for a given report; what a chart does with that is the chart's own concern.
 </content>
+
+## Session -- Export Picture button (Charts sheet)
+
+No new decisions.
+</content>
+
+## Session -- Project Folder button; SVG font/scaling exploration (reverted)
+
+No new decisions.
+</content>

@@ -1219,6 +1219,42 @@ def render_charts_tab():
                 key="cs_zoom", label_visibility="collapsed",
             )
 
+        # --- Export Picture — writes the currently configured chart's own
+        # SVG output (the same bytes the preview on the right renders) to
+        # the ChartGen Exports folder. Re-runs the chart function rather
+        # than reusing the right column's own image_bytes, since that
+        # stream is consumed by the preview's .read() before this button
+        # (in the left rail) would ever get a chance to read it — mirrors
+        # how Save to Running Order/Chart Store already recompute their
+        # own values rather than reach across columns. Respects a
+        # validated-but-unsaved Custom Charts override the same way the
+        # preview does, so what's exported always matches what's on screen.
+        if not base_chart_name:
+            st.caption("Select a chart type to enable Export Picture.")
+        elif st.button("🖼  Export Picture", use_container_width=True, key="cs_export_picture_btn"):
+            temp_code = st.session_state.get("cs_temp_custom_code")
+            temp_for_chart = st.session_state.get("cs_temp_custom_for_chart")
+            try:
+                if temp_code and temp_for_chart == base_chart_name:
+                    export_chart_func = compile_custom_chart(temp_code)
+                else:
+                    export_chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
+                export_image_bytes = export_chart_func(
+                    pop_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str,
+                )
+                svg_text = export_image_bytes.read().decode("utf-8")
+            except Exception as e:
+                st.error(f"Chart failed to render: {e}")
+            else:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                export_path = os.path.join(
+                    get_extracts_folder(workfile_state.workfile_path), f"{base_chart_name}_{timestamp}.svg",
+                )
+                with open(export_path, "w", encoding="utf-8") as f:
+                    f.write(svg_text)
+                st.success(f"Exported to {export_path}")
+
         if st.button(
             "↺  Reset", type="primary", help="Reset — clear the Charts sheet back to a fresh state",
         ):

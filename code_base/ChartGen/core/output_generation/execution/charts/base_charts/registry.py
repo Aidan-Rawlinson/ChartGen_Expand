@@ -55,6 +55,7 @@ from core.output_generation.execution.charts.base_charts.timeseries.line_ci_0 im
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_at_least_90pct import line_ci_at_least_90pct
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_100pct import line_ci_100pct
 from core.output_generation.execution.charts.base_charts.timeseries.line_ci_full import line_ci_full
+from core.output_generation.execution.charts.base_charts.timeseries.line_ci_na import line_ci_na
 
 CHART_REGISTRY = {
     "ranked_column":        ranked_column,
@@ -89,6 +90,7 @@ CHART_REGISTRY = {
     "line_ci_at_least_90pct":  line_ci_at_least_90pct,
     "line_ci_100pct":          line_ci_100pct,
     "line_ci_full":         line_ci_full,
+    "line_ci_na":           line_ci_na,
 }
 
 

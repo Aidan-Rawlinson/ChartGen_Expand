@@ -33,4 +33,5 @@ TimeSeries,line_ci_0,Line Chart - CI Zero — blue tick/orange cross/grey dash: 
 TimeSeries,line_ci_at_least_90pct,Line Chart - CI At Least 90% — blue tick/orange cross/grey dash: final period's submission vs threshold of 90% (pass if submission >= 90)
 TimeSeries,line_ci_100pct,Line Chart - CI 100% — blue tick/orange cross/grey dash: final period's submission vs 100% (pass if submission is 100%, or very close)
 TimeSeries,line_ci_full,Line chart — Community Indicators report styling, mean/median reference lines, Selected on top, plus a per-period Selected/Mean/Median table beneath the chart
+TimeSeries,line_ci_na,Line Chart - CI N/A — grey circle with "N/A" text, disregards all data, placeholder for rows where this evaluation doesn't apply
 TimeSeries,celltest,Diagnostic — 50% transparent green rectangle at exactly the requested cell size, no data drawn

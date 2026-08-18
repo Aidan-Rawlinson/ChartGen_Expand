@@ -176,8 +176,23 @@ def filter_time_series_periods(shape: "TimeSeries", start_period_id: str = "",
     after the end, produces an empty range — the same "unresolvable ->
     nothing" behaviour as an unresolvable population token
     (Functional Spec §10.4), not a special case.
+
+    TEMPORARY HACK, not the agreed design (calendar-range padding is
+    still pending its own decision): if end_period_id resolves but
+    start_period_id does not, the shape's own period axis starts later
+    than the requested range asked for -- rather than wiping the shape
+    to nothing, return it completely untrimmed. This is a stopgap only;
+    it does not synthesize the missing months, so a Base Chart still
+    only sees whatever periods this shape actually has, not the full
+    requested range. Revisit once the real design (padding with
+    placeholder periods) is agreed.
     """
     ids_in_order = [p.period_id for p in shape.periods]
+
+    start_found = (not start_period_id) or (start_period_id in ids_in_order)
+    end_found = (not end_period_id) or (end_period_id in ids_in_order)
+    if start_period_id and not start_found and end_found:
+        return shape
 
     start_idx = 0 if not start_period_id else (
         ids_in_order.index(start_period_id) if start_period_id in ids_in_order else None
