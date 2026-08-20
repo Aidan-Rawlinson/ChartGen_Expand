@@ -341,3 +341,15 @@ No new decisions.
 
 No new decisions.
 </content>
+
+
+## Session -- SVG text rendering fixed, PDF/COM reliability
+
+- **Real `<text>` in SVG output is now the standing approach for every Base Chart/Base Table**, replacing glyph-outline rendering, via a fixed 5x draw-then-shrink workaround for a confirmed PowerPoint SVG-compression bug. See Architecture Decision 48 for the full mechanism.
+- **Scale factor set to 5.** Tested at 10 first; reduced once render-time cost (roughly quadratic in the factor, since it scales canvas area) became a concern. An earlier, fully-reverted exploratory session had separately proven the same mechanism works at 4.
+- **`TEXT_SCALE`/`CHART_RENDER_SCALE` deliberately duplicated, never shared via import**, across every Base Chart/Base Table file and every system-layer call site -- consistent with the existing standalone-artefact rule for Base Charts/Tables (Decisions 18, 24), extended here to the system-layer call sites too for consistency with the pattern already established for the first two.
+- **Export Picture exports the oversized artefact, not a shrunk-back-down copy** -- deliberate, confirmed with the user: this is genuinely what gets embedded in a PPTX, and matching it exactly was judged more useful than a "normal-looking" standalone file.
+- **`gc.collect()` removed in favour of plain `del`s** for COM cleanup after `Quit()` -- confirmed the `del`s alone are sufficient (ordinary reference counting, not a cycle), and the full collection's cost (10-30s, walking the whole live object graph) wasn't justified once that was established. `gc.collect(0)` (cheaper, youngest-generation only) is the agreed next step if PowerPoint is ever seen lingering again, not a full collect().
+- **`_delete_existing_and_save`'s settle-check interval set to 0.3s x up to 5 checks** (~1.5s worst case) -- confirmed with the user as negligible from a human point of view, deliberately not a longer timeout or an indefinite retry.
+- **Feature List's stale Base Table count fixed immediately** (same-session re-upload); **Glossary's identical stale count deliberately deferred** at the user's explicit request, not fixed this session.
+</content>

@@ -4,13 +4,14 @@ Table registry and dispatch -- maps table_type_ref to its Base Table
 function. The base_tables equivalent of
 core.output_generation.execution.charts.base_charts.registry.
 
-Two built-in table_type_refs -- plain_grid (the minimal first pass) and
-table_cardtile -- each its own standalone file, one table_type_ref per
+Four built-in table_type_refs -- plain_grid (the minimal first pass),
+table_cardtile, and their two-row-header CI-report variants ci_grid and
+ci_cardtile -- each its own standalone file, one table_type_ref per
 file, exactly as the built-in Base Charts are laid out. Extending this to
 further rendering styles is a registry entry, not a change to insert_table
 or the Output Tables tab.
 
-Deliberately trimmed back from ten styles to these two (Decisions.md) --
+Trimmed back from ten styles to plain_grid/table_cardtile (Decisions.md) --
 chart-component cells (Decision 28) surfaced a harder problem several of
 the removed styles hadn't solved yet: each Base Table function is its own
 standalone artefact responsible for reporting back where it actually
@@ -19,7 +20,8 @@ draws a cell, and a style with deliberately-overflowing decoration
 in its own reported rectangle, not simply drop bbox_inches="tight" the
 way plain_grid could. table_cardtile is being kept specifically to work
 through that harder case, rather than repeating the fix nine more times
-speculatively.
+speculatively. ci_grid/ci_cardtile were added afterward, once that harder
+case was worked through, as CI-report-specific two-row-header variants.
 """
 
 from core.output_generation.execution.tables.base_tables.plain_grid import plain_grid

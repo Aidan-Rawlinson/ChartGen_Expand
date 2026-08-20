@@ -17,10 +17,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -28,6 +29,11 @@ BAR_BLUE = "#7CB9E8"
 NAVY     = "#1F4E79"
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -70,15 +76,15 @@ def radar_chart(population_layers: list, width_emu=3771900, height_emu=3771900, 
     values_plot = values + [values[0]]
     angles_plot = angles + [angles[0]]
     ax = fig.add_subplot(111, polar=True)
-    ax.plot(angles_plot, values_plot, color=NAVY, linewidth=2, zorder=3)
+    ax.plot(angles_plot, values_plot, color=NAVY, linewidth=2 * TEXT_SCALE, zorder=3)
     ax.fill(angles_plot, values_plot, color=BAR_BLUE, alpha=0.35, zorder=2)
-    ax.scatter(angles, values, color=NAVY, s=40, zorder=4)
+    ax.scatter(angles, values, color=NAVY, s=40 * (TEXT_SCALE ** 2), zorder=4)
     ax.set_xticks(angles)
     labels = [c if len(c) <= 18 else c[:16] + "…" for c in components]
-    ax.set_xticklabels(labels, fontsize=7.5)
-    ax.tick_params(axis="y", labelsize=7, colors="#888888")
-    ax.yaxis.grid(True, color="#DDDDDD", linewidth=0.7)
-    ax.xaxis.grid(True, color="#DDDDDD", linewidth=0.7)
+    ax.set_xticklabels(labels, fontsize=7.5 * TEXT_SCALE)
+    ax.tick_params(axis="y", labelsize=7 * TEXT_SCALE, colors="#888888")
+    ax.yaxis.grid(True, color="#DDDDDD", linewidth=0.7 * TEXT_SCALE)
+    ax.xaxis.grid(True, color="#DDDDDD", linewidth=0.7 * TEXT_SCALE)
     ax.spines["polar"].set_visible(False)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     fig.tight_layout()

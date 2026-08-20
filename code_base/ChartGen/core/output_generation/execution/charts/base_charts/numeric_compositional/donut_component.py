@@ -16,15 +16,21 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -54,12 +60,12 @@ def donut_component(population_layers: list, width_emu=3771900, height_emu=37719
         values, colors=colours, startangle=90,
         autopct=lambda p: f"{p:.1f}%" if p > 5 else "",
         pctdistance=0.75,
-        wedgeprops={"width": 0.55, "linewidth": 1.5, "edgecolor": "white"},
+        wedgeprops={"width": 0.55, "linewidth": 1.5 * TEXT_SCALE, "edgecolor": "white"},
     )
     for at in autotexts:
-        at.set_fontsize(8); at.set_color("white"); at.set_fontweight("bold")
+        at.set_fontsize(8 * TEXT_SCALE); at.set_color("white"); at.set_fontweight("bold")
     ax.legend(wedges, [f"{c} ({v/total*100:.1f}%)" for c, v in zip(components, values)],
               loc="upper center", bbox_to_anchor=(0.5, -0.02),
-              fontsize=7, frameon=False, ncol=2)
+              fontsize=7 * TEXT_SCALE, frameon=False, ncol=2)
     fig.tight_layout()
     return _fig_to_bytes(fig)

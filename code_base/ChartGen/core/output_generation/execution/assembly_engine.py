@@ -40,6 +40,23 @@ from core.workfile.state.workfile_file import master_table_rows
 # Hyperlink icon — optional, insert_chart only
 # ---------------------------------------------------------------------------
 
+# PowerPoint SVG-text-compression workaround. Every Base Chart is called
+# with width_emu/height_emu multiplied by this factor, then its rendered
+# image is placed back on the slide at the real, unmultiplied target
+# size -- add_svg_picture already scales an SVG's own content to
+# whatever box it's given, so no resize-after-insert is needed. This is
+# only half the mechanism: a Base Chart's own absolute point-based sizes
+# (fontsize, linewidth, markersize) don't scale automatically just
+# because its canvas got bigger, so every individual Base Chart also
+# carries its own local multiplier applied to those literals (see each
+# file's own TEXT_SCALE constant). This number must match every Base
+# Chart's own constant exactly for that chart's text/lines to come out
+# correctly proportioned; not enforced in code, per "Base Charts are
+# outside the system boundary" (no shared import between this file and
+# any Base Chart). insert_table.py carries this same constant
+# independently for table rendering and chart-in-table-cell placement.
+CHART_RENDER_SCALE = 5
+
 DEFAULT_HYPERLINK_COLOUR = "#0563C1"   # standard Office hyperlink blue
 DEFAULT_HYPERLINK_SIZE_EMU = 360000    # ~1cm (914400 EMU/inch ÷ 2.54)
 
@@ -328,7 +345,7 @@ def save_ppt(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         return err_result(row, "save_ppt: no open presentation.")
     try:
         os.makedirs(os.path.dirname(ctx.output_path), exist_ok=True)
-        ctx.prs.save(ctx.output_path)
+        _delete_existing_and_save(ctx.prs, ctx.output_path)
         return ok_result(row, f"Saved: {ctx.output_path}")
     except Exception as e:
         return err_result(row, f"save_ppt: {e}")
@@ -346,9 +363,11 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     pdf_path = os.path.join(pdf_dir, os.path.basename(ctx.output_path).replace(".pptx", ".pdf"))
     os.makedirs(pdf_dir, exist_ok=True)
 
-    # Ensure the pptx is saved first (COM needs a file on disk to open)
+    # Ensure the pptx is saved first (COM needs a file on disk to open) --
+    # deleted-then-resaved-then-settle-checked, not a plain overwrite, per
+    # _delete_existing_and_save's own docstring.
     try:
-        ctx.prs.save(ctx.output_path)
+        _delete_existing_and_save(ctx.prs, ctx.output_path)
     except Exception as e:
         return err_result(row, f"save_pdf: could not save .pptx before PDF export: {e}")
 
@@ -369,18 +388,54 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         try:
             powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
             powerpoint.Visible = 1
-            deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
-            # TEST, not yet a settled decision -- see Architecture, Structural
-            # Design Principles ("Validate only where designed"). ExportAsFixedFormat
-            # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
-            # called with default settings for everything else. Decision 26 originally
-            # moved away from this method because it produced visibly downsampled
-            # embedded images even with autoCompressPictures forced off -- revisited
-            # here at Aidan's request; that finding may still apply and is worth
-            # re-checking against raster (non-SVG) content before treating this as settled.
-            deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
-            deck.Close()
-            powerpoint.Quit()
+            try:
+                deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
+                try:
+                    # TEST, not yet a settled decision -- see Architecture, Structural
+                    # Design Principles ("Validate only where designed"). ExportAsFixedFormat
+                    # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
+                    # called with default settings for everything else. Decision 26 originally
+                    # moved away from this method because it produced visibly downsampled
+                    # embedded images even with autoCompressPictures forced off -- revisited
+                    # here at Aidan's request; that finding may still apply and is worth
+                    # re-checking against raster (non-SVG) content before treating this as settled.
+                    deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
+                finally:
+                    # Nested so a failure in ExportAsFixedFormat still
+                    # closes this specific presentation -- previously
+                    # Close()/Quit() only ran on the success path,
+                    # meaning any exception here (a genuine export
+                    # failure, not what prompted this fix, but a real
+                    # gap) left PowerPoint.exe open and visible
+                    # indefinitely, with nothing in the log to explain why.
+                    deck.Close()
+            finally:
+                # Same reasoning one level up -- guarantees Quit() runs
+                # even if Presentations.Open() itself is what failed.
+                powerpoint.Quit()
+            # Explicit reference release before CoUninitialize -- COM
+            # objects are reference-counted, and comtypes can hold an
+            # interface pointer alive slightly longer than the Python
+            # variable's own scope would suggest, meaning the
+            # POWERPNT.EXE process can outlive a successful Quit() call
+            # with no error anywhere in the log. Confirmed distinct from
+            # the exception-path gap above: this can happen even when
+            # ExportAsFixedFormat and Close both succeed cleanly, and the
+            # PDF itself comes out completely correct. del alone drops
+            # both to a zero reference count, which CPython's ordinary
+            # reference counting releases immediately -- no gc.collect()
+            # needed for that, and a full collection was confirmed adding
+            # a real 10-30s delay (walking the whole live object graph,
+            # sized by everything a report run leaves in memory: every
+            # chart's own matplotlib figures/SVG buffers, now larger
+            # again since CHART_RENDER_SCALE). If PowerPoint is ever
+            # observed lingering again after this, that would point to a
+            # genuine reference cycle rather than plain scope-exit timing,
+            # and gc.collect(0) (youngest generation only, far cheaper
+            # than a full collection) would be the next thing to try
+            # before reaching for a full collect() again.
+            del deck
+            del powerpoint
         finally:
             pythoncom.CoUninitialize()
         return ok_result(row, f"PDF saved: {pdf_path}")
@@ -510,14 +565,24 @@ def _render_chart_image(base_chart_name: str, population_layers: list, width_emu
     the "Selected"-labelled entry in population_layers by the time this is
     called.
 
-    width_emu/height_emu are passed straight through — EMU is the one real
-    unit of size in this system (Architecture, Structural Design
-    Principles); a Base Chart function converts to inches internally
-    (divide by 914400) for its own matplotlib figsize. No percent
-    conversion happens at this boundary any more.
+    width_emu/height_emu are the row's real target size. A Base Chart is
+    called here with both multiplied by CHART_RENDER_SCALE (see that
+    constant's own comment) -- the resulting image_bytes is at that
+    inflated size internally, but insert_chart places it back on the
+    slide at the real, unmultiplied width_emu/height_emu, exactly like
+    every other chart, so nothing about placement changes. EMU is the
+    one real unit of size in this system (Architecture, Structural
+    Design Principles); a Base Chart function converts to inches
+    internally (divide by 914400) for its own matplotlib figsize. No
+    percent conversion happens at this boundary any more.
     """
     chart_func = get_chart_callable(base_chart_name, custom_chart_code)
-    return chart_func(population_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks)
+    return chart_func(
+        population_layers,
+        width_emu=width_emu * CHART_RENDER_SCALE,
+        height_emu=height_emu * CHART_RENDER_SCALE,
+        tweaks=tweaks,
+    )
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,
@@ -547,6 +612,62 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
+
+# Fraction-of-a-second scale deliberately -- see _delete_existing_and_save's
+# own docstring. Not a long-timeout retry loop; if the file hasn't
+# settled within this bounded number of checks, something's genuinely
+# wrong (a stuck sync, a locked file) and the row should fail loudly
+# rather than wait indefinitely or proceed with an unstable file.
+SETTLE_CHECK_INTERVAL_S = 0.3
+MAX_SETTLE_CHECKS = 5
+
+
+def _delete_existing_and_save(prs: Presentation, output_path: str):
+    """
+    Deletes any existing file at output_path before saving -- this is
+    always an overwrite of a previous run's output, never a first save
+    to a brand-new path, so a stale file (possibly still mid-sync from a
+    OneDrive/SharePoint-backed output folder) is never left sitting
+    underneath the new one. Confirms the deletion actually completed
+    before proceeding, rather than assuming os.remove succeeded.
+
+    After saving, waits for the file's size to stop changing across two
+    consecutive checks (SETTLE_CHECK_INTERVAL_S apart) before returning --
+    a negligible wait from a human point of view (a fraction of a second
+    in the normal case), but enough to avoid handing a file that's still
+    being flushed/synced straight to COM automation. This is the
+    suspected cause of a save_pdf run that hung with PowerPoint open for
+    a long time then failed with "Cannot perform this action with a
+    modal dialog showing" against a SharePoint/OneDrive-synced output
+    path (Progression_Log.md) -- COM's own Presentations.Open() catching
+    the file mid-write/mid-sync-lock, rather than any actual corruption
+    (the same file opened cleanly by hand afterwards).
+
+    Raises RuntimeError if the deletion or the settle check doesn't
+    complete within their own bounded attempts -- fails loudly with a
+    clear message rather than retrying indefinitely or silently
+    proceeding with a file that hasn't actually finished writing.
+    """
+    if os.path.exists(output_path):
+        os.remove(output_path)
+        if os.path.exists(output_path):
+            raise RuntimeError(f"could not delete existing file before saving: {output_path}")
+
+    prs.save(output_path)
+
+    previous_size = -1
+    for _ in range(MAX_SETTLE_CHECKS):
+        current_size = os.path.getsize(output_path)
+        if current_size == previous_size:
+            return
+        previous_size = current_size
+        time.sleep(SETTLE_CHECK_INTERVAL_S)
+
+    raise RuntimeError(
+        f"file size did not stabilise after saving (possible OneDrive/SharePoint "
+        f"sync delay): {output_path}"
+    )
+
 
 def _ensure_output_folder(settings: dict) -> str:
     output_folder = settings.get("outputs_folder", "").strip()

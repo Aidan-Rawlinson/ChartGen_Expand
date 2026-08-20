@@ -25,9 +25,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.transforms as mtransforms
@@ -38,14 +40,23 @@ SUBMISSION_COL  = "#C12958"
 EMU_PER_INCH = 914400
 MM_IN_INCHES = 1 / 25.4
 
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly. Applied
+# below to INNER_GAP_IN/OUTER_GAP_IN too, not just fontsize/linewidth --
+# both are fixed *physical-inch* offsets from the axes edge, so without
+# this they'd shrink to a much smaller proportion of the chart once this
+# chart is drawn on the inflated canvas and shrunk back down.
+TEXT_SCALE = 5
+
 # Two separate, independently tunable physical gaps either side of an end
 # label -- both fixed inches, not fractions of the axes' own width (see
 # the note on GAP_IN's old single-value version, further down, for why
 # fractional offsets don't work here). Reading outward from the plot
 # area toward the canvas edge: plot area -> INNER_GAP_IN -> label text ->
 # OUTER_GAP_IN -> border -> canvas edge.
-INNER_GAP_IN = (0.015 + 2 * MM_IN_INCHES) * 2 / 3   # label's near edge to plot area
-OUTER_GAP_IN = (2 * MM_IN_INCHES) / 3                # label's far edge to the border
+INNER_GAP_IN = (0.015 + 2 * MM_IN_INCHES) * 2 / 3 * TEXT_SCALE   # label's near edge to plot area
+OUTER_GAP_IN = (2 * MM_IN_INCHES) / 3 * TEXT_SCALE                # label's far edge to the border
 
 
 def _shade(hex_colour, lightness_delta, saturation_delta=0.0):
@@ -124,7 +135,7 @@ def _add_end_labels(fig, ax, side, median_val, submission_val,
 
     for (text, colour, _), y in zip(entries, y_positions):
         ax.text(x_anchor, y, text, transform=transform, color=colour,
-                fontsize=7, fontweight="bold", ha=ha, va="center",
+                fontsize=7 * TEXT_SCALE, fontweight="bold", ha=ha, va="center",
                 clip_on=False)
 
 
@@ -157,7 +168,7 @@ def _draw_internal_gap_bridges(ax, x, values_raw, color):
         if start > 0 and end < n and values_raw[start - 1] is not None and values_raw[end] is not None:
             ax.plot(
                 [x[start - 1], x[end]], [values_raw[start - 1], values_raw[end]],
-                color=color, linewidth=0.8, linestyle=(0, (1, 2.4)),
+                color=color, linewidth=0.8 * TEXT_SCALE, linestyle=(0, (1 * TEXT_SCALE, 2.4 * TEXT_SCALE)),
                 dash_capstyle="round", zorder=1.5,
             )
         # start == 0 (leading) or end == n (trailing): left as a plain
@@ -377,27 +388,27 @@ def sparkline1(population_layers: list, width_emu=2736215, height_emu=684054, tw
                         origin="lower", aspect="auto", cmap=fade, alpha=0.48,
                         zorder=0)
         im.set_clip_path(poly.get_paths()[0], transform=ax.transData)
-        ax.plot(x, medians, color=MEDIAN_LINE_COL, linewidth=1.0, zorder=1,
+        ax.plot(x, medians, color=MEDIAN_LINE_COL, linewidth=1.0 * TEXT_SCALE, zorder=1,
                 solid_capstyle="round")
 
     if submission_values:
         _draw_internal_gap_bridges(ax, x, submission_values_raw, SUBMISSION_COL)
-        ax.plot(x, submission_values, color=SUBMISSION_COL, linewidth=0.8,
+        ax.plot(x, submission_values, color=SUBMISSION_COL, linewidth=0.8 * TEXT_SCALE,
                 zorder=2, solid_capstyle="round")
         # Small marker on every month, red line only.
         ax.plot(x, submission_values, linestyle="none", marker="o",
-                markersize=1.333, color=SUBMISSION_COL, zorder=3)
+                markersize=1.333 * TEXT_SCALE, color=SUBMISSION_COL, zorder=3)
 
     # Larger start/end markers on both lines -- clip_on=False so
     # _inset_axes_to_fit can reserve room to draw the full circle even
     # when it sits right at (or just past) the plot edge.
     if has_medians:
         ax.plot([x[0], x[-1]], [medians[0], medians[-1]], linestyle="none",
-                marker="o", markersize=2.667, color=MEDIAN_LINE_COL, zorder=2,
+                marker="o", markersize=2.667 * TEXT_SCALE, color=MEDIAN_LINE_COL, zorder=2,
                 clip_on=False)
     if submission_values:
         ax.plot([x[0], x[-1]], [submission_values[0], submission_values[-1]],
-                linestyle="none", marker="o", markersize=2.667,
+                linestyle="none", marker="o", markersize=2.667 * TEXT_SCALE,
                 color=SUBMISSION_COL, zorder=4, clip_on=False)
 
     ax.axis("off")

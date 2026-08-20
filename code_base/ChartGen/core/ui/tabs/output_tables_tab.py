@@ -101,6 +101,19 @@ ZOOM_OPTIONS = ["0.75x", "Actual size (approximately)", "1.25x", "1.5x", "2x", "
 ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 1.25, "1.5x": 1.5, "2x": 2.0}
 DEFAULT_ZOOM = "Actual size (approximately)"
 
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
+# full reasoning. Must match every Base Table's own local TEXT_SCALE,
+# and insert_table.py's own CHART_RENDER_SCALE, exactly -- duplicated
+# locally here rather than imported, matching the convention charts_tab.py
+# already uses for this same constant. Applied to the table_func render
+# call below, and to _splice_chart_cells_into_svg's own width_emu/
+# height_emu (must be the same inflated value table_func was actually
+# called with, since chart_cells comes back in that same render-space --
+# see insert_table.py's own comment for the full reasoning). The CSS/px
+# display width stays at the real, unmultiplied size.
+CHART_RENDER_SCALE = 5
+
 # "ots_" is Preview's own configuration state (table type, tweaks, sizing,
 # save-back target, paste-back) -- what Reset clears. Table *selection*
 # ("ot_ro_choice", "ot_table_choice", "ot_bound_row_idx", ...) lives outside
@@ -131,6 +144,12 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
     base_chart_name lookup and the render call at the cell's own rectangle.
     Returns None on any failure -- one broken chart cell doesn't block the
     rest of the preview.
+
+    chart_rect is in the table's own render-space (CHART_RENDER_SCALE
+    times real size -- see that constant's own comment), since the
+    enclosing table_func call is. Used here exactly as given, with no
+    further multiplication -- that's already the correctly-inflated size
+    a Base Chart expects to be called with under this same mechanism.
     """
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
     if not base_chart_name:
@@ -812,9 +831,15 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
             )
             full_unit_set_for_bundle = _current_full_unit_set(workfile_state, the_settings) if include_charts else None
 
+            # width_emu/height_emu passed here at CHART_RENDER_SCALE times
+            # the real target size -- the same inflated value this table
+            # is actually called with at runtime (see that constant's own
+            # comment), so the bundle's own "Live data for this table,
+            # right now" section reports the true figures an AI author
+            # needs to reason about.
             bundle_text = build_bundle(
                 table_type_ref, resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                width_emu, height_emu, tweaks_str, workfile_state.custom_table_code,
+                width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE, tweaks_str, workfile_state.custom_table_code,
                 include_charts=include_charts, workfile_state=workfile_state, full_unit_set=full_unit_set_for_bundle,
             )
             st.download_button(
@@ -901,9 +926,17 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                     table_func = compile_custom_table(temp_code)
                 else:
                     table_func = get_table_callable(table_type_ref, workfile_state.custom_table_code)
+                # Called at CHART_RENDER_SCALE times the real target size
+                # -- see that constant's own comment -- then displayed
+                # below at the real, unmultiplied px width, so the browser
+                # shrinks it back down exactly as PowerPoint does.
+                # chart_cells (if any) comes back in that same inflated
+                # space, so the splice below must use the same inflated
+                # width_emu/height_emu, not the real display ones.
                 image_bytes, chart_cells = table_func(
                     resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                    width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str,
+                    width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
+                    tweaks=tweaks_str,
                 )
             except Exception as e:
                 st.error(f"Table failed to render: {e}")
@@ -913,7 +946,8 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
         if chart_cells:
             full_unit_set = _current_full_unit_set(workfile_state, the_settings)
             svg_text = _splice_chart_cells_into_svg(
-                svg_text, chart_cells, workfile_state, full_unit_set, width_emu, height_emu,
+                svg_text, chart_cells, workfile_state, full_unit_set,
+                width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
             )
 
         if zoom_choice == "Fit to screen":

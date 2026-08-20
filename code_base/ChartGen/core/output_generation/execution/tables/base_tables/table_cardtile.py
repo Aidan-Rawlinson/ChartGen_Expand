@@ -15,16 +15,14 @@ throwaway offscreen figure to measure text extents) -- it has no bearing
 on the final SVG's own resolution, which is vector and scales losslessly.
 
 Font is Calibri (matplotlib.rcParams["font.family"], below) -- ChartGen's
-standard chart/table font. svg.fonttype is left at matplotlib's own
-default ("path"), which bakes Calibri's actual glyph shapes into vector
-outlines at render time, so the result looks correct regardless of what's
-installed wherever the SVG is later opened. An alternative ("none", real
-live <text> elements) was tried and reverted: neither PowerPoint's own
-Find nor either PDF export method exposed the text as genuinely
-searchable, and the PDF additionally came out with characters selectable
-in mismatched positions/layers -- "path" gives the clean, high-quality
-result with no such artefacts, at the accepted cost that table text
-isn't searchable/selectable in the final output.
+standard chart/table font. SVG text is kept as real text
+(svg.fonttype="none"), not glyph outlines -- an earlier attempt at this
+was reverted (mismatched character positions, non-searchable text in
+PowerPoint's Find and both PDF export paths), which turned out to be the
+same PowerPoint SVG-compression bug affecting every Base Chart/Table,
+not a table_cardtile-specific problem -- see line_ci_full's own
+TEXT_SCALE comment for the actual fix (draw everything TEXT_SCALE times
+bigger, insert at real size) that resolves it properly.
 
 table_inputs contract unchanged: content, column_widths, row_heights,
 width_emu, height_emu, tweaks in; bytes out.
@@ -37,10 +35,11 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -48,19 +47,29 @@ import numpy as np
 DPI = 300
 EMU_PER_INCH = 914400
 
-MAX_FONT_SIZE = 12
-MIN_FONT_SIZE = 4
-FONT_STEP = 0.5
-LEFT_PAD_INCHES = 0.08
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (insert_table.py) exactly. Applied to
+# every fixed physical-inch/absolute-point constant below (font bounds,
+# padding, card rounding, border width, save padding) -- see
+# plain_grid.py's own comment for why an unscaled font-size search bound
+# or padding constant would defeat the whole mechanism once called at an
+# inflated canvas size.
+TEXT_SCALE = 5
+
+MAX_FONT_SIZE = 12 * TEXT_SCALE
+MIN_FONT_SIZE = 4 * TEXT_SCALE
+FONT_STEP = 0.5 * TEXT_SCALE
+LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
 ACCENT_BLUE = "#005EB8"
 GREY_LINE = "#C9D2DA"
 GREY_TEXT = "#5B6770"
 
-CARD_ROUNDING_INCHES = 0.06
-BORDER_WIDTH = 0.375
+CARD_ROUNDING_INCHES = 0.06 * TEXT_SCALE
+BORDER_WIDTH = 0.375 * TEXT_SCALE
 SHADOW_OFFSET_FRACTION = 0.065
-SAVE_PAD_INCHES = 0.03
+SAVE_PAD_INCHES = 0.03 * TEXT_SCALE
 
 # The middle fraction of a body row's own height a card (and therefore
 # its text) actually occupies -- see table_cardtile's own card_y/card_h

@@ -17,10 +17,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
@@ -28,6 +29,11 @@ import matplotlib.ticker as mticker
 BAR_BLUE = "#7CB9E8"
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -74,19 +80,19 @@ def ugly_bar(population_layers: list, width_emu=5486400, height_emu=2743200, twe
     y = np.arange(len(components))
     ax.barh(y, values, color=BAR_BLUE, height=0.5, zorder=2)
     ax.set_yticks(y)
-    ax.set_yticklabels(components, fontsize=8)
+    ax.set_yticklabels(components, fontsize=8 * TEXT_SCALE)
     ax.invert_yaxis()
     ax.xaxis.set_major_formatter(_axis_formatter(base.format_modifier))
     if base.format_modifier == "P":
         ax.set_xlim(0, max(values) * 1.15 if values else 100)
-    ax.tick_params(axis="x", labelsize=8)
-    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.tick_params(axis="x", labelsize=8 * TEXT_SCALE)
+    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
     handles = [
         mpatches.Patch(color=BAR_BLUE,  label="Sample Average"),
         mpatches.Patch(color="#AAAAAA", label="Unit"),
     ]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15),
-              ncol=2, fontsize=7, frameon=False)
+              ncol=2, fontsize=7 * TEXT_SCALE, frameon=False)
     fig.tight_layout()
     return _fig_to_bytes(fig)

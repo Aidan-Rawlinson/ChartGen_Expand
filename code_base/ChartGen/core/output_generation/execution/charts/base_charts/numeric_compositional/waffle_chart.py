@@ -17,16 +17,22 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -64,13 +70,13 @@ def waffle_chart(population_layers: list, width_emu=4114800, height_emu=3429000,
         for col in range(10):
             cat_idx = grid[row, col]
             rect = plt.Rectangle((col, 9 - row), 0.9, 0.9,
-                                  facecolor=colours[cat_idx], edgecolor="white", linewidth=1.5)
+                                  facecolor=colours[cat_idx], edgecolor="white", linewidth=1.5 * TEXT_SCALE)
             ax.add_patch(rect)
     ax.set_xlim(0, 10); ax.set_ylim(0, 10)
     ax.set_aspect("equal"); ax.axis("off")
     handles = [mpatches.Patch(color=colours[i], label=f"{components[i]} ({pcts[i]:.1f}%)")
                for i in range(len(components))]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.02),
-              fontsize=7, frameon=False, ncol=2)
+              fontsize=7 * TEXT_SCALE, frameon=False, ncol=2)
     fig.tight_layout()
     return _fig_to_bytes(fig)

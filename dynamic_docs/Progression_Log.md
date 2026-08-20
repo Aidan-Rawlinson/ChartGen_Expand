@@ -474,3 +474,19 @@ Added a "Project Folder" button to the bottom of the sidebar, below Version/Sign
 
 Separately, explored two questions: how SVG font embedding behaves through PowerPoint's PDF export pathway, and how font sizes scale when an SVG canvas is drawn oversized then shrunk into a smaller picture frame. Built three test artefacts to demonstrate this end to end -- `line_ci_full2`/`column_ci_full2` (real SVG `<text>` instead of glyph outlines) and `line_ci_full3` (a "draw at 4x, shrink on insert" bodge requiring a temporary hardcoded special case in `assembly_engine.insert_chart`). All three, their registry/chart_type_map wiring, and the assembly_engine special case were fully removed at the user's request once testing was complete. No lasting code or doc changes from this thread.
 </content>
+
+
+## Session -- SVG text rendering fixed (real `<text>` via 5x draw-and-shrink), PDF/COM reliability fixes
+
+Fixed PowerPoint's SVG-text character-spacing corruption for real `<text>` elements (as opposed to glyph outlines) -- confirmed via a real PPTX/PDF round-trip test that PowerPoint's own SVG handling mis-spaces individual characters when text is kept as real `<text>`, and that drawing everything at 5x the target size, then placing the result back at the real size, resolves it (matching the earlier, fully-reverted 4x exploratory pass from a prior session).
+
+Rolled out across the whole system: `assembly_engine.py`/`insert_table.py` (new `CHART_RENDER_SCALE = 5`), all 23 Base Charts (the 20 originally known plus the `line_ci_*` diagnostic-marker family, several of which turned out to be self-scaling and needed no `TEXT_SCALE`), all 4 Base Tables (`plain_grid`, `table_cardtile`, and two previously undocumented ones found mid-session, `ci_grid`/`ci_cardtile`), both sandbox previews (`charts_tab.py`/`output_tables_tab.py`), and the Custom Charts/Custom Tables contract documents (updated to tell an AI author about the mechanism, including their own code needing a matching `TEXT_SCALE`).
+
+Fixed a distinct chart-in-table-cell placement bug this rollout required: a Base Table's `chart_cells` rectangle comes back in the table's own inflated render-space, and needs dividing by the scale factor at the placement boundary only (not the render boundary) -- fixed in both `insert_table.py` and the Output Tables tab's own Preview splice.
+
+Along the way, misdiagnosed `ci_cardtile` as a custom table (it's a built-in, just undocumented in the registry's own docstring and in Architecture) -- corrected once the user pointed to the actual file path in the codebase.
+
+Separately, fixed two PDF/PowerPoint-COM reliability issues surfaced by testing: PowerPoint failing to close after `save_pdf` (two distinct root causes -- an exception-path gap in cleanup, fixed with nested `try`/`finally`; and a COM reference-counting issue even on success, fixed with explicit `del` rather than a costly `gc.collect()`), and a SharePoint/OneDrive-specific stuck-modal failure during `save_pdf` (fixed with a new shared `_delete_existing_and_save` helper used by both `save_ppt`/`save_pdf`, checking the file has actually settled before handing it to COM).
+
+Architecture updated: Decision 27 corrected to point forward; new Decisions 48 (the SVG mechanism), 49 (the PDF/COM fixes), 50 (the `ci_grid`/`ci_cardtile` documentation gap) added; Section 4 file tree and table corrected. Feature List's two stale "2 Base Table styles"/"not searchable" lines also corrected. Both re-uploaded and verified against Project Files. Glossary has the same stale Base Table count, confirmed but deliberately left for the user to fix in a later session.
+</content>

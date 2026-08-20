@@ -79,7 +79,12 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
+
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
@@ -88,10 +93,20 @@ import numpy as np
 DPI = 300
 EMU_PER_INCH = 914400
 
-MAX_FONT_SIZE = 12
-MIN_FONT_SIZE = 4
-FONT_STEP = 0.5
-LEFT_PAD_INCHES = 0.08
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (insert_table.py) exactly. Applied to
+# every fixed physical-inch/absolute-point constant below (font bounds,
+# padding, card rounding, border width, save padding, header font
+# boost) -- see plain_grid.py's own comment for why an unscaled
+# font-size search bound or padding constant would defeat the whole
+# mechanism once called at an inflated canvas size.
+TEXT_SCALE = 5
+
+MAX_FONT_SIZE = 12 * TEXT_SCALE
+MIN_FONT_SIZE = 4 * TEXT_SCALE
+FONT_STEP = 0.5 * TEXT_SCALE
+LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
 ACCENT_BLUE = "#1265A5"  # a step darker than the previous #1887DC (itself sparkline1's own MEDIAN_LINE_COL derivation) -- HLS lightness -0.12 further
 GREY_LINE = "#C9D2DA"
@@ -99,16 +114,16 @@ GREY_TEXT = "#5B6770"
 HEADER_BG = "#FCFEFF"  # a third of the previous tint's intensity (~2% of the base blue #7CB9E8 blended toward white, was ~6%) -- paler still, per request; now the gradient's own END colour (right side) -- see HEADER_BG_GRADIENT_START
 HEADER_BG_GRADIENT_START = "#DEEEF9"  # a decent step darker than the previous #F3F9FD (~9% tint) -- now a 25% tint of the base blue #7CB9E8, fading to HEADER_BG on the right
 
-CARD_ROUNDING_INCHES = 0.06
-BORDER_WIDTH = 0.375
+CARD_ROUNDING_INCHES = 0.06 * TEXT_SCALE
+BORDER_WIDTH = 0.375 * TEXT_SCALE
 SHADOW_OFFSET_FRACTION = 0.065
-SAVE_PAD_INCHES = 0.03
+SAVE_PAD_INCHES = 0.03 * TEXT_SCALE
 CARD_HEIGHT_FRACTION = 0.8
 
 HEADER_ROWS = 2
 MERGED_HEADER_LABEL = "Benchmark"  # fixed label spanning the final two columns' row 0
 SUB_HEADINGS = ["Target", "Met(?)"]  # fixed text for the final two columns' row 1
-HEADER_FONT_BOOST = 2  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
+HEADER_FONT_BOOST = 2 * TEXT_SCALE  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
 CENTRED_BODY_COLUMN_INDEX = 3  # the fourth column (0-indexed) -- centred instead of right-aligned, unlike every other body column
 HEADER_ROW_HEIGHT_REDUCTION = 1 / 3  # rendering-only: the two header rows are drawn a third shorter than authored, freed height redistributed into the body rows
 

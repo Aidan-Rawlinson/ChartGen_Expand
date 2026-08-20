@@ -16,10 +16,11 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 YES_COL = "#4CAF50"
@@ -27,6 +28,11 @@ NO_COL  = "#C0392B"
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -73,17 +79,17 @@ def dot_matrix(population_layers: list, width_emu=5486400, height_emu=3771900, t
             for d in range(10):
                 filled = d < n_filled
                 ax.scatter(ci * 11 + d, qi,
-                           s=55, color=col if filled else "#E0E0E0",
+                           s=55 * (TEXT_SCALE ** 2), color=col if filled else "#E0E0E0",
                            zorder=2, linewidths=0)
 
-    ax.set_yticks(range(n_q)); ax.set_yticklabels(questions, fontsize=7)
+    ax.set_yticks(range(n_q)); ax.set_yticklabels(questions, fontsize=7 * TEXT_SCALE)
     ax.invert_yaxis()
     ax.set_xticks([ci * 11 + 4.5 for ci in range(n_c)])
-    ax.set_xticklabels(categories, fontsize=8, fontweight="bold")
+    ax.set_xticklabels(categories, fontsize=8 * TEXT_SCALE, fontweight="bold")
     ax.tick_params(bottom=False)
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.yaxis.grid(False); ax.set_facecolor("white")
-    ax.text(0, n_q + 0.3, "Each dot ≈ 10%", fontsize=6.5, color="#888888", style="italic")
+    ax.text(0, n_q + 0.3, "Each dot ≈ 10%", fontsize=6.5 * TEXT_SCALE, color="#888888", style="italic")
     fig.tight_layout()
     return _fig_to_bytes(fig)

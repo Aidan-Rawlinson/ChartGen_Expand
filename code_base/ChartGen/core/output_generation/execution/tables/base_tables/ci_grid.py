@@ -50,24 +50,34 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
+
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 DPI = 300
 EMU_PER_INCH = 914400
 
-MAX_FONT_SIZE = 12
-MIN_FONT_SIZE = 4
-FONT_STEP = 0.5
-LEFT_PAD_INCHES = 0.08
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (insert_table.py) exactly.
+TEXT_SCALE = 5
+
+MAX_FONT_SIZE = 12 * TEXT_SCALE
+MIN_FONT_SIZE = 4 * TEXT_SCALE
+FONT_STEP = 0.5 * TEXT_SCALE
+LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
 HEADER_ROWS = 2
 MERGED_HEADER_LABEL = "Benchmark"  # fixed label spanning the final two columns' row 0
 SUB_HEADINGS = ["Target", "Met(?)"]  # fixed text for the final two columns' row 1
 HEADER_BG = "white"  # tried a tinted grey (#F2F4F6, then #E7EBEE) -- didn't work, back to plain white to match the body rows
 HEADER_TEXT_COLOUR = "#1F2A33"
-HEADER_FONT_BOOST = 2  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
+HEADER_FONT_BOOST = 2 * TEXT_SCALE  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
 HEADER_ROW_HEIGHT_REDUCTION = 1 / 3  # rendering-only: the two header rows are drawn a third shorter than authored, freed height redistributed into the body rows
 
 
@@ -255,7 +265,7 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                 # Ordinary column: one merged cell spanning both header
                 # rows, showing row 0's own text.
                 rect = mpatches.Rectangle((x0, header_top), x1 - x0, header_bottom - header_top,
-                                           facecolor=HEADER_BG, edgecolor="black", linewidth=0.75)
+                                           facecolor=HEADER_BG, edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect)
                 cell_text = header_row0[c] if c < len(header_row0) else ""
                 chart_tag = _chart_cell_id(cell_text)
@@ -278,7 +288,7 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                 row0_y1 = row_y[1] if len(row_y) > 1 else header_bottom
                 merged_x1 = col_x[last_two_start + 2] if last_two_start + 2 < len(col_x) else 100.0
                 rect_merged = mpatches.Rectangle((x0, header_top), merged_x1 - x0, row0_y1 - header_top,
-                                                  facecolor=HEADER_BG, edgecolor="black", linewidth=0.75)
+                                                  facecolor=HEADER_BG, edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect_merged)
                 ax.text((x0 + merged_x1) / 2, (header_top + row0_y1) / 2, MERGED_HEADER_LABEL,
                         ha="center", va="center", fontsize=font_size + HEADER_FONT_BOOST, fontweight="bold",
@@ -286,7 +296,7 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
 
                 row1_y1 = row_y[2] if len(row_y) > 2 else header_bottom
                 rect1 = mpatches.Rectangle((x0, row0_y1), x1 - x0, row1_y1 - row0_y1,
-                                            facecolor=HEADER_BG, edgecolor="black", linewidth=0.75)
+                                            facecolor=HEADER_BG, edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect1)
                 sub_heading = SUB_HEADINGS[0] if SUB_HEADINGS else ""
                 ax.text((x0 + x1) / 2, (row0_y1 + row1_y1) / 2, sub_heading,
@@ -299,7 +309,7 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                 row0_y1 = row_y[1] if len(row_y) > 1 else header_bottom
                 row1_y1 = row_y[2] if len(row_y) > 2 else header_bottom
                 rect1 = mpatches.Rectangle((x0, row0_y1), x1 - x0, row1_y1 - row0_y1,
-                                            facecolor=HEADER_BG, edgecolor="black", linewidth=0.75)
+                                            facecolor=HEADER_BG, edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect1)
                 idx = c - last_two_start
                 sub_heading = SUB_HEADINGS[idx] if idx < len(SUB_HEADINGS) else ""
@@ -317,7 +327,7 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                 x0 = col_x[c]
                 x1 = col_x[c + 1] if c + 1 < len(col_x) else 100.0
                 rect = mpatches.Rectangle((x0, y0), x1 - x0, y1 - y0,
-                                           facecolor="white", edgecolor="black", linewidth=0.75)
+                                           facecolor="white", edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect)
 
                 cell_text = row_data[c] if c < len(row_data) else ""

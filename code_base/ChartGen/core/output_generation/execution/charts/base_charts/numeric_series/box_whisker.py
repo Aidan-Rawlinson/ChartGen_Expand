@@ -17,10 +17,11 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
@@ -38,6 +39,11 @@ HIGHLIGHT    = "#C12958"
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -80,14 +86,14 @@ def box_whisker(population_layers: list, width_emu=3429000, height_emu=3429000, 
     fig, ax = plt.subplots(figsize=(w, h))
     values = [u.values[0] for u in base.units if u.values[0] is not None]
     ax.boxplot(values, vert=True, patch_artist=True, widths=0.5,
-               medianprops=dict(color=MEDIAN_COL, linewidth=2),
-               boxprops=dict(facecolor=BAR_BLUE, color=NAVY, linewidth=1.2),
-               whiskerprops=dict(color=NAVY, linewidth=1.2),
-               capprops=dict(color=NAVY, linewidth=1.2),
-               flierprops=dict(marker="o", color=ORANGE, markersize=4, alpha=0.7, markeredgewidth=0))
+               medianprops=dict(color=MEDIAN_COL, linewidth=2 * TEXT_SCALE),
+               boxprops=dict(facecolor=BAR_BLUE, color=NAVY, linewidth=1.2 * TEXT_SCALE),
+               whiskerprops=dict(color=NAVY, linewidth=1.2 * TEXT_SCALE),
+               capprops=dict(color=NAVY, linewidth=1.2 * TEXT_SCALE),
+               flierprops=dict(marker="o", color=ORANGE, markersize=4 * TEXT_SCALE, alpha=0.7, markeredgewidth=0))
     ms = base.metric_stats[0]
     if ms.mean is not None:
-        ax.axhline(ms.mean, color=MEAN_COL, linewidth=1.5, linestyle="--")
+        ax.axhline(ms.mean, color=MEAN_COL, linewidth=1.5 * TEXT_SCALE, linestyle="--")
 
     extra_handles = []
     peer_colour_idx = 0
@@ -102,10 +108,10 @@ def box_whisker(population_layers: list, width_emu=3429000, height_emu=3429000, 
             sel_units = layer.units
             if sel_units and sel_units[0].values[0] is not None:
                 sv = sel_units[0].values[0]
-                ax.scatter([1], [sv], color=HIGHLIGHT, zorder=7, s=80, marker="D")
-                ax.axhline(sv, color=HIGHLIGHT, linewidth=1, linestyle=":", zorder=5, alpha=0.6)
+                ax.scatter([1], [sv], color=HIGHLIGHT, zorder=7, s=80 * (TEXT_SCALE ** 2), marker="D")
+                ax.axhline(sv, color=HIGHLIGHT, linewidth=1 * TEXT_SCALE, linestyle=":", zorder=5, alpha=0.6)
                 extra_handles.append(plt.Line2D([0],[0], marker="D", color="w",
-                    markerfacecolor=HIGHLIGHT, markersize=7,
+                    markerfacecolor=HIGHLIGHT, markersize=7 * TEXT_SCALE,
                     label=f"{sel_units[0].unit_code}: {_format_number(sv, base.format_modifier)}"))
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
@@ -116,26 +122,26 @@ def box_whisker(population_layers: list, width_emu=3429000, height_emu=3429000, 
                                     if u.unit_id in selected_ids
                                     and u.values[0] is not None), None)
                 if sel_in_peer is not None:
-                    ax.scatter([1], [sel_in_peer], color=colour, zorder=6, s=60, marker="D", alpha=0.85)
-                    ax.axhline(sel_in_peer, color=colour, linewidth=0.8, linestyle=":", zorder=5, alpha=0.5)
+                    ax.scatter([1], [sel_in_peer], color=colour, zorder=6, s=60 * (TEXT_SCALE ** 2), marker="D", alpha=0.85)
+                    ax.axhline(sel_in_peer, color=colour, linewidth=0.8 * TEXT_SCALE, linestyle=":", zorder=5, alpha=0.5)
                     extra_handles.append(plt.Line2D([0],[0], marker="D", color="w",
-                        markerfacecolor=colour, markersize=6, label=layer.population_label))
+                        markerfacecolor=colour, markersize=6 * TEXT_SCALE, label=layer.population_label))
 
     ax.set_xticks([])
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
-    ax.tick_params(axis="y", labelsize=9)
-    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.tick_params(axis="y", labelsize=9 * TEXT_SCALE)
+    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
-    ax.set_xlabel(f"n = {len(values)}", fontsize=8, color="#555555")
+    ax.set_xlabel(f"n = {len(values)}", fontsize=8 * TEXT_SCALE, color="#555555")
     handles = [
         mpatches.Patch(facecolor=BAR_BLUE, edgecolor=NAVY, label="IQR"),
-        plt.Line2D([0],[0], color=MEDIAN_COL, linewidth=2,
+        plt.Line2D([0],[0], color=MEDIAN_COL, linewidth=2 * TEXT_SCALE,
                    label=f"Median: {_format_number(ms.median, base.format_modifier)}" if ms.median is not None else "Median"),
-        plt.Line2D([0],[0], color=MEAN_COL, linewidth=1.5, linestyle="--",
+        plt.Line2D([0],[0], color=MEAN_COL, linewidth=1.5 * TEXT_SCALE, linestyle="--",
                    label=f"Mean: {_format_number(ms.mean, base.format_modifier)}" if ms.mean is not None else "Mean"),
-        plt.Line2D([0],[0], marker="o", color="w", markerfacecolor=ORANGE, markersize=5, label="Outliers"),
+        plt.Line2D([0],[0], marker="o", color="w", markerfacecolor=ORANGE, markersize=5 * TEXT_SCALE, label="Outliers"),
     ] + extra_handles
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.08),
-              ncol=2, fontsize=7, frameon=False)
+              ncol=2, fontsize=7 * TEXT_SCALE, frameon=False)
     fig.tight_layout()
     return _fig_to_bytes(fig)

@@ -76,11 +76,26 @@ order, and returns exactly one thing:
   units (nothing currently resolves to that label) — this is expected
   behaviour, not an error, and every chart type in this system already
   handles it by simply drawing nothing extra for that layer.
-- **width_emu**, **height_emu** — integers, the target size in EMU
-  (English Metric Units — 914400 per inch), the same unit PowerPoint
-  itself stores every shape's size in. Not a percentage, not pixels — a
-  real physical size. To convert to inches for a `matplotlib` figure's own
-  `figsize`, divide by 914400.
+- **width_emu**, **height_emu** — integers, the size in EMU (English
+  Metric Units — 914400 per inch), the same unit PowerPoint itself stores
+  every shape's size in. Not a percentage, not pixels — a real physical
+  size. To convert to inches for a `matplotlib` figure's own `figsize`,
+  divide by 914400.
+
+  Important: these are **already scaled up** from the size the chart will
+  actually be displayed at — every Base Chart is called at a fixed
+  multiple of its real, final on-screen size (currently 5x), then placed
+  back on the slide/page at that real size afterward, which shrinks the
+  whole rendered image back down uniformly. This is a workaround for a
+  PowerPoint bug that otherwise mis-spaces individual characters in text
+  kept as real `<text>` (see the font instructions below for why that
+  matters here). You don't need to account for this in width_emu/
+  height_emu themselves — just use them exactly as given, the same as
+  before — but you **do** need to scale every absolute point-based size
+  in your own code (font sizes, line widths, marker sizes) by that same
+  multiple, or your chart's own text and lines will come out looking
+  proportionally far too small once displayed at real size. See the font
+  instructions below for exactly how.
 - **tweaks** — a free-text string, blank by default. Nothing in the wider
   system currently parses this string's contents — if you want to make
   some part of the chart's appearance configurable, you're free to invent
@@ -101,16 +116,30 @@ Base Chart returns: a `matplotlib` figure saved to an in-memory buffer via
 rendered as a vector image, not a raster one), with the buffer returned
 (not the figure object itself, and not a Matplotlib Axes/Figure).
 
-Font must be Calibri — set once, near the top of the file, right after
-the matplotlib imports:
+Font must be Calibri, and text must be kept as real text rather than
+converted to glyph outlines — set both once, near the top of the file,
+right after the matplotlib imports:
 
     import matplotlib
     matplotlib.rcParams["font.family"] = "Calibri"
+    matplotlib.rcParams["svg.fonttype"] = "none"
 
-Leave `matplotlib.rcParams["svg.fonttype"]` at its own default ("path").
-Do not set it to "none" — that was tried and reverted (it doesn't make
-text genuinely searchable in PowerPoint or in either PDF export pathway,
-and introduces character-positioning corruption in the PDF specifically).
+Then define a local scale constant, and multiply every absolute
+point-based size in the file by it — font sizes, line widths, marker
+sizes, dash-pattern lengths, anything specified in points rather than as
+a fraction of the axes/figure:
+
+    TEXT_SCALE = 5
+
+    ax.plot(x, y, linewidth=1.5 * TEXT_SCALE)
+    ax.set_xticklabels(labels, fontsize=7 * TEXT_SCALE)
+    ax.scatter(x, y, s=40 * (TEXT_SCALE ** 2))   # scatter's own "s" is an area, not a length -- square the scale factor
+
+This number (5) must match exactly — it isn't something to tune per
+chart. If a value is already computed as a fraction of the axes/figure
+(anything in the 0-1 data-coordinate or figure-fraction space, rather
+than points or inches) it already scales correctly on its own and needs
+no multiplication.
 
 ## Submitting your answer
 

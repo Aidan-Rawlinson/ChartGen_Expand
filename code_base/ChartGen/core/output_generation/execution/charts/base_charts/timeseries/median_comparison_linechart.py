@@ -20,10 +20,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -32,6 +33,11 @@ HIGHLIGHT    = "#C12958"
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -71,14 +77,14 @@ def median_comparison_linechart(population_layers: list, width_emu=5486400, heig
     """Line chart of one Metric-Series across every period — median line per population layer, except 'Selected', which charts the actual unit value(s) instead of a median."""
     if not population_layers:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
     base = population_layers[0]
     metric = base.metrics[0] if base.metrics else None
     if metric is None or not base.periods:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
     w, h = _size_to_inches(width_emu, height_emu)
@@ -95,29 +101,29 @@ def median_comparison_linechart(population_layers: list, width_emu=5486400, heig
 
         if layer.population_label == "Selected":
             for unit in layer_metric.units:
-                ax.plot(x, unit.values, color=HIGHLIGHT, linewidth=2, marker="o",
-                        markersize=4, zorder=4)
+                ax.plot(x, unit.values, color=HIGHLIGHT, linewidth=2 * TEXT_SCALE, marker="o",
+                        markersize=4 * TEXT_SCALE, zorder=4)
             if layer_metric.units:
-                ax.plot([], [], color=HIGHLIGHT, linewidth=2, marker="o", markersize=4,
+                ax.plot([], [], color=HIGHLIGHT, linewidth=2 * TEXT_SCALE, marker="o", markersize=4 * TEXT_SCALE,
                         label=layer_metric.units[0].unit_code)
         elif i == 0:
             medians = [ps.median for ps in layer_metric.period_stats]
-            ax.plot(x, medians, color=NAVY, linewidth=2, zorder=2,
+            ax.plot(x, medians, color=NAVY, linewidth=2 * TEXT_SCALE, zorder=2,
                     label=f"{layer.population_label} median")
         else:
             colour = PEER_COLOURS[peer_colour_idx % len(PEER_COLOURS)]
             peer_colour_idx += 1
             medians = [ps.median for ps in layer_metric.period_stats]
-            ax.plot(x, medians, color=colour, linewidth=1.5, linestyle="--", zorder=3,
+            ax.plot(x, medians, color=colour, linewidth=1.5 * TEXT_SCALE, linestyle="--", zorder=3,
                     label=f"{layer.population_label} median")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
-    ax.tick_params(axis="y", labelsize=8)
-    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7 * TEXT_SCALE)
+    ax.tick_params(axis="y", labelsize=8 * TEXT_SCALE)
+    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7, frameon=False)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, fontsize=7 * TEXT_SCALE, frameon=False)
     fig.tight_layout()
 
     return _fig_to_bytes(fig)

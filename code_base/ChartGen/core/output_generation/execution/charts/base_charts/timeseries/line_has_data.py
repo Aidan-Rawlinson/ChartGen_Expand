@@ -26,10 +26,12 @@ import matplotlib
 matplotlib.use("Agg")
 
 # Calibri -- ChartGen's standard chart/table font, though this chart draws
-# no text; kept for consistency with every other Base Chart in this file
-# set (baked into the SVG as real glyph outlines, svg.fonttype default
-# "path" -- irrelevant here with no text, but harmless to set).
+# no text; kept for consistency with every other Base Chart. SVG text is
+# kept as real text, not glyph outlines (see line_ci_full's own comment
+# for the full reasoning) -- irrelevant here with no text, but harmless
+# and kept consistent with every other Base Chart.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400

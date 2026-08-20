@@ -46,10 +46,13 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology (Decision 27).
+# Calibri -- ChartGen's standard chart/table font (Decision 27, governs
+# every Base Chart), not Arial as given in the CI spec's own typography
+# section -- flagged for confirmation rather than silently overridden.
+# SVG text is kept as real text, not glyph outlines -- see line_ci_full's
+# own comment for the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import matplotlib.transforms as mtransforms
@@ -69,6 +72,11 @@ LEGEND_BORDER = "#E6E9ED"   # light grey — legend card border, matches line_ci
 TARGET_PURPLE = "#9B30FF"   # bright purple — tweaks-driven target reference line, this chart's own copy (matches line_ci_full's)
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _hex_to_rgb(hex_colour):
@@ -132,7 +140,7 @@ def _fig_to_bytes(fig):
 def _apply_spine_style(ax):
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.axhline(0, color=BASELINE_GREY, linewidth=0.8, zorder=1)
+    ax.axhline(0, color=BASELINE_GREY, linewidth=0.8 * TEXT_SCALE, zorder=1)
     ax.set_axisbelow(True)
 
 
@@ -278,7 +286,7 @@ def _empty_chart(width_emu, height_emu):
     fig, ax = plt.subplots(figsize=(w, h))
     fig.patch.set_facecolor(CARD_BG)
     ax.set_facecolor(PLOT_BG)
-    ax.text(0.5, 0.5, "No data", ha="center", va="center", color=AXIS_GREY)
+    ax.text(0.5, 0.5, "No data", ha="center", va="center", color=AXIS_GREY, fontsize=10 * TEXT_SCALE)
     ax.axis("off")
     return _fig_to_bytes(fig)
 
@@ -350,7 +358,7 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
     if sel_idx is not None and sel_val is not None:
         ax.annotate(_format_number(sel_val, base.format_modifier, decimals=key_decimals),
                     xy=(sel_idx, sel_val), xytext=(0, 4), textcoords="offset points",
-                    ha="center", fontsize=8, color=SELECTED_RED, fontweight="bold",
+                    ha="center", fontsize=8 * TEXT_SCALE, color=SELECTED_RED, fontweight="bold",
                     zorder=10,
                     bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", boxstyle="square,pad=0.2"))
 
@@ -358,7 +366,7 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
     # (still shown as a text-only legend entry, after Median, with no
     # colour swatch -- see handles below), per this chart's own display
     # convention.
-    if ms.median is not None: ax.axhline(ms.median, color=MEDIAN_GREEN, linewidth=2, zorder=3)
+    if ms.median is not None: ax.axhline(ms.median, color=MEDIAN_GREEN, linewidth=2 * TEXT_SCALE, zorder=3)
 
     # --- Tweaks-driven target reference line: "target:XXXX" in this row's
     # own tweaks string (this chart's own tweaks convention -- see
@@ -395,7 +403,7 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
     ax.yaxis.set_major_locator(mticker.MultipleLocator(y_step))
 
     if target_value is not None:
-        ax.axhline(target_value, color=TARGET_PURPLE, linewidth=2, linestyle="--", zorder=4)
+        ax.axhline(target_value, color=TARGET_PURPLE, linewidth=2 * TEXT_SCALE, linestyle="--", zorder=4)
         # Right edge of the plot area, above the line -- x anchored to the
         # axes' own right edge (axes-fraction), y anchored to the target's
         # own data value (blended transform), so the label sits exactly
@@ -403,11 +411,11 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
         label_trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
         ax.text(1.0, target_value, f"Target: {target_raw}",
                 transform=label_trans, ha="right", va="bottom",
-                fontsize=8, color=TARGET_PURPLE, fontweight="bold",
+                fontsize=8 * TEXT_SCALE, color=TARGET_PURPLE, fontweight="bold",
                 bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", boxstyle="square,pad=0.2"))
 
     ax.set_xticks(x)
-    tick_labels = ax.set_xticklabels(codes, rotation=0, ha="center", fontsize=6.5)
+    tick_labels = ax.set_xticklabels(codes, rotation=0, ha="center", fontsize=6.5 * TEXT_SCALE)
     for i, lbl in enumerate(tick_labels):
         if i == sel_idx:
             lbl.set_color(SELECTED_RED)
@@ -416,9 +424,9 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
             lbl.set_color(AXIS_GREY)
 
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
-    ax.tick_params(axis="y", labelsize=7, colors=AXIS_GREY)
+    ax.tick_params(axis="y", labelsize=7 * TEXT_SCALE, colors=AXIS_GREY)
     ax.tick_params(axis="x", length=0)
-    ax.yaxis.grid(True, color=GRID_GREY, linewidth=0.5)
+    ax.yaxis.grid(True, color=GRID_GREY, linewidth=0.5 * TEXT_SCALE)
     _apply_spine_style(ax)
 
     # --- Key (legend) labels, using key_decimals computed above ---
@@ -428,7 +436,7 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
     handles = [
         plt.matplotlib.patches.Patch(color=SELECTED_RED, label=f"{sel_code or 'Selected'}: {sel_value_text}"),
         plt.matplotlib.patches.Patch(color=OTHER_BLUE, label="Other providers"),
-        plt.Line2D([0], [0], color=MEDIAN_GREEN, linewidth=2, label=median_label),
+        plt.Line2D([0], [0], color=MEDIAN_GREEN, linewidth=2 * TEXT_SCALE, label=median_label),
         # Mean is text-only in the legend -- no colour swatch, since it's
         # no longer drawn as a line on the chart itself (see reference
         # lines above). An invisible handle (colour "none") still gives
@@ -449,12 +457,12 @@ def column_ci_full(population_layers: list, width_emu=5486400, height_emu=342900
         bbox_transform=fig.transFigure,
         mode="expand",
         ncol=len(handles),
-        fontsize=9,
+        fontsize=9 * TEXT_SCALE,
         frameon=True,
         borderaxespad=0,
         labelcolor=AXIS_GREY,
     )
     legend.get_frame().set_facecolor(CARD_BG)
     legend.get_frame().set_edgecolor(LEGEND_BORDER)
-    legend.get_frame().set_linewidth(0.8)
+    legend.get_frame().set_linewidth(0.8 * TEXT_SCALE)
     return _fig_to_bytes(fig)

@@ -96,6 +96,17 @@ ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 
 DEFAULT_ZOOM = "Actual size (approximately)"
 CS_KEY_PREFIX = "cs_"
 
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
+# full reasoning. Must match every Base Chart's own local TEXT_SCALE,
+# and assembly_engine.py's/insert_table.py's own CHART_RENDER_SCALE,
+# exactly -- duplicated locally here rather than imported, matching the
+# same convention those two modules already use for this same constant.
+# Applied to every chart_func render call below (preview and Export
+# Picture); the CSS/px display width stays at the real, unmultiplied
+# size in both cases, same as PPTX placement.
+CHART_RENDER_SCALE = 5
+
 # Placeholder option values, used as literal entries in each dropdown's own
 # options list rather than Python None — None triggers Streamlit's own
 # built-in "Choose an option" placeholder once pre-set into session_state,
@@ -1152,9 +1163,17 @@ def render_charts_tab():
             if not base_chart_name:
                 st.caption("Select a chart type above first.")
             else:
+                # width_emu/height_emu passed here at CHART_RENDER_SCALE
+                # times the real target size -- the same inflated value
+                # this chart is actually called with at runtime (see that
+                # constant's own comment), so the bundle's own "Live data
+                # for this chart, right now" section reports the true
+                # figures an AI author needs to reason about, not the
+                # row's own nominal target size.
                 bundle_text = build_bundle(
                     base_chart_name, effective_shape_type, pop_layers,
-                    width_emu, height_emu, tweaks_str, workfile_state.custom_chart_code,
+                    width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
+                    tweaks_str, workfile_state.custom_chart_code,
                 )
                 st.download_button(
                     "⬇  Download bundle for this chart", data=bundle_text,
@@ -1239,8 +1258,14 @@ def render_charts_tab():
                     export_chart_func = compile_custom_chart(temp_code)
                 else:
                     export_chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
+                # Exported at CHART_RENDER_SCALE times the real size --
+                # the same, genuinely oversized artefact actually embedded
+                # in a PPTX, not shrunk back down for this standalone
+                # file (confirmed: exporting the oversized version is
+                # correct here).
                 export_image_bytes = export_chart_func(
-                    pop_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str,
+                    pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
+                    height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
                 )
                 svg_text = export_image_bytes.read().decode("utf-8")
             except Exception as e:
@@ -1279,7 +1304,14 @@ def render_charts_tab():
                     chart_func = compile_custom_chart(temp_code)
                 else:
                     chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
-                image_bytes = chart_func(pop_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks_str)
+                # Called at CHART_RENDER_SCALE times the real target size
+                # -- see that constant's own comment -- then displayed
+                # below at the real, unmultiplied px width, so the browser
+                # shrinks it back down exactly as PowerPoint does.
+                image_bytes = chart_func(
+                    pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
+                    height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
+                )
             except Exception as e:
                 st.error(f"Chart failed to render: {e}")
                 return

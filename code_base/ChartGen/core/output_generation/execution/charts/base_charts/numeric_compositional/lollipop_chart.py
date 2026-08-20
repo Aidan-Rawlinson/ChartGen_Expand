@@ -17,10 +17,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -28,6 +29,11 @@ BAR_BLUE = "#7CB9E8"
 NAVY     = "#1F4E79"
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -72,17 +78,17 @@ def lollipop_chart(population_layers: list, width_emu=4800600, height_emu=274320
     components = metric.component_names
     values = [v if v is not None else 0 for v in metric.units[0].values]
     y = np.arange(len(components))
-    ax.hlines(y, 0, values, color=BAR_BLUE, linewidth=2.5, zorder=2)
-    ax.scatter(values, y, color=NAVY, s=80, zorder=3)
+    ax.hlines(y, 0, values, color=BAR_BLUE, linewidth=2.5 * TEXT_SCALE, zorder=2)
+    ax.scatter(values, y, color=NAVY, s=80 * (TEXT_SCALE ** 2), zorder=3)
     for i, (val, yi) in enumerate(zip(values, y)):
-        ax.text(val + max(values) * 0.02, yi, _format_number(val, base.format_modifier), va="center", fontsize=8, color=NAVY)
+        ax.text(val + max(values) * 0.02, yi, _format_number(val, base.format_modifier), va="center", fontsize=8 * TEXT_SCALE, color=NAVY)
     ax.set_yticks(y)
-    ax.set_yticklabels(components, fontsize=8)
+    ax.set_yticklabels(components, fontsize=8 * TEXT_SCALE)
     ax.invert_yaxis()
     ax.set_xlim(0, max(values) * 1.2 if values else 100)
-    ax.tick_params(axis="x", labelsize=8)
+    ax.tick_params(axis="x", labelsize=8 * TEXT_SCALE)
     ax.xaxis.set_major_formatter(_axis_formatter(base.format_modifier))
-    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
     fig.tight_layout()
     return _fig_to_bytes(fig)

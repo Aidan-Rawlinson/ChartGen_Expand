@@ -18,10 +18,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
@@ -33,6 +34,11 @@ import matplotlib.colors as mcolors
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -62,7 +68,7 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
     """Multi-tier bead-string dot plot — one tier per population layer."""
     if not population_layers:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
     base = population_layers[0]
@@ -70,7 +76,7 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
     vals = [u.values[0] for u in base.units if u.values[0] is not None]
     if not vals:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
     COLOUR_ALL = (136/255, 135/255, 128/255, 0.38)
@@ -100,7 +106,7 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
 
     if not tiers:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
     # Visual-only de-duplication: a unit already shown in a more specific
@@ -152,7 +158,7 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
     ax.spines["left"].set_visible(False); ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False); ax.spines["bottom"].set_visible(True)
     ax.spines["bottom"].set_color("#CCCCCC")
-    ax.tick_params(axis="x", labelsize=7.5, color="#AAAAAA"); ax.xaxis.grid(False)
+    ax.tick_params(axis="x", labelsize=7.5 * TEXT_SCALE, color="#AAAAAA"); ax.xaxis.grid(False)
 
     if q1 is not None and q3 is not None:
         iqr_rect = mpatches.FancyBboxPatch(
@@ -162,29 +168,29 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
         ax.add_patch(iqr_rect)
         label_y = y_max + TIER_GAP * 0.08
         ax.text(q1, label_y, f"Q1\n{_format_number(q1, base.format_modifier)}", ha="center", va="bottom",
-                fontsize=6.5, color=(100/255, 130/255, 180/255, 0.85))
+                fontsize=6.5 * TEXT_SCALE, color=(100/255, 130/255, 180/255, 0.85))
         ax.text(q3, label_y, f"Q3\n{_format_number(q3, base.format_modifier)}", ha="center", va="bottom",
-                fontsize=6.5, color=(100/255, 130/255, 180/255, 0.85))
+                fontsize=6.5 * TEXT_SCALE, color=(100/255, 130/255, 180/255, 0.85))
 
     if median is not None:
-        ax.vlines(median, y_min, y_max, colors="#E24B4A", linewidth=1.2, linestyles="dashed", zorder=3)
+        ax.vlines(median, y_min, y_max, colors="#E24B4A", linewidth=1.2 * TEXT_SCALE, linestyles="dashed", zorder=3)
         ax.text(median, y_max + TIER_GAP * 0.08, f"Median\n{_format_number(median, base.format_modifier)}",
-                ha="center", va="bottom", fontsize=6.5, color="#E24B4A")
+                ha="center", va="bottom", fontsize=6.5 * TEXT_SCALE, color="#E24B4A")
 
     for t in tiers:
         y = t["y"]; dot = t["dot"]; str_c = t["string"]
-        ax.hlines(y, x_min, x_max, colors=[str_c], linewidths=0.5, zorder=2)
+        ax.hlines(y, x_min, x_max, colors=[str_c], linewidths=0.5 * TEXT_SCALE, zorder=2)
         alpha = 1.0 if t["opaque"] else (dot[3] if len(dot) == 4 else 1.0)
         dot_c = dot[:3] if isinstance(dot, tuple) else dot
         ax.scatter(t["vals"], [y] * len(t["vals"]),
-                   s=DOT_SIZE, c=[dot_c] * len(t["vals"]),
+                   s=DOT_SIZE * (TEXT_SCALE ** 2), c=[dot_c] * len(t["vals"]),
                    alpha=alpha, linewidths=0, zorder=4)
 
     if tiers[-1]["opaque"] and tiers[-1]["vals"]:
         sv = tiers[-1]["vals"][0]
         ax.annotate(_format_number(sv, base.format_modifier), xy=(sv, tiers[-1]["y"]),
                     xytext=(0, 9), textcoords="offset points",
-                    ha="center", fontsize=7.5, color=COLOUR_SEL, fontweight="bold")
+                    ha="center", fontsize=7.5 * TEXT_SCALE, color=COLOUR_SEL, fontweight="bold")
 
     ax_pos = ax.get_position()
     for t in tiers:
@@ -192,7 +198,7 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
         y_fig = ax_pos.y0 + y_ax * ax_pos.height
         dot_c = t["dot"][:3] if isinstance(t["dot"], tuple) else t["dot"]
         fig.text(ax_pos.x0 - 0.045, y_fig, t["label"],
-                 ha="right", va="center", fontsize=7.5, color="#444444")
+                 ha="right", va="center", fontsize=7.5 * TEXT_SCALE, color="#444444")
         r_y = 0.014; r_x = r_y * (h / w)
         fig.patches.append(mpatches.Ellipse(
             (ax_pos.x0 - 0.030, y_fig), width=2*r_x, height=2*r_y,

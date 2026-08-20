@@ -31,6 +31,11 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 matplotlib.rcParams["font.family"] = "Calibri"
+# SVG text kept as real text, not glyph outlines -- see line_ci_full's
+# own comment for the full reasoning. This chart's own "N/A" text scales
+# its fontsize to the circle radius already (see below), so no separate
+# TEXT_SCALE constant is needed here.
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400

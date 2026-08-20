@@ -28,25 +28,44 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 DPI = 300
 EMU_PER_INCH = 914400
 
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (insert_table.py) exactly.
+#
+# Applied to every constant below, not just a fontsize literal: the
+# font-size search (_fit_font_size) is bounded by MAX_FONT_SIZE, and its
+# available width is col0_width_inches minus LEFT_PAD_INCHES on each
+# side -- both fixed *physical* quantities. Called at TEXT_SCALE times
+# the real width_emu/height_emu, w_inches grows by the same factor, but
+# an unscaled LEFT_PAD_INCHES/MAX_FONT_SIZE would leave the search
+# finding a font size capped at the same absolute 12pt regardless of how
+# much bigger the canvas got -- defeating the whole point (the chosen
+# font would come out proportionally tiny once shrunk back to real
+# size). Scaling every physical constant here by the same factor keeps
+# the algorithm's behaviour proportionally identical to the real size,
+# just computed on a bigger canvas.
+TEXT_SCALE = 5
+
 # Font-size search bounds for the "shrink to fit column 1" behaviour.
-MAX_FONT_SIZE = 12
-MIN_FONT_SIZE = 4
-FONT_STEP = 0.5
+MAX_FONT_SIZE = 12 * TEXT_SCALE
+MIN_FONT_SIZE = 4 * TEXT_SCALE
+FONT_STEP = 0.5 * TEXT_SCALE
 
 # Fixed physical left-hand padding for column 1 text. The font size is then
 # chosen so the widest column-1 string leaves this same amount of clear
 # space on the right as well.
-LEFT_PAD_INCHES = 0.08
+LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -253,7 +272,7 @@ def plain_grid(content: list, column_widths: list, row_heights: list,
             y1 = row_y[r + 1] if r + 1 < len(row_y) else 100.0
             rect = mpatches.Rectangle(
                 (x0, y0), x1 - x0, y1 - y0,
-                facecolor="white", edgecolor="black", linewidth=0.75,
+                facecolor="white", edgecolor="black", linewidth=0.75 * TEXT_SCALE,
             )
             ax.add_patch(rect)
 

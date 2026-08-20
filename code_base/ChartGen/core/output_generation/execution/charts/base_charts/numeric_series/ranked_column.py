@@ -18,10 +18,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
@@ -38,6 +39,11 @@ HIGHLIGHT    = "#C12958"
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -141,28 +147,28 @@ def ranked_column(population_layers: list, width_emu=5486400, height_emu=3429000
     if sel_idx is not None and sel_val is not None:
         ax.annotate(sel_code,
                     xy=(sel_idx, sel_val), xytext=(0, 6), textcoords="offset points",
-                    ha="center", fontsize=7, color=HIGHLIGHT, fontweight="bold")
+                    ha="center", fontsize=7 * TEXT_SCALE, color=HIGHLIGHT, fontweight="bold")
 
-    if ms.mean   is not None: ax.axhline(ms.mean,   color=MEAN_COL,    linewidth=1.5, zorder=3)
-    if ms.median is not None: ax.axhline(ms.median, color=MEDIAN_COL,  linewidth=1.5, zorder=3)
-    if ms.q1     is not None: ax.axhline(ms.q1,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=3)
-    if ms.q3     is not None: ax.axhline(ms.q3,     color=QUARTILE_COL, linewidth=1, linestyle="--", zorder=3)
+    if ms.mean   is not None: ax.axhline(ms.mean,   color=MEAN_COL,    linewidth=1.5 * TEXT_SCALE, zorder=3)
+    if ms.median is not None: ax.axhline(ms.median, color=MEDIAN_COL,  linewidth=1.5 * TEXT_SCALE, zorder=3)
+    if ms.q1     is not None: ax.axhline(ms.q1,     color=QUARTILE_COL, linewidth=1 * TEXT_SCALE, linestyle="--", zorder=3)
+    if ms.q3     is not None: ax.axhline(ms.q3,     color=QUARTILE_COL, linewidth=1 * TEXT_SCALE, linestyle="--", zorder=3)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(codes, rotation=90, fontsize=7)
+    ax.set_xticklabels(codes, rotation=90, fontsize=7 * TEXT_SCALE)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier))
-    ax.tick_params(axis="y", labelsize=8)
-    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.tick_params(axis="y", labelsize=8 * TEXT_SCALE)
+    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
 
     label = base.metric_names[0] if base.metric_names else "Value"
     handles = _population_legend_handles(population_layers, label)
     handles += [
-        plt.Line2D([0],[0], color=MEAN_COL,     linewidth=1.5, label="Mean"),
-        plt.Line2D([0],[0], color=MEDIAN_COL,   linewidth=1.5, label="Median"),
-        plt.Line2D([0],[0], color=QUARTILE_COL, linewidth=1, linestyle="--", label="Lower/Upper Quartiles"),
+        plt.Line2D([0],[0], color=MEAN_COL,     linewidth=1.5 * TEXT_SCALE, label="Mean"),
+        plt.Line2D([0],[0], color=MEDIAN_COL,   linewidth=1.5 * TEXT_SCALE, label="Median"),
+        plt.Line2D([0],[0], color=QUARTILE_COL, linewidth=1 * TEXT_SCALE, linestyle="--", label="Lower/Upper Quartiles"),
     ]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.28),
-              ncol=4, fontsize=7, frameon=False)
+              ncol=4, fontsize=7 * TEXT_SCALE, frameon=False)
     fig.tight_layout()
     return _fig_to_bytes(fig)

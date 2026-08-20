@@ -87,12 +87,20 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology (Decision 27). The source
-# bundle used Arial (the CI report spec's own typography) — kept as
-# Calibri here per that governed decision, same as column_ci_full.
+# Calibri -- ChartGen's standard chart/table font. See Architecture, SVG
+# rendering methodology (Decision 27). The source bundle used Arial (the
+# CI report spec's own typography) — kept as Calibri here per that
+# governed decision, same as column_ci_full.
 matplotlib.rcParams["font.family"] = "Calibri"
+# SVG text is kept as real text, not glyph outlines -- every Base
+# Chart/Table does this now. PowerPoint's own SVG compression routine
+# mis-spaces individual characters when text is baked into paths, most
+# visibly on decimal-heavy labels ("0.000"); real <text>, combined with
+# this chart's own TEXT_SCALE below, avoids that. Set per-file, not as a
+# global rcParam, so a downloaded Custom Charts bundle (this whole
+# module's source, handed to an AI standalone) stays correct in
+# isolation rather than silently depending on an app-level setting.
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import matplotlib.patches as mpatches
@@ -120,6 +128,28 @@ GREYED_DIVIDER_COL = "#E9EDF0"
 PEER_ALPHAS = [1.0, 0.7, 0.5, 0.35]
 
 EMU_PER_INCH = 914400
+
+# --- PowerPoint SVG-text-compression workaround ---
+# PowerPoint's own lossy compression of an embedded SVG mis-spaces
+# individual characters when text is kept as real <text> (svg.fonttype
+# "none", above) rather than glyph outlines -- most visible on
+# decimal-heavy labels ("0.000"). The system layer
+# (assembly_engine._render_chart_image) calls this chart with
+# width_emu/height_emu already multiplied by a fixed factor, then places
+# the result back at the real target size on the slide -- but that alone
+# only inflates the drawn canvas, not any of this chart's own absolute
+# point-based sizes (fontsize, linewidth, markersize, dash-pattern
+# lengths), which would otherwise stay proportionally tiny relative to
+# the now-bigger canvas once shrunk back down. TEXT_SCALE multiplies
+# every such literal in this file to match.
+#
+# This number must equal the system layer's own multiplier exactly (see
+# assembly_engine.py's own constant) -- not enforced in code, since Base
+# Charts are standalone artefacts with no shared imports (Architecture,
+# "Base Charts are outside the system boundary"). A mismatch here would
+# only make this chart's own text/lines look proportionally wrong
+# relative to its own canvas; it wouldn't affect any other chart.
+TEXT_SCALE = 5
 
 # --- Figure layout: one consistent outer margin on all four sides, then
 # three fixed vertical bands (bottom to top: table, slim buffer, legend,
@@ -416,10 +446,10 @@ def _apply_axes_style(ax, y_max, step):
         spine.set_visible(False)
     ax.set_ylim(0, y_max)
     ax.yaxis.set_major_locator(mticker.MultipleLocator(step))
-    ax.yaxis.grid(True, color=GRID_COL, linewidth=0.5, zorder=0)
+    ax.yaxis.grid(True, color=GRID_COL, linewidth=0.5 * TEXT_SCALE, zorder=0)
     ax.xaxis.grid(False)
-    ax.axhline(0, color=BASELINE_COL, linewidth=0.8, zorder=1)
-    ax.tick_params(axis="y", labelsize=7, colors=AXIS_LABEL_COL, length=0)
+    ax.axhline(0, color=BASELINE_COL, linewidth=0.8 * TEXT_SCALE, zorder=1)
+    ax.tick_params(axis="y", labelsize=7 * TEXT_SCALE, colors=AXIS_LABEL_COL, length=0)
     ax.tick_params(axis="x", length=0)
 
 
@@ -428,7 +458,7 @@ def _empty_chart(width_emu, height_emu):
     fig, ax = plt.subplots(figsize=(w, h))
     fig.patch.set_facecolor(CARD_BG)
     ax.set_facecolor(CARD_BG)
-    ax.text(0.5, 0.5, "No data", ha="center", va="center")
+    ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=12 * TEXT_SCALE)
     ax.axis("off")
     return _fig_to_bytes(fig)
 
@@ -470,7 +500,7 @@ def _style_table(table, has_selected_row, n_pad, ax_table):
     columns are left alone, since the month label itself is still real
     and informative even though the data beneath it isn't."""
     table.auto_set_font_size(False)
-    table.set_fontsize(7.5)
+    table.set_fontsize(7.5 * TEXT_SCALE)
 
     renderer = ax_table.figure.canvas.get_renderer()
     border_zorder = table.get_zorder() + 1
@@ -483,30 +513,30 @@ def _style_table(table, has_selected_row, n_pad, ax_table):
 
     for (row, col), cell in table.get_celld().items():
         cell.set_edgecolor(LEGEND_BORDER)
-        cell.set_linewidth(0.8)
+        cell.set_linewidth(0.8 * TEXT_SCALE)
         if row == 0:
             cell.set_facecolor(HEADER_BG)
-            cell.set_text_props(color=BASELINE_COL, fontweight="bold", fontsize=7)
+            cell.set_text_props(color=BASELINE_COL, fontweight="bold", fontsize=7 * TEXT_SCALE)
         elif col == -1:
             cell.set_facecolor(ROWLABEL_BG)
-            cell.set_text_props(fontweight="bold", fontsize=7,
+            cell.set_text_props(fontweight="bold", fontsize=7 * TEXT_SCALE,
                                  color=row_colours[row - 1])
         elif n_pad and col < n_pad:
             cell.set_facecolor(TABLE_CELL_BG)
             cell.set_edgecolor(GREYED_HATCH_COL)
             cell.set_hatch("///")
-            cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7, style="italic")
+            cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7 * TEXT_SCALE, style="italic")
             bbox_display = cell.get_window_extent(renderer)
             bbox_data = bbox_display.transformed(ax_table.transData.inverted())
             border_overlay = mpatches.Rectangle(
                 (bbox_data.x0, bbox_data.y0), bbox_data.width, bbox_data.height,
-                facecolor="none", edgecolor=LEGEND_BORDER, linewidth=0.8,
+                facecolor="none", edgecolor=LEGEND_BORDER, linewidth=0.8 * TEXT_SCALE,
                 zorder=border_zorder,
             )
             ax_table.add_patch(border_overlay)
         else:
             cell.set_facecolor(TABLE_CELL_BG)
-            cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7)
+            cell.set_text_props(color=AXIS_LABEL_COL, fontsize=7 * TEXT_SCALE)
 
 
 def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
@@ -647,37 +677,37 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     if n_pad:
         ax.axvspan(-0.5, n_pad - 0.5, facecolor="none", edgecolor=GREYED_HATCH_COL,
                    hatch="///", linewidth=0, zorder=0.5)
-        ax.axvline(n_pad - 0.5, color=GREYED_DIVIDER_COL, linewidth=1,
-                   linestyle=(0, (4, 3)), zorder=0.6)
+        ax.axvline(n_pad - 0.5, color=GREYED_DIVIDER_COL, linewidth=1 * TEXT_SCALE,
+                   linestyle=(0, (4 * TEXT_SCALE, 3 * TEXT_SCALE)), zorder=0.6)
 
     handles = []
     legend_labels = []
 
     # Draw order: median, mean, peer groups, selected organisation on top.
-    line, = ax.plot(x, medians, color=MEDIAN_COL, linewidth=1.8, zorder=2)
+    line, = ax.plot(x, medians, color=MEDIAN_COL, linewidth=1.8 * TEXT_SCALE, zorder=2)
     handles.append(line)
     legend_labels.append("Median")
 
-    line, = ax.plot(x, means, color=MEAN_COL, linewidth=1.8, zorder=3)
+    line, = ax.plot(x, means, color=MEAN_COL, linewidth=1.8 * TEXT_SCALE, zorder=3)
     handles.append(line)
     legend_labels.append("Mean")
 
     for peer_means, peer_label, alpha in peer_series:
-        line, = ax.plot(x, peer_means, color=OTHER_COL, linewidth=1.5,
+        line, = ax.plot(x, peer_means, color=OTHER_COL, linewidth=1.5 * TEXT_SCALE,
                          linestyle="--", alpha=alpha, zorder=4)
         handles.append(line)
         legend_labels.append(peer_label)
 
     if selected_y is not None:
-        line, = ax.plot(x, selected_y, color=SELECTED_COL, linewidth=2.2,
-                         marker="o", markersize=4, markerfacecolor=SELECTED_COL,
+        line, = ax.plot(x, selected_y, color=SELECTED_COL, linewidth=2.2 * TEXT_SCALE,
+                         marker="o", markersize=4 * TEXT_SCALE, markerfacecolor=SELECTED_COL,
                          markeredgecolor=SELECTED_COL, zorder=5)
         handles.append(line)
         legend_labels.append(selected_code)
 
     target_handle = None
     if target_series is not None:
-        target_handle, = ax.plot(x, target_series, color=TARGET_PURPLE, linewidth=2,
+        target_handle, = ax.plot(x, target_series, color=TARGET_PURPLE, linewidth=2 * TEXT_SCALE,
                                   linestyle="--", zorder=6)
         # Labelled via the legend (last entry, added after the reversal
         # below) rather than an on-chart label -- an on-chart label's
@@ -713,14 +743,14 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
         bbox_transform=fig.transFigure,
         mode="expand",
         ncol=len(reversed_handles),
-        fontsize=9,
+        fontsize=9 * TEXT_SCALE,
         frameon=True,
         borderaxespad=0,
         labelcolor=AXIS_LABEL_COL,
     )
     legend.get_frame().set_facecolor(CARD_BG)
     legend.get_frame().set_edgecolor(LEGEND_BORDER)
-    legend.get_frame().set_linewidth(0.8)
+    legend.get_frame().set_linewidth(0.8 * TEXT_SCALE)
 
     # --- Per-period table: header row of month labels, then Selected,
     # Mean, Median rows, aligned with the chart's plot area above. Decimal

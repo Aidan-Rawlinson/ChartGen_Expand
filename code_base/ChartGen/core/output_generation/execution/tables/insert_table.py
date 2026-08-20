@@ -44,18 +44,48 @@ from core.output_generation.execution.charts.custom_charts import get_chart_call
 from core.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from core.shared.normalisation_containers.population_layers import build_population_layers
 
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
+# full reasoning. Must match every Base Chart's and Base Table's own
+# local TEXT_SCALE, and assembly_engine.py's own CHART_RENDER_SCALE,
+# exactly -- not enforced in code, per "Base Charts are outside the
+# system boundary" (no shared import between this file and any Base
+# Chart/Table).
+#
+# A Base Table is called here with width_emu/height_emu multiplied by
+# this factor, same as insert_chart. Its returned chart_cells rectangle
+# (Decision 28) comes back in that same inflated space, since a Base
+# Table derives it proportionally from whatever width_emu/height_emu it
+# was actually given -- so before that rectangle is used as a real
+# slide-EMU placement offset (add_svg_picture's own left/top/width/
+# height), it must be divided back down by CHART_RENDER_SCALE. The
+# embedded chart's own *render* call needs no such division -- chart_rect's
+# raw (undivided) width/height is already exactly CHART_RENDER_SCALE
+# times the real cell size, which is exactly what a Base Chart expects
+# to be called with under this same mechanism.
+CHART_RENDER_SCALE = 5
+
 
 def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, workfile_state):
     """
     Render one Chart Store entry's own saved chart-def, sized to
-    chart_rect (a Base Table's own reserved rectangle for this cell, in
-    EMU) rather than the entry's own stored width_emu/height_emu --
+    chart_rect (a Base Table's own reserved rectangle for this cell) --
     Decisions.md: a chart embedded in a table cell is always drawn to fit
     the cell, never its own stored size. Mirrors insert_chart's own
     cache-load / cut / population-layers / render pipeline
     (assembly_engine.py) field for field, sourced from a Chart Store row
     instead of a Running Order row. Returns None on any failure -- one
     broken chart cell doesn't abort the whole table.
+
+    chart_rect is in the *render*-space the enclosing Base Table was
+    actually called at (already CHART_RENDER_SCALE times the real cell
+    size -- see that constant's own comment), not the real placement
+    size -- so chart_rect["width"]/["height"] are used here exactly as
+    given, with no further multiplication, matching what a Base Chart
+    expects to receive under this same mechanism. The caller
+    (insert_table) is responsible for dividing this same rectangle back
+    down by CHART_RENDER_SCALE when it comes to placing the *result* on
+    the slide.
     """
     cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
@@ -150,9 +180,15 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
     custom_table_code = workfile_state.custom_table_code if workfile_state else {}
     try:
         table_func = get_table_callable(table_type_ref, custom_table_code)
+        # Called at CHART_RENDER_SCALE times the row's real target size
+        # (see that constant's own comment) -- image_bytes comes back
+        # drawn at that inflated size; chart_cells comes back in that
+        # same inflated space too, since a Base Table derives it
+        # proportionally from whatever width_emu/height_emu it's given.
         image_bytes, chart_cells = table_func(
             resolved["content"], resolved["column_widths"], resolved["row_heights"],
-            width_emu=width_emu, height_emu=height_emu, tweaks=tweaks,
+            width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
+            tweaks=tweaks,
         )
     except Exception as e:
         return err_result(row, f"insert_table: render failed for '{table_type_ref}': {e}")
@@ -161,7 +197,10 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
         slide = ctx.prs.slides[slide_index]
         # Every Base Table returns SVG bytes (see Architecture, SVG
         # rendering methodology) -- inserted via the shared add_svg_picture
-        # dual-blip mechanism rather than a plain add_picture call.
+        # dual-blip mechanism rather than a plain add_picture call. Placed
+        # at the row's real, unmultiplied width_emu/height_emu -- the
+        # inflated image_bytes shrinks back down to this on the slide,
+        # exactly as for a chart (assembly_engine.insert_chart).
         add_svg_picture(
             slide, image_bytes.read(), left_emu, top_emu, width_emu, height_emu,
         )
@@ -178,6 +217,13 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
         if chart_store_row is None:
             skipped += 1
             continue
+        # rect is in the table's own render-space (CHART_RENDER_SCALE
+        # times real size -- see that constant's own comment). Passed to
+        # the chart's own render call exactly as given (chart_rect there
+        # already is the correct inflated size a Base Chart expects), but
+        # divided back down by CHART_RENDER_SCALE here, for placement
+        # only, to convert it into a real slide-EMU offset/size relative
+        # to the table's own real (left_emu, top_emu) position.
         chart_image_bytes = _render_chart_store_chart(ctx, chart_store_row, rect, workfile_state)
         if chart_image_bytes is None:
             skipped += 1
@@ -185,8 +231,10 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
         try:
             add_svg_picture(
                 slide, chart_image_bytes.read(),
-                left_emu + int(round(rect["x"])), top_emu + int(round(rect["y"])),
-                int(round(rect["width"])), int(round(rect["height"])),
+                left_emu + int(round(rect["x"] / CHART_RENDER_SCALE)),
+                top_emu + int(round(rect["y"] / CHART_RENDER_SCALE)),
+                int(round(rect["width"] / CHART_RENDER_SCALE)),
+                int(round(rect["height"] / CHART_RENDER_SCALE)),
             )
             placed += 1
         except Exception:

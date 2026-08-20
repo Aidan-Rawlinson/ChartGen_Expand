@@ -17,10 +17,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -28,6 +29,11 @@ YES_COL = "#4CAF50"
 NO_COL  = "#C0392B"
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -64,16 +70,16 @@ def diverging_bar(population_layers: list, width_emu=5486400, height_emu=3771900
     y = np.arange(len(questions))
     ax.barh(y,  yes_pcts,              color=YES_COL, height=0.55, zorder=2)
     ax.barh(y, [-n for n in no_pcts],  color=NO_COL,  height=0.55, zorder=2)
-    ax.axvline(0, color="#333333", linewidth=0.8, zorder=3)
-    ax.set_yticks(y); ax.set_yticklabels(questions, fontsize=7)
+    ax.axvline(0, color="#333333", linewidth=0.8 * TEXT_SCALE, zorder=3)
+    ax.set_yticks(y); ax.set_yticklabels(questions, fontsize=7 * TEXT_SCALE)
     ax.invert_yaxis()
     lim = max(max(yes_pcts), max(no_pcts)) * 1.1
     ax.set_xlim(-lim, lim)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
-    ax.tick_params(axis="x", labelsize=7)
-    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.tick_params(axis="x", labelsize=7 * TEXT_SCALE)
+    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     _apply_spine_style(ax)
-    ax.text( lim * 0.5,  -0.8, "Yes →", ha="center", va="center", fontsize=8, color=YES_COL, fontweight="bold")
-    ax.text(-lim * 0.5,  -0.8, "← No",  ha="center", va="center", fontsize=8, color=NO_COL,  fontweight="bold")
+    ax.text( lim * 0.5,  -0.8, "Yes →", ha="center", va="center", fontsize=8 * TEXT_SCALE, color=YES_COL, fontweight="bold")
+    ax.text(-lim * 0.5,  -0.8, "← No",  ha="center", va="center", fontsize=8 * TEXT_SCALE, color=NO_COL,  fontweight="bold")
     fig.tight_layout()
     return _fig_to_bytes(fig)

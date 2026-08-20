@@ -17,10 +17,11 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
@@ -29,6 +30,11 @@ YES_COL = "#4CAF50"
 NO_COL  = "#C0392B"
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -65,18 +71,18 @@ def yn_bar(population_layers: list, width_emu=5486400, height_emu=3771900, tweak
     y = np.arange(len(questions))
     ax.barh(y, yes_pcts, color=YES_COL, height=0.5, zorder=2)
     ax.barh(y, no_pcts,  color=NO_COL,  height=0.5, left=yes_pcts, zorder=2)
-    ax.set_yticks(y); ax.set_yticklabels(questions, fontsize=7)
+    ax.set_yticks(y); ax.set_yticklabels(questions, fontsize=7 * TEXT_SCALE)
     ax.invert_yaxis()
     ax.set_xlim(0, 100)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
     ax.xaxis.set_major_locator(mticker.MultipleLocator(5))
     ax.xaxis.tick_top(); ax.xaxis.set_label_position("top")
-    ax.tick_params(axis="x", labelsize=7)
-    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7)
+    ax.tick_params(axis="x", labelsize=7 * TEXT_SCALE)
+    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7 * TEXT_SCALE)
     ax.spines["bottom"].set_visible(False); ax.spines["right"].set_visible(False)
     ax.set_axisbelow(True)
     handles = [mpatches.Patch(color=YES_COL, label="Yes"), mpatches.Patch(color=NO_COL, label="No")]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.03),
-              ncol=2, fontsize=7, frameon=False)
+              ncol=2, fontsize=7 * TEXT_SCALE, frameon=False)
     fig.tight_layout()
     return _fig_to_bytes(fig)

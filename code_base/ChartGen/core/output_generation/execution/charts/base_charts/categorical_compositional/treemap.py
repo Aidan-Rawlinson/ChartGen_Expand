@@ -16,15 +16,21 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font, baked into the SVG
-# vector output as real glyph outlines (svg.fonttype default "path").
-# See Architecture, SVG rendering methodology.
+# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
+# real text, not glyph outlines -- see line_ci_full's own comment for
+# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
+matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
 EMU_PER_INCH = 914400
+
+# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
+# TEXT_SCALE comment for the full reasoning. Must match the system
+# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
+TEXT_SCALE = 5
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -56,14 +62,14 @@ def treemap(population_layers: list, width_emu=4457700, height_emu=3086100, twea
     for pct, cat, col in sorted_items:
         bw = pct / 100
         rect = plt.Rectangle((x_cursor, 0), bw, 1.0,
-                              facecolor=col, edgecolor="white", linewidth=2)
+                              facecolor=col, edgecolor="white", linewidth=2 * TEXT_SCALE)
         ax.add_patch(rect)
         cx, cy = x_cursor + bw / 2, 0.5
         if bw > 0.06:
             ax.text(cx, cy + 0.15, cat, ha="center", va="center",
-                    fontsize=8, color="white", fontweight="bold")
+                    fontsize=8 * TEXT_SCALE, color="white", fontweight="bold")
             ax.text(cx, cy - 0.15, f"{pct:.1f}%", ha="center", va="center",
-                    fontsize=8, color="white")
+                    fontsize=8 * TEXT_SCALE, color="white")
         x_cursor += bw
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.axis("off")
     fig.tight_layout()
