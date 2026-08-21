@@ -59,8 +59,17 @@ Rejected: `src/` layout - solves an import-ambiguity problem that does not apply
 
 Deferred: `pyproject.toml` - touches launcher and installer, serves nothing in this migration.
 
+Stage 1 outcome:
+- Item 4 was a no-op. `venv/`, `app.py` and `run_chartgen.bat` were already siblings inside the old container, so flattening moved them to the root together and `cd /d "%~dp0"` still resolves. No `run_chartgen.bat` path change was needed; that permission went unused.
+- Item 5 reconciliation: `requirements.txt` was identical to the hardcoded list - same 10 packages, same order. Clean swap.
+- `venv/` was deleted rather than moved. A moved Windows venv breaks: `activate.bat` hardcodes an absolute `VIRTUAL_ENV` and prepends it to `PATH`. Rebuilt from `requirements.txt` via the repointed launcher path.
+- Rename surface: 91 files edited. 306 import lines plus docstring and comment path references. `installer/ChartGen.iss` and `user_resources/Installer_Guide.md` also repointed.
+
 Raised, not fixed:
 - No `tests/` anywhere in the tree.
+- No version pins anywhere. `requirements.txt` names 10 packages with no constraints, so every venv rebuild resolves to whatever is current on PyPI. The rebuild in this stage may have installed different versions than the venv it replaced.
+- `installer/Output/ChartGen.zip` and `installer/Output/ChartGen_Setup.exe` are tracked in Git, against the stated intent in `ChartGen.iss` that the compiled artefact is never stored there. The `.gitignore` pattern `installer/Output/` is root-anchored and never matched the old nested path. It matches now, but Git keeps tracking files already tracked, so the binaries stay versioned until explicitly untracked.
+- `static_docs_mirror/` and `dynamic_docs/` still carry `core/` path references (63 and 31 lines). Left untouched: the former is Stage 2's source and Stage 2 verifies facts against the codebase, the latter is deleted at the end of Stage 2.
 
 **Final step of this stage:** update the paths in this plan file to match the new layout.
 
@@ -120,12 +129,12 @@ Approval of these rules gates Stage 4.
 
 | Location | Covers |
 |---|---|
-| `core/acquisition/` | Two toolkits, URL triage, transformer output contract |
-| `core/shared/normalisation_containers/` | Five canonical shapes, `Unit`/`ShapeStats`, dispatch |
-| `core/output_generation/execution/` | Assembly pipeline, `CHART_RENDER_SCALE` and call sites |
-| `core/output_generation/definition/running_order/` | Running Order contract, column schema |
-| `core/ui/` | Streamlit patterns, logic delegated to owning modules |
-| `core/workfile/` | `.cgw` lifecycle, state ownership |
+| `chartgen/acquisition/` | Two toolkits, URL triage, transformer output contract |
+| `chartgen/shared/normalisation_containers/` | Five canonical shapes, `Unit`/`ShapeStats`, dispatch |
+| `chartgen/output_generation/execution/` | Assembly pipeline, `CHART_RENDER_SCALE` and call sites |
+| `chartgen/output_generation/definition/running_order/` | Running Order contract, column schema |
+| `chartgen/ui/` | Streamlit patterns, logic delegated to owning modules |
+| `chartgen/workfile/` | `.cgw` lifecycle, state ownership |
 | `.../charts/base_charts/` | Contract, scaling mechanism in full, do-not-refactor fence |
 | `.../tables/base_tables/` | As above, full duplicate |
 
