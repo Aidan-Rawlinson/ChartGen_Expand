@@ -353,3 +353,30 @@ No new decisions.
 - **`_delete_existing_and_save`'s settle-check interval set to 0.3s x up to 5 checks** (~1.5s worst case) -- confirmed with the user as negligible from a human point of view, deliberately not a longer timeout or an indefinite retry.
 - **Feature List's stale Base Table count fixed immediately** (same-session re-upload); **Glossary's identical stale count deliberately deferred** at the user's explicit request, not fixed this session.
 </content>
+
+
+---
+
+## Session: Claude Code migration plan
+
+**Move development from Claude Chat to Claude Code.** Context moves from six re-uploaded governed documents to a root `CLAUDE.md`, nested per-package `CLAUDE.md` files, and a `docs/` folder.
+
+**Documentation states current facts and rules; reasoning is not recorded unless needed to make a change safely.** Governing principle for the whole migration. Rationale that once justified a decision reads as fact on the next pass, which is the origin of the drift found this session.
+
+**The 50 Architecture decisions are culled, not archived.** Facts are extracted from each entry before deletion; the reasoning is not kept. GitHub history is the fallback.
+
+**`dynamic_docs/` is dropped entirely** -- `Current_State.md`, `Next_Session.md`, `Progression_Log.md`, `Decisions.md` all deleted at the end of migration Stage 2, no archive. Archived versions exist in GitHub history.
+
+**`ChartGen_Primer.md` and `ChartGen_Docs_Maintenance_Guide.md` do not carry forward.**
+
+**No change to the function of code without explicit permission, for the duration of the migration.** Path and import updates arising from the restructure are in scope. Defects found in passing are raised, not fixed.
+
+**One stage per session, stopping at each stage boundary for approval.**
+
+**Restructure runs first, not last.** Later stages write path references into `CLAUDE.md` files; restructuring afterwards would invalidate them.
+
+**Restructure decisions.** Rename `core/` to `chartgen/` -- a generic top-level import name replaced by one named for the project. Remove the `code_base/` and `ChartGen/` container folders. Move `installer/` and `venv/` to repo root. Repoint `run_chartgen.bat` to install from `requirements.txt`, after reconciling that file against the current hardcoded list. Rejected: `src/` layout, since ChartGen is never pip-installed. Deferred: `pyproject.toml`.
+
+**Base Charts and Base Tables receive a full docstring strip**, including complete removal of the per-file `TEXT_SCALE` comment with no residual pointer line. The scaling mechanism is explained in full in both `base_charts/CLAUDE.md` and `base_tables/CLAUDE.md`, duplicated rather than cross-referenced, since a nested `CLAUDE.md` only loads when Claude reads files in that directory.
+
+**Docstring convention.** Module docstring 1-3 lines. Function docstring only where the signature does not already say it, contract only. Inline comments only where the code alone misleads. Test for keeping any line: does it change what gets done.

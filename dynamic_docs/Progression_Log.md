@@ -490,3 +490,26 @@ Separately, fixed two PDF/PowerPoint-COM reliability issues surfaced by testing:
 
 Architecture updated: Decision 27 corrected to point forward; new Decisions 48 (the SVG mechanism), 49 (the PDF/COM fixes), 50 (the `ci_grid`/`ci_cardtile` documentation gap) added; Section 4 file tree and table corrected. Feature List's two stale "2 Base Table styles"/"not searchable" lines also corrected. Both re-uploaded and verified against Project Files. Glossary has the same stale Base Table count, confirmed but deliberately left for the user to fix in a later session.
 </content>
+
+
+---
+
+## Session: Claude Code migration plan (design only)
+
+No code changed. No governed document changed.
+
+**Work done.** Full review of the package tree under `code_base/ChartGen/core`, the six governed documents, and a structured sample of docstrings across every layer, to plan the move from Claude Chat to Claude Code.
+
+**Findings.**
+- Six governed documents total 2,179 lines. `ChartGen_Architecture.md` is 1,025 of them, mostly a 50-entry decision ledger written as narrative.
+- 32 occurrences of "Decision N" across roughly 25 modules, all pointing into that ledger.
+- Around 45 occurrences of session-historical language in docstrings.
+- `assembly_engine.py` references a `Restructure_Plan.md` open item no longer present in the project folder.
+- Three confirmed cases of docstrings having gone stale against code: `shapes/common.py` states three canonical shapes, `base_charts/registry.py` states four, there are five. Prior session notes recorded 23 Base Charts; `CHART_REGISTRY` holds 33.
+- Structural: the top-level importable package is `core`, not `ChartGen`. `venv/` and `installer/` sit inside the application folder. `run_chartgen.bat` installs a hardcoded package list and never reads `requirements.txt`. No `tests/` in the tree.
+
+**Output.** `Claude_Code_Migration_Plan.md` written to the project root. Five stages: restructure, documents, `CLAUDE.md` files, docstrings across the system layer, docstrings across Base Charts and Base Tables. Scope constraint, stop rule, and lead surface recorded per stage.
+
+The plan was rewritten once mid-session. The first version carried its own justification and context; Aidan identified this as the same failure mode being migrated away from. Stripped from roughly 2,500 words to 850.
+
+**Not executed.** Nothing from the plan has been run. Stage 1 is ready to hand to Claude Code.

@@ -2,34 +2,31 @@
 
 ## Pick up here
 
-- **Fix the Glossary's Base Table count.** Still says "Two built-in styles (`plain_grid`, `table_cardtile`), trimmed back from ten" -- same stale gap as Architecture's Decision 50 and Feature List's two now-corrected rows. User explicitly deferred this one rather than doing a third upload round-trip in one session -- pick it up first thing, it's a two-minute fix once you're back in the mirror.
-- **A full generation run using `ci_cardtile` with an embedded `sparkline1` chart worked well** by the end of this session -- but that was reached after several rounds of debugging in the same session (a genuinely unrelated custom-table misdiagnosis, then the real bug in `ci_cardtile`'s own unscaled font constants). Worth one more clean end-to-end confirmation next time, on a fresh run, before treating this as fully settled.
-- **Confirm the PDF/PowerPoint COM fixes hold up across more runs.** Only tested against a handful of runs this session: the nested-`try`/`finally` cleanup, the `del`-without-`gc.collect()` fix, and the `_delete_existing_and_save` settle guard all worked when tried, but none has had extensive repeated use yet. If PowerPoint is ever seen lingering again, the next thing to try is `gc.collect(0)` (youngest generation only) rather than reintroducing a full `gc.collect()` -- see Architecture Decision 49's own reasoning for why.
-- **Every Base Chart/Base Table now carries a local `TEXT_SCALE = 5` constant that must exactly match `CHART_RENDER_SCALE` in `assembly_engine.py`/`insert_table.py`/`charts_tab.py`/`output_tables_tab.py`.** Nothing enforces this in code, by design (standalone-artefact rule) -- if the factor is ever changed again, it needs changing in all ~29 places by hand, and a mismatch anywhere fails silently (wrong-looking proportions in that one file only, no error). Worth keeping this list of call sites in mind if the factor comes up again.
-- **Any custom chart or custom table saved into a workfile before this session needs manual re-saving** to pick up the new mechanism (`svg.fonttype="none"` + its own `TEXT_SCALE`) -- the same class of breaking change Decision 27 itself was. None were found or fixed this session beyond `ci_cardtile`/`ci_grid`, which turned out to be built-in files, not custom ones -- worth an inventory pass of any genuinely custom charts/tables in active workfiles if this hasn't been done since.
-- The radar-cycling multi-submission-per-organisation limitation is still unverified. `sp_a_generic_radar_to_dual_bar`'s per-organisation cycling gives every submission under one organisation identical values, since the API is driven by `organisation_id` not `submission_id`. Needs checking against a real multi-submission organisation.
-- 16 SPs from an earlier session's full mapping still have no transformer. That's a substantial chunk of remaining build work across NumericSeries, NumericCompositional, and CategoricalCompositional -- all existing shapes, no new shape code needed.
-- PairedSurveyData still has no transformer, no Base Chart, and no `reference_ids.py` entry for Summary Stat Tags. Ask which to prioritise rather than assuming.
-- Per-unit `metadata: dict` on the shared `Unit` base class is designed but not coded -- needed before cross-service transformers (3 of the 26 mapped SPs) can be built.
-- Worth a visual check, not a design task: with `metric_periods` no longer raising on an unresolvable id, a metric with no data now flows through to whichever Base Chart renders it. Worth looking at how a couple of real charts actually handle that now.
-- The same Excel `cell.value`-without-`number_format` gap fixed for Output Table content (Architecture Decision 34) may still exist in the Stat Tags, Chart Store, and Running Order Excel readers. Flagged repeatedly now, still not investigated.
-- Any Running Order `.xlsx` exported before the period-field storage rework should be treated as stale and re-exported, not reused.
-- SVG transparent backgrounds for Output Tables -- still deferred, case-by-case, per the user's own earlier plan.
-- A residual "pixel or two too low" vertical offset in `table_cardtile`'s chart-cell placement -- still parked. Worth re-checking now the 5x rendering has changed the underlying numbers involved, though this session independently measured the crop-vs-placement mismatch at ~1.6% and confirmed it wasn't the cause of anything actually seen this session.
-- A larger, unscoped feature raised in conversation some sessions back: conditional per-unit slide deletion plus a matching index-page regeneration. Still needs its own dedicated design session. Nothing built yet.
-- `CG_Chart_`/`CG_Link_` shape naming only applies to charts inserted from this point forward -- carried forward, still relevant if the Position Finder tool is reported "not finding" a match on an older output.
-- The `target` tweak convention is intentionally per-chart, not a system standard -- carried forward; don't assume a third chart's tweak needs the same syntax without asking.
-- The relative-to-chart-corner picture positioning built for the hyperlink icon is a reusable pattern, not yet extracted anywhere -- carried forward, still only living in `assembly_engine._insert_hyperlink_icon`.
-- An unbuilt idea from an earlier session: letting a template textbox sit in front of an inserted chart picture rather than behind -- confirmed buildable, not built, carried forward.
-- Whether real SVG `<text>` (now standard, Decision 48) is genuinely searchable/selectable in PowerPoint's Find or the PDF text layer hasn't been re-checked since the switch from glyph outlines -- Decision 48 only verified the spacing/corruption fix, not this separate question.
+**The next session is Stage 1 of the migration, and it runs in Claude Code, not here.** Read `Claude_Code_Migration_Plan.md` in the project root first -- the Scope section, then Stage 1. Do not read ahead into later stages.
+
+Before Claude Code touches anything, the current state needs a clean commit to revert to. That is what this session's own commit provides.
+
+### Stage 1 specifics
+
+- Four structural moves plus one launcher fix, all listed in the plan. The largest is renaming `core/` to `chartgen/`, which updates every import across roughly 100 modules.
+- **Change 5 has a gate inside it.** Reconcile `requirements.txt` against the hardcoded package list in `run_chartgen.bat`, show Aidan the result, and wait for confirmation before repointing the `.bat` to read from it. `requirements.txt` has never been read and may be stale or incomplete; repointing blind would break first-run setup for anyone with no venv.
+- Changes 4 and 5 are behavioural changes to `run_chartgen.bat`. Permission is granted for those two specifically and nothing else.
+- The final step of Stage 1 is updating the paths inside the plan file itself to match the new layout. Stage 3's package `CLAUDE.md` table still uses `core/` paths and will need correcting there.
+- Verify by hand at the end: launch the app and confirm it runs. An import rename across 100 files is mechanical but dynamic imports and string-based paths are not always caught.
+- Commit Stage 1 on its own, before Stage 2 begins.
+
+### Open items on the plan
+
+1. Whether `.claude/rules/` path-scoped rules are adopted -- deferred, not urgent.
+2. What replaces the Wake up, Close-down and Scrap Session protocols. `dynamic_docs/` is deleted at the end of Stage 2, which removes what Wake up currently reads, so this needs settling before then.
+3. Lead surface for Stages 2 and 3 is provisional -- confirm after Stage 1 completes.
+
+### Not agreed yet
+
+The five standing rules proposed for the root `CLAUDE.md` (plan, Stage 3) are Claude's extraction from the existing documents, not a list Aidan wrote. They are unreviewed. Their approval gates Stage 4, because the bulk docstring strip is what removes their only current home.
 
 ## This session's work, for context
 
-Started as a request to fix PowerPoint's SVG-text character-spacing corruption for real `<text>` (as opposed to glyph outlines) -- something a much earlier, fully-reverted exploratory session had already investigated at 4x scale. Went through several wrong turns before landing on the right mechanism: first tried a pure SVG-bytes post-processing wrap (`<g transform="scale(N)">`), proven not to work against a real PPTX/PDF test since PowerPoint reads a text element's own declared `font-size` before composing any ancestor transform; then correctly identified, via the exploratory session's own saved write-up, that the real fix needs the chart/table itself to draw at a genuinely bigger canvas *and* scale its own absolute point-based literals (font sizes, line widths) by the same factor.
+Design only. No code changed, no governed document changed.
 
-Rolled out systematically across all 23 Base Charts, all 4 Base Tables (two of which -- `ci_grid`/`ci_cardtile` -- turned out to be undocumented built-ins, not caught until partway through, causing a real misdiagnosis mid-session), both system-layer call sites (`assembly_engine.py`/`insert_table.py`), both sandbox previews, and the Custom Charts/Custom Tables contract documents. Landed on a scale factor of 5 (started at 10, reduced once render-time cost became a concern).
-
-Separately, fixed two independent PowerPoint-COM reliability issues surfaced by testing the above: PowerPoint sometimes not closing after `save_pdf` (two different root causes, both fixed), and a SharePoint/OneDrive-specific stuck-modal failure during `save_pdf` (fixed with a save-then-settle guard, also applied to `save_ppt`).
-
-Closed with an Architecture doc update (Decision 27 corrected, Decisions 48-50 added, Section 4 corrected) and a Feature List correction for the same stale Base Table count -- both re-uploaded and verified against Project Files this session. Glossary has the identical stale count and was explicitly left for the user to fix later.
-</content>
+Reviewed the codebase and the six governed documents to plan the move to Claude Code, then produced and agreed a five-stage plan. The plan was rewritten once mid-session: the first version carried its own justification and context, which Aidan identified as the same failure mode being migrated away from. Stripped to roughly a third of its length, and a test for keeping a line was added to Stage 4 as a result -- does it change what gets done.
