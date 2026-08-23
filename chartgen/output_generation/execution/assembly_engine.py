@@ -317,6 +317,13 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     """
     Save the completed output as a .pdf using COM automation (Windows/PowerPoint only).
     Falls back gracefully on non-Windows or if PowerPoint is not available.
+
+    The export and the PowerPoint cleanup that follows it are reported
+    separately. Once ExportAsFixedFormat returns, the PDF is on disk and
+    this row has done its job, so a problem shutting PowerPoint down
+    afterwards is appended to a success result rather than turning it into
+    a failure. Reporting a produced file as missing sends the reader
+    looking for something that is already there.
     """
     if ctx.prs is None:
         return err_result(row, "save_pdf: no open presentation.")
@@ -347,25 +354,44 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         # explicit-call convention insert_from_excel.py already uses for
         # its own COM session, for the same reason.
         pythoncom.CoInitialize()
+        deck = None
+        powerpoint = None
+        cleanup_problems = []
         try:
             powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
             powerpoint.Visible = 1
-            try:
-                deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
+            deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
+            # FixedFormatType=2 is ppFixedFormatTypePDF. Every other
+            # parameter is left at its default. Raster (non-SVG)
+            # content may still come out downsampled; unconfirmed.
+            deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
+        finally:
+            # Every teardown step runs on every path, each guarded on its
+            # own so a failure in one does not skip the rest, and each
+            # recorded rather than raised. Without the guards, a failing
+            # Close() masks the export result and skips the release below;
+            # POWERPNT.EXE is then left open indefinitely.
+            if deck is not None:
                 try:
-                    # FixedFormatType=2 is ppFixedFormatTypePDF. Every other
-                    # parameter is left at its default. Raster (non-SVG)
-                    # content may still come out downsampled; unconfirmed.
-                    deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
-                finally:
-                    # Nested so a failure in ExportAsFixedFormat still
-                    # closes this presentation. Otherwise POWERPNT.EXE is
-                    # left open indefinitely with nothing in the log.
+                    # PowerPoint can flag the deck modified during export.
+                    # Close() then raises a modal "save changes?" prompt,
+                    # which blocks COM with "Cannot perform this action
+                    # with a modal dialog showing" — the export having
+                    # already succeeded. Declaring it saved (msoTrue) stops
+                    # that one prompt, rather than suppressing alerts
+                    # wholesale and hiding a real problem with it.
+                    deck.Saved = True
+                except Exception as e:
+                    cleanup_problems.append(f"could not mark the deck saved: {e}")
+                try:
                     deck.Close()
-            finally:
-                # Same one level up: Quit() must run even if
-                # Presentations.Open() is what failed.
-                powerpoint.Quit()
+                except Exception as e:
+                    cleanup_problems.append(f"could not close the presentation: {e}")
+            if powerpoint is not None:
+                try:
+                    powerpoint.Quit()
+                except Exception as e:
+                    cleanup_problems.append(f"could not quit PowerPoint: {e}")
             # Explicit release before CoUninitialize. comtypes can hold a
             # COM interface pointer past the Python variable's scope, so
             # POWERPNT.EXE can outlive a successful Quit() with no error
@@ -376,8 +402,13 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
             # 10-30s.
             del deck
             del powerpoint
-        finally:
             pythoncom.CoUninitialize()
+        if cleanup_problems:
+            return ok_result(
+                row,
+                f"PDF saved: {pdf_path} — PowerPoint did not shut down cleanly afterwards: "
+                + "; ".join(cleanup_problems),
+            )
         return ok_result(row, f"PDF saved: {pdf_path}")
     except ImportError:
         return err_result(row, "save_pdf: comtypes not available — PDF export requires Windows + PowerPoint.")
