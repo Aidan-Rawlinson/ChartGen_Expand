@@ -1,32 +1,4 @@
-"""
-table_cardtile.py
-Base Table -- card-tile layout: a bold header row over a stack of
-rounded, drop-shadowed "cards", one per data row.
-
-Renders as SVG (matplotlib's own SVG backend, format='svg') rather than
-PNG -- the standard rendering methodology across every Base Chart and
-Base Table (see Architecture, SVG rendering methodology). Returned bytes
-are vector text, not raster, inserted into the PowerPoint via the shared
-add_svg_picture dual-blip mechanism rather than a plain add_picture call.
-
-DPI is kept only for matplotlib's own text-metric estimation during
-layout (_text_width_inches/_text_height_inches, both still rasterise to a
-throwaway offscreen figure to measure text extents) -- it has no bearing
-on the final SVG's own resolution, which is vector and scales losslessly.
-
-Font is Calibri (matplotlib.rcParams["font.family"], below) -- ChartGen's
-standard chart/table font. SVG text is kept as real text
-(svg.fonttype="none"), not glyph outlines -- an earlier attempt at this
-was reverted (mismatched character positions, non-searchable text in
-PowerPoint's Find and both PDF export paths), which turned out to be the
-same PowerPoint SVG-compression bug affecting every Base Chart/Table,
-not a table_cardtile-specific problem -- see line_ci_full's own
-TEXT_SCALE comment for the actual fix (draw everything TEXT_SCALE times
-bigger, insert at real size) that resolves it properly.
-
-table_inputs contract unchanged: content, column_widths, row_heights,
-width_emu, height_emu, tweaks in; bytes out.
-"""
+"""Base Table, table_cardtile. A bold header row over a stack of rounded, drop-shadowed cards, one per data row."""
 
 import io
 import warnings
@@ -35,9 +7,6 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -47,14 +16,6 @@ import numpy as np
 DPI = 300
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (insert_table.py) exactly. Applied to
-# every fixed physical-inch/absolute-point constant below (font bounds,
-# padding, card rounding, border width, save padding) -- see
-# plain_grid.py's own comment for why an unscaled font-size search bound
-# or padding constant would defeat the whole mechanism once called at an
-# inflated canvas size.
 TEXT_SCALE = 5
 
 MAX_FONT_SIZE = 12 * TEXT_SCALE
@@ -71,10 +32,6 @@ BORDER_WIDTH = 0.375 * TEXT_SCALE
 SHADOW_OFFSET_FRACTION = 0.065
 SAVE_PAD_INCHES = 0.03 * TEXT_SCALE
 
-# The middle fraction of a body row's own height a card (and therefore
-# its text) actually occupies -- see table_cardtile's own card_y/card_h
-# calc below. Named here too so _shrink_for_multiline_height can compute
-# a body row's true available height without duplicating the 0.8 literal.
 CARD_HEIGHT_FRACTION = 0.8
 
 
@@ -87,10 +44,10 @@ def _rounded_rect_polygon(x, y, w, h, rx, ry, n=12, **kwargs):
         return np.column_stack([cx + rx * np.cos(angs), cy + ry * np.sin(angs)])
 
     verts = np.vstack([
-        arc(x + rx, y + ry, 180, 270),          # top-left
-        arc(x + w - rx, y + ry, 270, 360),      # top-right
-        arc(x + w - rx, y + h - ry, 0, 90),     # bottom-right
-        arc(x + rx, y + h - ry, 90, 180),       # bottom-left
+        arc(x + rx, y + ry, 180, 270),
+        arc(x + w - rx, y + ry, 270, 360),
+        arc(x + w - rx, y + h - ry, 0, 90),
+        arc(x + rx, y + h - ry, 90, 180),
     ])
     return mpatches.Polygon(verts, closed=True, **kwargs)
 
@@ -100,9 +57,6 @@ def _size_to_inches(width_emu, height_emu):
 
 
 def _chart_cell_id(cell_text):
-    """None if not a chart-component cell marker ("{" + Chart Store id +
-    "}"); otherwise the id. String slicing only, no regex -- see
-    plain_grid.py's own copy for the full reasoning."""
     t = (cell_text or "").strip()
     if len(t) > 2 and t.startswith("{") and t.endswith("}"):
         inner = t[1:-1]
@@ -122,29 +76,6 @@ def _fig_to_bytes(fig):
 
 def _resolve_chart_cells(fig, chart_cells_raw: dict, w_inches: float, h_inches: float,
                          width_emu: int, height_emu: int) -> dict:
-    """
-    Convert each chart cell's raw data-space rectangle (0-100 x 0-100 --
-    exactly the coordinates passed to _record_chart_cell during drawing,
-    before anything is known about cropping) into a final EMU rectangle,
-    corrected for whatever bbox_inches="tight" + pad_inches actually
-    crops the saved canvas to.
-
-    This can't safely assume the 0-100 space maps 1:1 onto width_emu x
-    height_emu the way plain_grid.py's own (crop-free) version can --
-    this file's shadow is drawn with clip_on=False specifically so it
-    isn't clipped off, which means it can genuinely extend past the
-    nominal canvas edge, and bbox_inches="tight" expands the saved canvas
-    to include it. fig.get_tightbbox(renderer) returns the exact bounding
-    box (figure-inches) that "tight" will crop to -- the same computation
-    bbox_inches="tight" itself uses, read directly here rather than
-    re-derived or assumed. Adding pad_inches on every side (matching what
-    savefig is called with) gives the true final canvas extent; any
-    data-space point's fraction of *that*, not of the nominal declared
-    canvas, is what determines where it actually lands once the saved
-    image is stretched into width_emu x height_emu. Verified empirically
-    against matplotlib's own rendered SVG output during development, not
-    assumed to hold.
-    """
     if not chart_cells_raw:
         return {}
 
@@ -159,9 +90,6 @@ def _resolve_chart_cells(fig, chart_cells_raw: dict, w_inches: float, h_inches: 
 
     chart_cells = {}
     for tag, (cx0, cx1, cy0, cy1) in chart_cells_raw.items():
-        # Data-space (0-100) -> figure-inches is exact here (not
-        # approximate) because the axes fill the entire figure canvas --
-        # see _new_axes.
         fig_x0 = (cx0 / 100.0) * w_inches
         fig_x1 = (cx1 / 100.0) * w_inches
         fig_y0 = (cy0 / 100.0) * h_inches
@@ -227,19 +155,6 @@ def _fit_font_size(texts, available_width_inches, dpi,
 
 def _shrink_for_multiline_height(font_size, content, row_heights, h_inches, dpi,
                                   min_size=MIN_FONT_SIZE, step=FONT_STEP):
-    """
-    A multi-line cell (resolve.py's "<br>" -> real newline conversion)
-    renders as stacked lines, which _fit_font_size never considers -- it
-    only ever measures width. This is a second, separate pass: starting
-    from the width-fit size already chosen, shrink further (never grow
-    back past it) until every cell containing a newline renders, at the
-    returned size, within its own available height -- a header row
-    (index 0) uses its full row height; a body row (index 1+) uses only
-    CARD_HEIGHT_FRACTION of it, matching the card's own inset. Otherwise
-    the overflow would sit underneath either the next row's own card or
-    (for the last row) simply outside the canvas.
-    A chart-component cell is skipped -- it isn't drawn as text at all.
-    """
     size = font_size
     while size > min_size:
         fits = True
@@ -294,10 +209,6 @@ def _prepare(content, column_widths, row_heights, width_emu, height_emu):
 
 def _new_axes(p):
     fig = plt.figure(figsize=(p["w_inches"], p["h_inches"]))
-    # Axes fill the entire figure canvas exactly ([0,0,1,1] in
-    # figure-fraction coordinates), not tight_layout's own heuristic
-    # centering -- required for the data-space-to-figure-inches mapping
-    # _resolve_chart_cells relies on to be exact rather than approximate.
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 100)
@@ -330,11 +241,6 @@ def table_cardtile(content, column_widths, row_heights, width_emu=5486400, heigh
     chart_cells_raw = {}
 
     def _record_chart_cell(chart_tag, cx0, cx1, cy0, cy1):
-        # Data-space coordinates only, at this point (0-100 x 0-100) --
-        # converted to a final, crop-corrected EMU rectangle afterwards,
-        # once the actual tight-crop bbox is known (_resolve_chart_cells).
-        # Storing the raw coordinates here rather than converting to EMU
-        # immediately is what makes that correction possible.
         chart_cells_raw[chart_tag] = (cx0, cx1, cy0, cy1)
 
     if n_rows > 0:
@@ -393,14 +299,6 @@ def table_cardtile(content, column_widths, row_heights, width_emu=5486400, heigh
                                       facecolor="white", zorder=2)
         ax.add_patch(shadow)
         ax.add_patch(card)
-        # A chart cell's own reported rectangle is the card's own white
-        # background -- vertically inset to card_y/card_h (the middle 80%
-        # of the row; the shadow and the 10% top/bottom margin are outside
-        # this, and never part of what's reported), never the raw row
-        # bounds. Horizontally, each column still gets its own share of
-        # the shared card (there is only one card per row, spanning every
-        # column -- a column is a text-alignment position within it, not
-        # a separate rectangle of its own).
         cx0_col0, cx1_col0, _, _ = _cell_bounds(p, r, 0)
         body0_val = _cell_text(p, r, 0)
         body0_tag = _chart_cell_id(body0_val)

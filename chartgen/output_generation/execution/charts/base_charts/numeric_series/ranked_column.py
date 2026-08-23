@@ -1,14 +1,4 @@
-"""
-ranked_column.py
-Base Chart — NumericSeries. Ranked descending column chart with mean/
-median/quartile reference lines.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's identity comes from the "Selected"-labelled entry in
-population_layers, the same convention every other Base Chart uses.
-"""
+"""Base Chart, NumericSeries. Ranked descending column chart with mean, median and quartile reference lines."""
 
 import io
 import warnings
@@ -18,18 +8,12 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
 
-# ---------------------------------------------------------------------------
-# Palette / sizing / formatting — inlined, this chart's own copy
-# ---------------------------------------------------------------------------
 
 BAR_BLUE     = "#7CB9E8"
 MEAN_COL     = "#E87722"
@@ -40,9 +24,6 @@ PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -80,7 +61,6 @@ def _axis_formatter(format_modifier):
 
 
 def _resolve_unit_colours(units, population_layers):
-    """Assign a colour to each unit based on which population layer(s) it belongs to."""
     colours = [BAR_BLUE] * len(units)
     peer_colour_idx = 0
     for layer in population_layers:
@@ -112,13 +92,6 @@ def _population_legend_handles(population_layers, data_label):
 
 
 def _find_selected_in_scope(units, population_layers):
-    """
-    Find the Selected unit's position within `units` (the scope, already
-    sorted for this chart). Identity comes from the "Selected"-labelled
-    population layer, not from any external runtime object — where more
-    than one unit is Selected, the first is used as the representative for
-    on-chart annotation. Returns (index, value, unit_code) or (None, None, None).
-    """
     selected_layer = next((l for l in population_layers if l.population_label == "Selected"), None)
     if selected_layer is None or not selected_layer.units:
         return None, None, None
@@ -130,7 +103,6 @@ def _find_selected_in_scope(units, population_layers):
 
 
 def ranked_column(population_layers: list, width_emu=5486400, height_emu=3429000, tweaks=""):
-    """Ranked descending column chart with mean/median/quartile reference lines."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))

@@ -1,31 +1,4 @@
-"""
-line_ci_at_most_2.py
-Base Chart -- TimeSeries, diagnostic variant, one of the "CI" family
-alongside line_ci_at_least_median/line_ci_at_most_median/line_ci_at_most_5pct/
-line_ci_0/line_ci_at_least_90pct/line_ci_100pct. Three-way
-indicator, checking only the Selected unit's own submission value in the
-FINAL period (never any other period):
-
-  - blue circle, white tick    -- passes: (final submission value -
-                                  0.0001) <= 2
-  - orange circle, white cross -- fails that same check
-  - grey circle, white dash    -- no submission value for the final
-                                  period at all
-
-The circle's own fill colour carries the pass/fail/no-data signal; the
-symbol inside it is always white, never the fill's own colour scheme.
-The fail colour is a genuine complement of the pass colour -- same HLS
-lightness/saturation as the blue, opposite hue -- not just "an orange"
-picked freehand.
-
-The -0.0001 is deliberate, not a floating-point tolerance in the usual
-"isclose" sense -- a value exactly equal to 2 is meant to pass, and this
-is the specified way to make that so under float comparison.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) -- no report_context or any other runtime object.
-"""
+"""Base Chart, TimeSeries, diagnostic. Three-way circle indicator on the Selected unit's final-period value only: blue tick passes if the value is at most 2, orange cross fails, grey dash if there is no value."""
 
 import io
 import warnings
@@ -34,22 +7,17 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 matplotlib.rcParams["font.family"] = "Calibri"
-# SVG text kept as real text, not glyph outlines -- see line_ci_full's
-# own comment for the full reasoning. This chart draws no text itself
-# (line_ci_na, the one family member that does, self-scales its own
-# fontsize to the circle radius already), but set here for consistency
-# with every other Base Chart.
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400
 
-CIRCLE_FILL_PASS = "#7CB9E8"     # sparkline1's own MEDIAN_COL blue
-CIRCLE_FILL_FAIL = "#E8AB7C"     # complementary to CIRCLE_FILL_PASS -- same HLS lightness/saturation, opposite hue (206deg -> 26deg)
-CIRCLE_FILL_NO_DATA = "#C1C8CE"  # same light grey as line_has_data's own circle
+CIRCLE_FILL_PASS = "#7CB9E8"
+CIRCLE_FILL_FAIL = "#E8AB7C"
+CIRCLE_FILL_NO_DATA = "#C1C8CE"
 MARK_COLOUR = "white"
 
-CIRCLE_DIAMETER_FRACTION = 0.72  # matches line_has_data's own current sizing
+CIRCLE_DIAMETER_FRACTION = 0.72
 
 THRESHOLD = 2
 EPSILON = 0.0001
@@ -69,9 +37,6 @@ def _fig_to_bytes(fig):
 
 
 def _final_submission_value(population_layers):
-    """The Selected unit's own value for the final period only -- None if
-    there's no Selected layer, no submission unit, an empty values list,
-    or the final entry itself is None."""
     for layer in population_layers[1:] if population_layers else []:
         if getattr(layer, "population_label", None) != "Selected":
             continue
@@ -98,7 +63,7 @@ def _draw_mark(ax, cx, cy, r, result):
                 color=MARK_COLOUR, linewidth=lw, solid_capstyle="round", zorder=2)
         ax.plot([cx - 0.4 * r, cx + 0.4 * r], [cy + 0.4 * r, cy - 0.4 * r],
                 color=MARK_COLOUR, linewidth=lw, solid_capstyle="round", zorder=2)
-    else:  # "no_data"
+    else:
         ax.plot([cx - 0.4 * r, cx + 0.4 * r], [cy, cy],
                 color=MARK_COLOUR, linewidth=lw, solid_capstyle="round", zorder=2)
 

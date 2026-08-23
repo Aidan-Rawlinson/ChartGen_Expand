@@ -1,16 +1,4 @@
-"""
-median_comparison_linechart.py
-Base Chart — TimeSeries. Median per population layer across every period;
-Selected charts the actual unit value(s) instead of a median, since a
-median of one unit's own value(s) isn't a meaningful statistic in the way
-it is for a wider population.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's label comes from its own unit_code in the
-"Selected"-labelled population layer.
-"""
+"""Base Chart, TimeSeries. Median per population layer across every period, except Selected, which charts the actual unit values."""
 
 import io
 import warnings
@@ -20,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -34,9 +19,6 @@ PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -74,7 +56,6 @@ def _axis_formatter(format_modifier):
 
 
 def median_comparison_linechart(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
-    """Line chart of one Metric-Series across every period — median line per population layer, except 'Selected', which charts the actual unit value(s) instead of a median."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)

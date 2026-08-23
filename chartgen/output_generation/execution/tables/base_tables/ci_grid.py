@@ -1,48 +1,4 @@
-"""
-ci_grid.py
-Base Table -- a tailored variant of plain_grid.py for CI-style tables:
-a two-row header (rows 0 and 1 of content/row_heights are BOTH header
-rows now, not just row 0), and body rows (index 2 onward) that draw
-nothing at all -- no border, no fill, no text -- when every cell in that
-row is blank, so a workfile can use a fixed row count and leave trailing
-rows empty for consistent sizing across tables with different real row
-counts, without a visible empty box where the extra rows sit. The row's
-own height is still reserved in the layout either way -- only what's
-drawn changes, never the sizing.
-
-Two-row header design (deliberately tailored, not generic -- this table
-type always has this exact shape):
-  - Every column except the final two gets ONE merged cell spanning both
-    header rows' combined height, showing row 0's own resolved text,
-    vertically centred. Row 1's content for these columns is never read.
-  - The final two columns' row 0 is ONE cell merged horizontally across
-    both of them, showing the fixed text "Benchmark" -- not read from
-    resolved content.
-  - The final two columns' row 1 shows fixed text -- "Target" and
-    "Met(?)" -- regardless of whatever's actually in content[1] for those
-    columns; these, and "Benchmark", are a fixed design element of this
-    table type, not read from resolved content.
-  - Header text sourced from row 0 (the leading columns' own labels, and
-    "Benchmark") is HEADER_FONT_BOOST points larger than the row-1
-    sub-headings ("Target"/"Met(?)") -- a small visual hierarchy between
-    the primary heading and its sub-heading, not a uniform header size.
-  - The two header rows are drawn HEADER_ROW_HEIGHT_REDUCTION shorter
-    than their own authored row_heights -- a rendering-only adjustment
-    (_adjusted_row_heights); the freed height is redistributed into the
-    body rows so the table still fills the same canvas, nothing left
-    blank. The stored/authored heights themselves are never touched.
-
-Standalone artefact, the base_tables equivalent of a Base Chart
-(Architecture, Decision 18) -- no imports from ChartGen's own code,
-third-party libraries only. Receives already-resolved content (plain
-strings; Stat Tags already substituted, chart-component cell markers
-"{Cn}" left as literal text -- Decisions.md) and already-parsed
-column_widths / row_heights (percent, each expected to sum to ~100) -- no
-resolution logic lives here.
-
-Returns (image_bytes, chart_cells) -- the table_inputs return contract
-(Decisions.md).
-"""
+"""Base Table, ci_grid. CI-style variant of plain_grid. Rows 0 and 1 are both header rows. The final two columns carry the fixed text Benchmark, Target and Met(?), never content. A body row whose every cell is blank draws nothing, but still occupies its height."""
 
 import io
 import warnings
@@ -51,9 +7,6 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -62,9 +15,6 @@ import matplotlib.patches as mpatches
 DPI = 300
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (insert_table.py) exactly.
 TEXT_SCALE = 5
 
 MAX_FONT_SIZE = 12 * TEXT_SCALE
@@ -73,12 +23,12 @@ FONT_STEP = 0.5 * TEXT_SCALE
 LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
 HEADER_ROWS = 2
-MERGED_HEADER_LABEL = "Benchmark"  # fixed label spanning the final two columns' row 0
-SUB_HEADINGS = ["Target", "Met(?)"]  # fixed text for the final two columns' row 1
-HEADER_BG = "white"  # tried a tinted grey (#F2F4F6, then #E7EBEE) -- didn't work, back to plain white to match the body rows
+MERGED_HEADER_LABEL = "Benchmark"
+SUB_HEADINGS = ["Target", "Met(?)"]
+HEADER_BG = "white"
 HEADER_TEXT_COLOUR = "#1F2A33"
-HEADER_FONT_BOOST = 2 * TEXT_SCALE  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
-HEADER_ROW_HEIGHT_REDUCTION = 1 / 3  # rendering-only: the two header rows are drawn a third shorter than authored, freed height redistributed into the body rows
+HEADER_FONT_BOOST = 2 * TEXT_SCALE
+HEADER_ROW_HEIGHT_REDUCTION = 1 / 3
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -95,9 +45,6 @@ def _chart_cell_id(cell_text):
 
 
 def _row_is_blank(row, n_cols):
-    """Every cell across the full column count is empty/whitespace-only.
-    A chart-component cell marker counts as content -- only a row with
-    genuinely nothing in it at all is blank."""
     for c in range(n_cols):
         cell = row[c] if c < len(row) else ""
         if (cell or "").strip():
@@ -159,10 +106,6 @@ def _fit_font_size(texts, available_width_inches, dpi,
 
 def _shrink_for_multiline_height(font_size, body_content, body_row_heights, h_inches, dpi,
                                   min_size=MIN_FONT_SIZE, step=FONT_STEP):
-    """Same purpose as plain_grid.py's own version -- a multi-line cell
-    (resolve.py's "<br>" conversion) must fit its own row's full height,
-    not just its width. Only applied to body rows -- the header's two
-    rows are a fixed design element, not arbitrary multi-line content."""
     size = font_size
     while size > min_size:
         fits = True
@@ -186,16 +129,6 @@ def _shrink_for_multiline_height(font_size, body_content, body_row_heights, h_in
 
 
 def _adjusted_row_heights(row_heights, header_rows=HEADER_ROWS, reduction=HEADER_ROW_HEIGHT_REDUCTION):
-    """
-    Rendering-only adjustment, applied after row_heights is received --
-    the stored/authored values (whatever's actually saved for this table)
-    are never touched, only what gets drawn. Shrinks the header rows'
-    own combined height by `reduction` (a third, by default) and
-    redistributes exactly that freed height across the body rows, in
-    proportion to each one's own existing share of the body's total --
-    so the table still fills the same width_emu x height_emu canvas, with
-    nothing left blank at the bottom.
-    """
     if len(row_heights) <= header_rows:
         return list(row_heights)
     header_part = row_heights[:header_rows]
@@ -248,7 +181,6 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
 
     chart_cells = {}
 
-    # -- Header: rows 0 and 1 combined --
     if n_rows >= HEADER_ROWS and n_cols > 0:
         header_top = row_y[0]
         header_bottom = row_y[HEADER_ROWS] if HEADER_ROWS < len(row_y) else 100.0
@@ -262,8 +194,6 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
             x1 = col_x[c + 1] if c + 1 < len(col_x) else 100.0
 
             if c < last_two_start or not merge_last_two:
-                # Ordinary column: one merged cell spanning both header
-                # rows, showing row 0's own text.
                 rect = mpatches.Rectangle((x0, header_top), x1 - x0, header_bottom - header_top,
                                            facecolor=HEADER_BG, edgecolor="black", linewidth=0.75 * TEXT_SCALE)
                 ax.add_patch(rect)
@@ -282,9 +212,6 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                         ha=ha, va="center", fontsize=font_size + HEADER_FONT_BOOST, fontweight="bold",
                         color=HEADER_TEXT_COLOUR)
             elif c == last_two_start:
-                # First of the final two columns: draw the row-0
-                # "Benchmark" cell merged across both of them here (once
-                # only), plus this column's own row-1 sub-heading cell.
                 row0_y1 = row_y[1] if len(row_y) > 1 else header_bottom
                 merged_x1 = col_x[last_two_start + 2] if last_two_start + 2 < len(col_x) else 100.0
                 rect_merged = mpatches.Rectangle((x0, header_top), merged_x1 - x0, row0_y1 - header_top,
@@ -303,9 +230,6 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                         ha="center", va="center", fontsize=font_size, fontweight="bold",
                         color=HEADER_TEXT_COLOUR)
             else:
-                # Second of the final two columns: the row-0 "Benchmark"
-                # cell was already drawn (merged, above) -- just this
-                # column's own row-1 sub-heading cell.
                 row0_y1 = row_y[1] if len(row_y) > 1 else header_bottom
                 row1_y1 = row_y[2] if len(row_y) > 2 else header_bottom
                 rect1 = mpatches.Rectangle((x0, row0_y1), x1 - x0, row1_y1 - row0_y1,
@@ -317,7 +241,6 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                         ha="center", va="center", fontsize=font_size, fontweight="bold",
                         color=HEADER_TEXT_COLOUR)
 
-    # -- Body rows: index HEADER_ROWS onward --
     for r in range(HEADER_ROWS, n_rows):
         row_data = content[r]
         if not _row_is_blank(row_data, n_cols):
@@ -345,10 +268,5 @@ def ci_grid(content: list, column_widths: list, row_heights: list,
                 else:
                     ax.text((x0 + x1) / 2, (y0 + y1) / 2, cell_text,
                             ha="center", va="center", fontsize=font_size, color="black")
-        # A blank row draws nothing at all -- its row_y span is still
-        # reserved above (row_y was built from the full row_heights list
-        # regardless), so every other row's position and the table's
-        # overall size are completely unaffected by how many rows turn
-        # out blank.
 
     return _fig_to_bytes(fig), chart_cells

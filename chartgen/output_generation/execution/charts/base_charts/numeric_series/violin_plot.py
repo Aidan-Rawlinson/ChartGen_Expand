@@ -1,14 +1,4 @@
-"""
-violin_plot.py
-Base Chart — NumericSeries. Violin / KDE distribution plot; the Selected
-unit and any peer-group layers overlaid as markers.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's identity and label come entirely from the
-"Selected"-labelled entry in population_layers.
-"""
+"""Base Chart, NumericSeries. Violin plot, Selected and peer-group layers overlaid as markers."""
 
 import io
 import warnings
@@ -17,18 +7,12 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
 
-# ---------------------------------------------------------------------------
-# Palette / sizing / formatting — inlined, this chart's own copy
-# ---------------------------------------------------------------------------
 
 BAR_BLUE     = "#7CB9E8"
 MEAN_COL     = "#E87722"
@@ -39,9 +23,6 @@ PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -79,7 +60,6 @@ def _axis_formatter(format_modifier):
 
 
 def violin_plot(population_layers: list, width_emu=3429000, height_emu=3429000, tweaks=""):
-    """Violin plot — distribution from first shape, markers for subsequent layers."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))
@@ -95,9 +75,6 @@ def violin_plot(population_layers: list, width_emu=3429000, height_emu=3429000, 
 
     extra_handles = []
     peer_colour_idx = 0
-    # Identity of the currently Selected unit(s), for matching within peer
-    # layers below — sourced from the "Selected" population layer itself,
-    # not from any external runtime object.
     selected_layer = next((l for l in population_layers if l.population_label == "Selected"), None)
     selected_ids = {u.unit_id for u in selected_layer.units} if selected_layer else set()
 

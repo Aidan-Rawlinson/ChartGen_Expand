@@ -1,13 +1,4 @@
-"""
-ugly_bar.py
-Base Chart — NumericCompositional. Horizontal bar showing component
-breakdown (sample average). Population layers not applicable — renders
-aggregated sample averages.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks).
-"""
+"""Base Chart, NumericCompositional. Horizontal bar showing component breakdown."""
 
 import io
 import warnings
@@ -17,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -30,9 +18,6 @@ BAR_BLUE = "#7CB9E8"
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -70,7 +55,6 @@ def _axis_formatter(format_modifier):
 
 
 def ugly_bar(population_layers: list, width_emu=5486400, height_emu=2743200, tweaks=""):
-    """Horizontal bar — component breakdown (sample average)."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))

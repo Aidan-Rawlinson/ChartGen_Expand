@@ -1,13 +1,4 @@
-"""
-list_pie.py
-Base Chart — CategoricalCompositional. Pie chart with leader-line labels,
-category proportions for a single metric. Population layers not
-applicable — renders population-level aggregates.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks).
-"""
+"""Base Chart, CategoricalCompositional. Pie chart with leader-line labels, category proportions for a single metric."""
 
 import io
 import warnings
@@ -17,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -28,9 +16,6 @@ PIE_COLOURS = ["#1F4E79", "#E87722", "#7030A0", "#2E86AB", "#F0A500", "#4CAF50"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -48,7 +33,6 @@ def _fig_to_bytes(fig):
 
 
 def list_pie(population_layers: list, width_emu=3429000, height_emu=3771900, tweaks=""):
-    """Pie chart — category proportions for a single metric."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))

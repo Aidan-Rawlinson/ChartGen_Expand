@@ -1,13 +1,4 @@
-"""
-yn_bar.py
-Base Chart — CategoricalCompositional. Horizontal stacked Yes/No bar per
-question. Population layers not applicable — renders population-level
-aggregates.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks).
-"""
+"""Base Chart, CategoricalCompositional. Horizontal stacked Yes/No bar per question."""
 
 import io
 import warnings
@@ -17,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -31,9 +19,6 @@ NO_COL  = "#C0392B"
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -57,7 +42,6 @@ def _apply_spine_style(ax):
 
 
 def yn_bar(population_layers: list, width_emu=5486400, height_emu=3771900, tweaks=""):
-    """Horizontal stacked Yes/No bar per question."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig, ax = plt.subplots(figsize=(w, h))

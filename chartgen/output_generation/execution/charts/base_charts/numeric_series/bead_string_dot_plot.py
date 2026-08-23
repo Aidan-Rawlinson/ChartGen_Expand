@@ -1,14 +1,4 @@
-"""
-bead_string_dot_plot.py
-Base Chart — NumericSeries. Multi-tier bead-string dot plot, one tier per
-population layer.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. This
-chart never needed one: it reads unit identity and the "Selected" label
-directly from population_layers, the same as the other charts.
-"""
+"""Base Chart, NumericSeries. Multi-tier bead-string dot plot, one tier per population layer."""
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -18,26 +8,17 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
 
-# ---------------------------------------------------------------------------
-# Palette / sizing / formatting — inlined, this chart's own copy
-# ---------------------------------------------------------------------------
 
 PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -65,7 +46,6 @@ def _format_number(value, format_modifier):
 
 
 def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=2743200, tweaks=""):
-    """Multi-tier bead-string dot plot — one tier per population layer."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
@@ -109,12 +89,6 @@ def bead_string_dot_plot(population_layers: list, width_emu=5486400, height_emu=
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)
         return _fig_to_bytes(fig)
 
-    # Visual-only de-duplication: a unit already shown in a more specific
-    # (later-token) tier is suppressed from every broader (earlier-token)
-    # tier's dots, so e.g. the Selected unit(s) only appear once, in
-    # Selected, rather than also as a dot in Region() and All. Stats (ms)
-    # are computed from `base` above, untouched by this — it only affects
-    # which dots get drawn.
     already_shown = set()
     for t in reversed(tiers):
         original_ids = list(t["ids"])

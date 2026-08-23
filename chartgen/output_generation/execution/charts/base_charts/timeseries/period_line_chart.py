@@ -1,21 +1,4 @@
-"""
-period_line_chart.py
-Base Chart — TimeSeries. Population mean/IQR band across every period,
-with a highlighted line per subsequent population layer (Selected or peer
-group).
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's label comes from its own unit_code in the
-"Selected"-labelled population layer.
-
-population_layers[0] is always the scope and drives the main rendering
-(population mean line, IQR band), regardless of its own label;
-population_layers[1:] are highlighted on top — "Selected" as the
-individual unit's own trend line, any other label (a resolved peer group)
-as that group's mean line, in PEER_COLOURS order.
-"""
+"""Base Chart, TimeSeries. Population mean and IQR band across every period, with a highlighted line per subsequent population layer."""
 
 import io
 import warnings
@@ -25,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -40,9 +20,6 @@ PEER_COLOURS = ["#2E9E75", "#7030A0", "#E87722", "#2E86AB"]
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -80,7 +57,6 @@ def _axis_formatter(format_modifier):
 
 
 def period_line_chart(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
-    """Line chart of one Metric-Series across every period — population mean/IQR band, plus a highlighted line per subsequent layer (Selected or peer group)."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)

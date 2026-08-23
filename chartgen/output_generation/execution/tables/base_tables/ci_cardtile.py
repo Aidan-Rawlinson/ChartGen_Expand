@@ -1,77 +1,4 @@
-"""
-ci_cardtile.py
-Base Table -- a tailored variant of table_cardtile.py for CI-style
-tables: a two-row header (rows 0 and 1 of content/row_heights are BOTH
-header rows now, not just row 0), and body cards (index 2 onward) that
-draw nothing at all -- no card, no shadow, no text -- when every cell in
-that row is blank, so a workfile can use a fixed row count and leave
-trailing rows empty for consistent sizing across tables with different
-real row counts, without a visible empty card where the extra rows sit.
-The row's own height is still reserved in the layout either way -- only
-what's drawn changes, never the sizing.
-
-Two-row header design (deliberately tailored, not generic -- this table
-type always has this exact shape):
-  - One single rounded background block spans the whole two-row header
-    area, full width -- same rounding radius as the body cards
-    (CARD_ROUNDING_INCHES) -- rather than a flat, sharp-cornered
-    rectangle, which didn't read as a cohesive element against the
-    rounded cards below it. It also carries the same drop-shadow
-    treatment as a body card -- a second, offset copy of the same shape
-    behind it (border + secondary shape of matching dimensions, the same
-    technique the body cards already use) -- using the exact same
-    offset_x/offset_y a body card's own shadow uses (derived from the
-    first body row's own height), not a fraction re-derived from the
-    header's own much taller (two-row) height, which produced a visibly
-    bigger shadow gap than any body card's. The header block itself is
-    shrunk slightly off its own bottom edge by exactly that same offset,
-    to make room for the shadow within the header's existing allocated
-    height rather than letting it push into the first body row -- all
-    header text is lifted up by half that shrink to stay correctly
-    centred within the now-slightly-shorter block.
-  - Every column except the final two gets ONE header label spanning both
-    header rows' combined height, showing row 0's own resolved text,
-    bold accent-blue, vertically centred -- col 0 left-aligned, every
-    other column centred (not right-aligned -- unlike the body rows,
-    which stay right-aligned to line up with their own numeric values,
-    a right-aligned heading sitting alone above a column read
-    awkwardly). Row 1's content for these columns is never read.
-  - The final two columns' row 0 is ONE label merged horizontally across
-    both of them, showing the fixed text "Benchmark" -- not read from
-    resolved content -- sitting in the upper half of the shared header
-    block.
-  - The final two columns' row 1 shows fixed text -- "Target" and
-    "Met(?)" -- bold accent-blue, centred, in the lower half of the
-    shared header block, regardless of whatever's actually in content[1]
-    for those columns; these, and "Benchmark", are a fixed design element
-    of this table type, not read from resolved content.
-  - Header text sourced from row 0 (the leading columns' own labels, and
-    "Benchmark") is HEADER_FONT_BOOST points larger than the row-1
-    sub-headings ("Target"/"Met(?)") -- a small visual hierarchy between
-    the primary heading and its sub-heading, not a uniform header size.
-  - The two header rows are drawn HEADER_ROW_HEIGHT_REDUCTION shorter
-    than their own authored row_heights -- a rendering-only adjustment
-    (_adjusted_row_heights, applied once in _prepare); the freed height
-    is redistributed into the body rows so the table still fills the
-    same canvas, nothing left blank. The stored/authored heights
-    themselves are never touched.
-
-table_cardtile.py's own header-position "nudge" (balancing the header
-text's baseline against row 1's own text height) assumed a single header
-row immediately followed by body row 1 -- with the header now spanning
-two full rows of its own and body cards starting at index 2, that nudge
-no longer applies; header text is simply vertically centred in the full
-two-row header block instead.
-
-Standalone artefact, the base_tables equivalent of a Base Chart
-(Architecture, Decision 18) -- no imports from ChartGen's own code,
-third-party libraries only. Receives already-resolved content and
-already-parsed column_widths / row_heights -- no resolution logic lives
-here.
-
-Returns (image_bytes, chart_cells) -- the table_inputs return contract
-(Decisions.md).
-"""
+"""Base Table, ci_cardtile. CI-style variant of table_cardtile. Rows 0 and 1 are both header rows under one rounded block. The final two columns carry the fixed text Benchmark, Target and Met(?), never content. A body row whose every cell is blank draws no card, but still occupies its height."""
 
 import io
 import warnings
@@ -80,9 +7,6 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -93,14 +17,6 @@ import numpy as np
 DPI = 300
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (insert_table.py) exactly. Applied to
-# every fixed physical-inch/absolute-point constant below (font bounds,
-# padding, card rounding, border width, save padding, header font
-# boost) -- see plain_grid.py's own comment for why an unscaled
-# font-size search bound or padding constant would defeat the whole
-# mechanism once called at an inflated canvas size.
 TEXT_SCALE = 5
 
 MAX_FONT_SIZE = 12 * TEXT_SCALE
@@ -108,11 +24,11 @@ MIN_FONT_SIZE = 4 * TEXT_SCALE
 FONT_STEP = 0.5 * TEXT_SCALE
 LEFT_PAD_INCHES = 0.08 * TEXT_SCALE
 
-ACCENT_BLUE = "#1265A5"  # a step darker than the previous #1887DC (itself sparkline1's own MEDIAN_LINE_COL derivation) -- HLS lightness -0.12 further
+ACCENT_BLUE = "#1265A5"
 GREY_LINE = "#C9D2DA"
 GREY_TEXT = "#5B6770"
-HEADER_BG = "#FCFEFF"  # a third of the previous tint's intensity (~2% of the base blue #7CB9E8 blended toward white, was ~6%) -- paler still, per request; now the gradient's own END colour (right side) -- see HEADER_BG_GRADIENT_START
-HEADER_BG_GRADIENT_START = "#DEEEF9"  # a decent step darker than the previous #F3F9FD (~9% tint) -- now a 25% tint of the base blue #7CB9E8, fading to HEADER_BG on the right
+HEADER_BG = "#FCFEFF"
+HEADER_BG_GRADIENT_START = "#DEEEF9"
 
 CARD_ROUNDING_INCHES = 0.06 * TEXT_SCALE
 BORDER_WIDTH = 0.375 * TEXT_SCALE
@@ -121,11 +37,11 @@ SAVE_PAD_INCHES = 0.03 * TEXT_SCALE
 CARD_HEIGHT_FRACTION = 0.8
 
 HEADER_ROWS = 2
-MERGED_HEADER_LABEL = "Benchmark"  # fixed label spanning the final two columns' row 0
-SUB_HEADINGS = ["Target", "Met(?)"]  # fixed text for the final two columns' row 1
-HEADER_FONT_BOOST = 2 * TEXT_SCALE  # points added to header text sourced from row 0 (leading columns + "Benchmark") -- not the row-1 sub-headings
-CENTRED_BODY_COLUMN_INDEX = 3  # the fourth column (0-indexed) -- centred instead of right-aligned, unlike every other body column
-HEADER_ROW_HEIGHT_REDUCTION = 1 / 3  # rendering-only: the two header rows are drawn a third shorter than authored, freed height redistributed into the body rows
+MERGED_HEADER_LABEL = "Benchmark"
+SUB_HEADINGS = ["Target", "Met(?)"]
+HEADER_FONT_BOOST = 2 * TEXT_SCALE
+CENTRED_BODY_COLUMN_INDEX = 3
+HEADER_ROW_HEIGHT_REDUCTION = 1 / 3
 
 
 def _rounded_rect_polygon(x, y, w, h, rx, ry, n=12, **kwargs):
@@ -177,8 +93,6 @@ def _fig_to_bytes(fig):
 
 def _resolve_chart_cells(fig, chart_cells_raw: dict, w_inches: float, h_inches: float,
                           width_emu: int, height_emu: int) -> dict:
-    """Same crop-correction as table_cardtile.py's own version -- see
-    that file for the full reasoning; unchanged here."""
     if not chart_cells_raw:
         return {}
 
@@ -257,10 +171,6 @@ def _fit_font_size(texts, available_width_inches, dpi,
 
 def _shrink_for_multiline_height(font_size, body_content, body_row_heights, h_inches, dpi,
                                   min_size=MIN_FONT_SIZE, step=FONT_STEP):
-    """Same purpose as table_cardtile.py's own version, restricted to body
-    rows -- the header's two rows are a fixed design element here, not
-    arbitrary multi-line content. Every body row uses CARD_HEIGHT_FRACTION
-    of its own row height, matching the card's own inset."""
     size = font_size
     while size > min_size:
         fits = True
@@ -285,16 +195,6 @@ def _shrink_for_multiline_height(font_size, body_content, body_row_heights, h_in
 
 
 def _adjusted_row_heights(row_heights, header_rows=HEADER_ROWS, reduction=HEADER_ROW_HEIGHT_REDUCTION):
-    """
-    Rendering-only adjustment, applied after row_heights is received --
-    the stored/authored values (whatever's actually saved for this table)
-    are never touched, only what gets drawn. Shrinks the header rows'
-    own combined height by `reduction` (a third, by default) and
-    redistributes exactly that freed height across the body rows, in
-    proportion to each one's own existing share of the body's total --
-    so the table still fills the same width_emu x height_emu canvas, with
-    nothing left blank at the bottom.
-    """
     if len(row_heights) <= header_rows:
         return list(row_heights)
     header_part = row_heights[:header_rows]
@@ -384,13 +284,6 @@ def ci_cardtile(content, column_widths, row_heights, width_emu=5486400, height_e
     rx = (CARD_ROUNDING_INCHES / p["w_inches"]) * 100 if p["w_inches"] else 0.0
     ry = (CARD_ROUNDING_INCHES / p["h_inches"]) * 100 if p["h_inches"] else 0.0
 
-    # The exact same offset_x/offset_y a body card's own shadow uses --
-    # not a fraction re-derived from the header's own (much taller,
-    # two-row) height, which produced a visibly bigger shadow gap than
-    # every body card's. Based on the first body row's own height, same
-    # as any body card's own offset_y = card_h * SHADOW_OFFSET_FRACTION
-    # calculation below -- reused as-is for the header, on the assumption
-    # (true for this table type) that body rows share a common height.
     row_y_all = p["row_y"]
     if n_rows > HEADER_ROWS and HEADER_ROWS + 1 < len(row_y_all):
         ref_row_h = row_y_all[HEADER_ROWS + 1] - row_y_all[HEADER_ROWS]
@@ -400,7 +293,6 @@ def ci_cardtile(content, column_widths, row_heights, width_emu=5486400, height_e
     shadow_offset_y = ref_card_h * SHADOW_OFFSET_FRACTION
     shadow_offset_x = shadow_offset_y * (p["h_inches"] / p["w_inches"]) if p["w_inches"] else shadow_offset_y
 
-    # -- Header: rows 0 and 1 combined --
     if n_rows >= HEADER_ROWS and n_cols > 0:
         row_y = p["row_y"]
         col_x = p["col_x"]
@@ -408,18 +300,11 @@ def ci_cardtile(content, column_widths, row_heights, width_emu=5486400, height_e
         header_bottom_full = row_y[HEADER_ROWS] if HEADER_ROWS < len(row_y) else 100.0
         header_full_h = header_bottom_full - header_top
 
-        # Shrink the block off its own bottom edge by exactly
-        # shadow_offset_y, to leave room for the shadow within the
-        # header's existing allocated height, rather than letting it push
-        # into the first body row. Lift is half that shrink, so all
-        # header text stays centred within the resulting (slightly
-        # shorter) block rather than drifting toward its new, higher
-        # bottom edge.
         header_offset_y = shadow_offset_y
         header_offset_x = shadow_offset_x
         lift = header_offset_y / 2
         header_block_h = header_full_h - header_offset_y
-        header_bottom = header_top + header_block_h  # the block's own new bottom edge
+        header_bottom = header_top + header_block_h
 
         header_centre = (header_top + header_bottom) / 2
         row0_bottom = (row_y[1] if len(row_y) > 1 else header_bottom_full) - lift
@@ -435,12 +320,6 @@ def ci_cardtile(content, column_widths, row_heights, width_emu=5486400, height_e
         )
         ax.add_patch(header_shadow)
 
-        # Gradient fill (darker left, fading to HEADER_BG on the right) --
-        # same technique sparkline1.py uses for its own median fill: an
-        # imshow image spanning the block's own rectangle, clipped to the
-        # block's rounded-corner path rather than a flat facecolor. The
-        # block's own border is drawn as a separate, unfilled polygon on
-        # top, so the gradient never covers the border stroke.
         header_fade = mcolors.LinearSegmentedColormap.from_list(
             "header_fade", [HEADER_BG_GRADIENT_START, HEADER_BG])
         header_gradient_data = np.linspace(0, 1, 256).reshape(1, -1)
@@ -489,15 +368,9 @@ def ci_cardtile(content, column_widths, row_heights, width_emu=5486400, height_e
                         ha="center", va="center", fontsize=fs, fontweight="bold",
                         color=ACCENT_BLUE, zorder=3)
 
-    # -- Body cards: index HEADER_ROWS onward --
     for r in range(HEADER_ROWS, n_rows):
         row_data = p["content"][r]
         if _row_is_blank(row_data, n_cols):
-            # Nothing at all -- no card, no shadow, no text. row_y (built
-            # from the full row_heights list) already reserves this row's
-            # own space regardless, so every other row's position and the
-            # table's overall size are unaffected by how many rows turn
-            # out blank.
             continue
 
         _, _, y0, y1 = _cell_bounds(p, r, 0)

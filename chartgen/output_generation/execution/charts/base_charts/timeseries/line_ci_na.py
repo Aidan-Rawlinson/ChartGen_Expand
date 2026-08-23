@@ -1,28 +1,4 @@
-"""
-line_ci_na.py
-Base Chart -- TimeSeries, diagnostic variant, the "N/A" member of the
-"CI" family alongside line_ci_at_least_90pct/line_ci_at_least_median/
-line_ci_at_most_median/line_ci_at_most_2/line_ci_at_most_5pct/line_ci_0/
-line_ci_100pct. Unlike every other member of that family, this one does
-not evaluate anything -- it completely disregards population_layers and
-tweaks and always draws the same thing: a single circle, sized and
-positioned exactly as every other member of the family sizes its own
-circle (same CIRCLE_DIAMETER_FRACTION, same centring, same default
-width_emu/height_emu), with the literal text "N/A" in place of the
-pass/fail/no-data tick/cross/dash mark the rest of the family draws.
-
-Intended for rows in the Running Order where this particular evaluation
-genuinely does not apply to the metric in that slot, but the row still
-needs a same-sized placeholder rather than a gap or an error.
-
-width_emu/height_emu are still respected (this is how every Base Chart's
-physical output size is controlled, not part of the "data" being
-disregarded) -- only population_layers and tweaks are ignored.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) -- no report_context or any other runtime object.
-"""
+"""Base Chart, TimeSeries, diagnostic. The N/A member of the line_ci_* family. Evaluates nothing and always draws a circle with the literal text N/A, sized as the rest of the family."""
 
 import io
 import warnings
@@ -31,19 +7,15 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 matplotlib.rcParams["font.family"] = "Calibri"
-# SVG text kept as real text, not glyph outlines -- see line_ci_full's
-# own comment for the full reasoning. This chart's own "N/A" text scales
-# its fontsize to the circle radius already (see below), so no separate
-# TEXT_SCALE constant is needed here.
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400
 
-CIRCLE_FILL_NA = "#C1C8CE"   # same light grey as the rest of the family's own "no_data" fill
+CIRCLE_FILL_NA = "#C1C8CE"
 TEXT_COLOUR = "white"
 
-CIRCLE_DIAMETER_FRACTION = 0.72   # matches every other member of this family
+CIRCLE_DIAMETER_FRACTION = 0.72
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -74,11 +46,6 @@ def line_ci_na(population_layers: list, width_emu=2736215, height_emu=684054, tw
     circle = plt.Circle((cx, cy), r, facecolor=CIRCLE_FILL_NA, edgecolor="none", zorder=1)
     ax.add_patch(circle)
 
-    # Font size scaled to the circle's own radius (in points, via the
-    # figure's own EMU-derived inches), the same way the rest of the
-    # family scales its tick/cross/dash mark's linewidth to the circle --
-    # so "N/A" sits proportionally regardless of what width_emu/
-    # height_emu this row happens to specify.
     fontsize = r * 72 * 0.45
     ax.text(cx, cy, "N/A", color=TEXT_COLOUR, fontsize=fontsize,
              fontweight="bold", ha="center", va="center", zorder=2)

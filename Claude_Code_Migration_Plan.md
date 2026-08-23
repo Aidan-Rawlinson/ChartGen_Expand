@@ -247,6 +247,40 @@ Remove the per-file `TEXT_SCALE` comment entirely. No residual pointer line.
 
 Settled at the end of Stage 4: the four system-layer `CHART_RENDER_SCALE` markers stay. This stage still removes the per-file `TEXT_SCALE` comments with no pointer.
 
+**Floor agreed at the start of the stage.** Two things may survive per file, nothing else:
+1. One line of module docstring - what kind of artefact it is, its shape, what it draws.
+2. One line where the file reads `tweaks` with its own grammar. This is the only content in these files not recoverable from a `CLAUDE.md` or the bundle contract, and it is user-facing.
+
+**Why stripping does not weaken the standalone export.** `bundle.py` embeds `custom_charts/contract.py`'s `CHART_INPUTS_EXPLANATION` above the file's own source in every bundle. That constant already covers the `.crtx` framing, the full `chart_inputs` contract, `population_layers` semantics, EMU, the 5x pre-scaling and the PowerPoint reason for it, `TEXT_SCALE = 5` with the scale/never-scale rule, Calibri and `svg.fonttype`, allowed imports, and the return contract. The per-file prose repeated all of it. Stripping removed duplication from the bundle, not information.
+
+Stage 5 outcome:
+- Scope was 45 files, not the 37 this plan assumed: 33 Base Charts, 4 Base Tables, 7 `__init__.py` files, and the 2 `registry.py` files already done in Stage 4 and left alone. 44 changed.
+- Prose 2,075 lines to 89. Docstrings 1,340 to 89, comments 735 to 0. Tree 7,141 lines to 5,254. 149 insertions, 2,034 deletions.
+- Of the 89 surviving lines, 44 are the two untouched `registry.py` files. The 43 stripped files carry 45 lines between them: one each, plus a second in `column_ci_full` and `line_ci_full` for their `tweaks` grammar.
+- The 7 `__init__.py` files were added to scope this session. Stage 4 had skipped them. `base_tables/__init__.py` still cited the deleted `Decisions.md` and said two Base Tables exist when there are four. Both corrected. Dead references across both trees: 16 lines before, zero now.
+- `tweaks` grammar kept, in two files only: `column_ci_full` (`target:N`, `target:median`) and `line_ci_full` (the same, plus the bare `12m` flag). Both are typed by the user into a Running Order cell.
+- Edits were made by an AST-driven tool working off docstring and comment line numbers, not by regex, per the Stage 4 finding that a regex sweep mangled two comments.
+
+Verification:
+- Every file compiles; all 181 modules in `chartgen/` import cleanly.
+- AST comparison against HEAD with docstring nodes stripped from both sides: no code changed in any file.
+- **All 33 Base Charts and all 4 Base Tables rendered from synthetic data and compared byte-for-byte against the same renders from a HEAD worktree. Identical.** This needed matplotlib's own nondeterminism normalised out first: it stamps a wall-clock `<dc:date>` and a random id per clipPath, marker and glyph path. Ids are canonicalised by ordinal of first appearance. Two runs of the same tree agree before the comparison is trusted.
+- Both bundle documents build from the stripped sources, with the contract section intact and the source section carrying the complete file.
+- `CHART_INPUTS_EXPLANATION` and `TABLE_INPUTS_EXPLANATION` byte-identical to HEAD, verified by parsing the constant out of both.
+- App starts headless and serves the sign-in page, HTTP 200, no errors logged.
+
+Borderline items stripped, listed for a decision rather than silently kept:
+- `bead_string_dot_plot`, the visual-only de-duplication comment: a unit shown in a more specific tier is suppressed from broader tiers, and the stats are computed before this so they are unaffected.
+- The `line_ci_*` family's epsilon note: the `+/- 0.0001` is not a float tolerance, it is there so a value exactly equal to the threshold passes.
+- `_find_selected_in_scope` and `_selected_identity` return-tuple contracts, `(index, value, unit_code)` or `(None, None, None)`.
+- `plain_grid`'s entry-point parameter shapes: `content` is N rows by M columns, `column_widths` length M, `row_heights` length N, both percentages.
+- `sparkline1`'s note that a Base Chart must return the requested size itself rather than relying on the inserter to stretch a cropped file back.
+
+Raised, not fixed:
+- `charts/base_charts/CLAUDE.md` says a file computing its sizes proportionally needs no `TEXT_SCALE` and that "the `line_ci_*` family works this way". Eight of the nine do. `line_ci_full` defines `TEXT_SCALE = 5` and multiplies by it throughout, so the claim is wrong for that one file. Correcting it is a Stage 3 document change.
+- 27 of the 37 chart and table files define `TEXT_SCALE`, not all of them. The `base_tables/CLAUDE.md` table says "every file here" without the qualifier the charts version carries. Correct today, since all four Base Tables define one, but it would become wrong the first time a proportionally-sized table is added.
+- The 44 rewritten files are LF in the working tree while `core.autocrlf` is `true`, so Git normalises them on commit and restores CRLF on the next checkout. The working tree was already mixed before this stage. No effect on committed content.
+
 ---
 
 ## Stage 6 - Dead code removal
@@ -285,7 +319,9 @@ Stat Tags is the live risk: `stat_tags_xlsx.assign_missing_tags` issues ids alon
 | `output_tables_tab.py` restore path | `except (TypeError, ValueError)` substitutes 50% for an unparseable stored value |
 | `shapes/timeseries.py` `filter_time_series_periods` | If `start_period_id` does not resolve but `end_period_id` does, the shape is returned completely untrimmed, discarding the end bound too |
 
-The third needs the behaviour agreed before it is changed. It does not merely fall back on a missing value: it discards a bound the user did set, so a row asking for a range ending March 2025 silently renders the full history. Consistent with "an unresolvable period is a no-data case, not an error", the likely answer is to honour the end bound and treat the missing start as "from the first period". Design before build.
+**Behaviour agreed for the third.** Honour the end bound and treat the unresolvable start as "from the first period". The row renders rather than failing.
+
+This scenario genuinely occurs in practice, and it does need action when it does. That action happens when the outputs are reviewed, by a person looking at the report. So the correct behaviour is to render what the shape actually has, not to fail the row and not to silently widen the range past the end bound the user set. Consistent with "an unresolvable period is a no-data case, not an error".
 
 **Verification is behavioural.** There are no tests. 7.1 needs an xlsx import carrying pre-filled ids. 7.2 needs a row with a stored size outside 1 to 200, and a row whose `start_period` is absent from its report.
 

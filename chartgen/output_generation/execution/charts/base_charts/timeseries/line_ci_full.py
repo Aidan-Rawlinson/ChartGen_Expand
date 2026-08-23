@@ -1,82 +1,4 @@
-"""
-line_ci_full.py
-Base Chart — TimeSeries. Mean and median reference lines across every
-period, with a highlighted line per subsequent population layer (Selected
-or peer group), styled to the Community Indicators chart specification
-(NHS Identity palette), plus a per-period data table beneath the chart
-showing the Selected, Mean and Median values for each period.
-
-Replaces the earlier version of this chart (which reused
-median_comparison_linechart's median-only logic, restyled). This version
-is converted from a Custom Chart bundle the user recovered from an
-earlier session (a genuinely different chart design — mean AND median
-reference lines, plus an embedded per-period table — not just a restyle
-of an existing built-in). Converted to the current chart_inputs contract
-(width_emu/height_emu, SVG return, Calibri) from the bundle's own
-pre-Decision-27/29 width/height-percent/PNG form; no other logic changed.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's label comes from its own unit_code in the
-"Selected"-labelled population layer.
-
-population_layers[0] is always the scope and drives the mean/median
-reference lines, regardless of its own label; population_layers[1:] are
-highlighted on top — "Selected" as the individual unit's own trend line
-(NHS Red, on top of every other series), any other label (a resolved
-peer group) as that group's mean line (NHS Blue, dashed).
-
-Values on this chart are displayed as percentages regardless of the
-data's own format_modifier, per this chart's own display convention.
-
-The table is not a separate element — it is part of this single
-visualisation, sharing the one figure with the chart above it, and the
-whole thing (chart + table together) is sized to width_emu/height_emu.
-Chart, legend and table each occupy an explicitly reserved band of the
-figure (placed by absolute figure coordinates, not by axes-relative
-legend positioning), with a small fixed buffer between bands, so none of
-the three can encroach on another regardless of how much content each
-contains. The outer margin (top, bottom, left, right) is a single
-consistent value on all four sides — a left-hand "gutter" is reserved
-ahead of the axes for the y-axis tick labels and the table's row-label
-column, both of which draw outside their axes' own bounding box, so
-their actual visible ink lines up with the margin rather than eating
-into it.
-
-Values follow the shape's own format_modifier, the same convention every
-other Base Chart uses: "P" appends "%", "C" prefixes "£", anything else
-(including "N", or blank) gets no suffix at all — plain, comma-thousands
-formatting. The source bundle this chart was converted from hardcoded
-"always show as a percentage regardless of format_modifier" as its own
-display convention; that was wrong against real data (an "N"-modifier
-metric was being shown with a false "%" suffix) and has been replaced
-with the standard rule.
-
---- "12m" tweak ---
-This chart is not told the report's own period range (chart_inputs
-contract — no report_context reaches a Base Chart). The report this
-chart is normally used in covers a fixed 12-month year, but early in
-that year the underlying data may only actually exist for the last few
-months. The "12m" bare flag (no colon/value — just the literal text
-"12m" somewhere in the tweaks string) tells this chart to always present
-a full 12-month axis regardless of how many real periods it was actually
-given: whatever real periods exist occupy the most recent (rightmost)
-months, and however many months are short of 12 get synthesised at the
-front as empty, hatched "no data" months. This is presentation only —
-no data is invented, no real value is altered, nothing is filtered. As
-real months accumulate over the year this shrinks on its own; nothing
-about this logic needs revisiting as the year progresses. If given more
-than 12 real periods, only the most recent 12 are shown (same "most
-recent 12, working backwards" rule, no synthesis needed). Every real
-per-period series (mean, median, Selected, each peer group, the target
-line) is padded/trimmed identically via _apply_padding so they all stay
-aligned to the same 12-month axis. The synthetic months' own labels are
-calculated by stepping calendar-month-backwards from the first real
-period's own label; if that label doesn't parse as "Month YYYY", padding
-is skipped entirely for that render (chart still draws, just without the
-synthetic months) rather than guessing.
-"""
+"""Base Chart, TimeSeries. Mean and median reference lines across every period, a highlighted line per subsequent population layer, and a per-period table of Selected, Mean and Median values beneath the chart. Chart, legend and table each occupy a fixed non-overlapping band. CI report styling."""
 
 import io
 import math
@@ -87,41 +9,23 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. See Architecture, SVG
-# rendering methodology (Decision 27). The source bundle used Arial (the
-# CI report spec's own typography) — kept as Calibri here per that
-# governed decision, same as column_ci_full.
 matplotlib.rcParams["font.family"] = "Calibri"
-# SVG text is kept as real text, not glyph outlines -- every Base
-# Chart/Table does this now. PowerPoint's own SVG compression routine
-# mis-spaces individual characters when text is baked into paths, most
-# visibly on decimal-heavy labels ("0.000"); real <text>, combined with
-# this chart's own TEXT_SCALE below, avoids that. Set per-file, not as a
-# global rcParam, so a downloaded Custom Charts bundle (this whole
-# module's source, handed to an AI standalone) stays correct in
-# isolation rather than silently depending on an app-level setting.
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import matplotlib.patches as mpatches
 
-SELECTED_COL   = "#DA291C"   # NHS Red - this organisation
-MEAN_COL       = "#009639"   # NHS Green (dark) - mean
-MEDIAN_COL     = "#78BE20"   # NHS Light Green - median
-OTHER_COL      = "#005EB8"   # NHS Blue - peer groups
-GRID_COL       = "#DFE6EE"   # pale grey - gridlines
-BASELINE_COL   = "#2F3A45"   # dark grey - baseline
-AXIS_LABEL_COL = "#5B6770"   # grey - axis tick labels
-CARD_BG        = "#F0F5FC"   # outer card background (figure)
-LEGEND_BORDER  = "#E6E9ED"   # light grey - legend / table border
-TARGET_PURPLE  = "#9B30FF"   # bright purple - tweaks-driven target reference line, this chart's own copy (matches column_ci_full's)
+SELECTED_COL   = "#DA291C"
+MEAN_COL       = "#009639"
+MEDIAN_COL     = "#78BE20"
+OTHER_COL      = "#005EB8"
+GRID_COL       = "#DFE6EE"
+BASELINE_COL   = "#2F3A45"
+AXIS_LABEL_COL = "#5B6770"
+CARD_BG        = "#F0F5FC"
+LEGEND_BORDER  = "#E6E9ED"
+TARGET_PURPLE  = "#9B30FF"
 
-# "12m" tweak — synthetic/no-data month styling. GREYED_HATCH_COL drives
-# both the chart's axvspan hatch and the table's "n/a" cell hatch, so the
-# two greyed regions read as the same visual concept rather than two
-# unrelated design choices. GREYED_DIVIDER_COL is deliberately the same
-# colour again — one muted grey standing for "inactive", not a second
-# accent colour to track.
 GREYED_HATCH_COL   = "#E9EDF0"
 GREYED_DIVIDER_COL = "#E9EDF0"
 
@@ -129,56 +33,20 @@ PEER_ALPHAS = [1.0, 0.7, 0.5, 0.35]
 
 EMU_PER_INCH = 914400
 
-# --- PowerPoint SVG-text-compression workaround ---
-# PowerPoint's own lossy compression of an embedded SVG mis-spaces
-# individual characters when text is kept as real <text> (svg.fonttype
-# "none", above) rather than glyph outlines -- most visible on
-# decimal-heavy labels ("0.000"). The system layer
-# (assembly_engine._render_chart_image) calls this chart with
-# width_emu/height_emu already multiplied by a fixed factor, then places
-# the result back at the real target size on the slide -- but that alone
-# only inflates the drawn canvas, not any of this chart's own absolute
-# point-based sizes (fontsize, linewidth, markersize, dash-pattern
-# lengths), which would otherwise stay proportionally tiny relative to
-# the now-bigger canvas once shrunk back down. TEXT_SCALE multiplies
-# every such literal in this file to match.
-#
-# This number must equal the system layer's own multiplier exactly (see
-# assembly_engine.py's own constant) -- not enforced in code, since Base
-# Charts are standalone artefacts with no shared imports (Architecture,
-# "Base Charts are outside the system boundary"). A mismatch here would
-# only make this chart's own text/lines look proportionally wrong
-# relative to its own canvas; it wouldn't affect any other chart.
 TEXT_SCALE = 5
 
-# --- Figure layout: one consistent outer margin on all four sides, then
-# three fixed vertical bands (bottom to top: table, slim buffer, legend,
-# slim buffer, chart) filling the space between. Fixed fractions (rather
-# than tight_layout/gridspec auto-sizing) so the bands can never encroach
-# on one another, and the outer margin reads the same on every edge.
-#
-# LABEL_GUTTER reserves room, ahead of the axes' left edge, for content
-# that matplotlib draws outside the axes bounding box: the y-axis tick
-# labels (chart) and the row-label column (table). Without it, that
-# content spills left of MARGIN while nothing spills right of MARGIN on
-# the other side, making the right edge look doubled by comparison. ---
-MARGIN          = 0.055   # identical on top, bottom, left and right
-LABEL_GUTTER    = 0.048   # reserved for y-axis tick labels / table row labels
+MARGIN          = 0.055
+LABEL_GUTTER    = 0.048
 TABLE_HEIGHT    = 0.30
-BUFFER_1        = 0.025   # between table and legend - squeezed
+BUFFER_1        = 0.025
 LEGEND_HEIGHT   = 0.085
-BUFFER_2        = 0.020   # between legend and chart plot area - squeezed
+BUFFER_2        = 0.020
 
 _content_left   = MARGIN + LABEL_GUTTER
 _content_width  = 1.0 - (2 * MARGIN) - LABEL_GUTTER
 _content_bottom = MARGIN
 _content_top    = 1.0 - MARGIN
 
-# "Month YYYY" parsing/stepping for the "12m" tweak's synthetic months —
-# matched on the month name's first three letters, case-insensitive, the
-# same recognition rule _month_label already uses for display, so
-# anything this chart already displays correctly also parses correctly
-# here.
 _MONTH_ABBR_TO_NUM = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
@@ -199,9 +67,6 @@ def _rgb_to_hex(rgb):
 
 
 def _tint(hex_colour, strength):
-    """Blend a colour toward white. strength=1.0 keeps the colour as-is;
-    strength=0.25 keeps only a quarter of its distance from white (i.e.
-    a much paler version of the same colour)."""
     r, g, b = _hex_to_rgb(hex_colour)
     r = 255 - (255 - r) * strength
     g = 255 - (255 - g) * strength
@@ -209,10 +74,10 @@ def _tint(hex_colour, strength):
     return _rgb_to_hex((r, g, b))
 
 
-PLOT_BG          = _tint(CARD_BG, 0.25)         # plot area background, 25% of current strength
-TABLE_CELL_BG    = _tint(CARD_BG, 0.25)         # table body cell background, matching the plot area
-HEADER_BG        = _tint(OTHER_COL, 0.35)       # table header row, deliberately toned down
-ROWLABEL_BG      = _tint("#EFF5FC", 0.6)        # table row-label background, kept a little more visible
+PLOT_BG          = _tint(CARD_BG, 0.25)
+TABLE_CELL_BG    = _tint(CARD_BG, 0.25)
+HEADER_BG        = _tint(OTHER_COL, 0.35)
+ROWLABEL_BG      = _tint("#EFF5FC", 0.6)
 
 
 def _size_to_inches(width_emu, height_emu):
@@ -232,7 +97,6 @@ def _to_nan_array(values):
 
 
 def _month_label(period_label):
-    """Convert a period label such as 'June 2025' to 'Jun 25'."""
     parts = period_label.split()
     if len(parts) != 2:
         return period_label
@@ -243,11 +107,6 @@ def _month_label(period_label):
 
 
 def _parse_period_label(period_label):
-    """
-    Parse a period label of the form 'Month YYYY' (e.g. 'April 2026')
-    into (year, month) ints, or None if it doesn't match that shape.
-    "12m" tweak support — see _build_padding_labels.
-    """
     parts = period_label.split()
     if len(parts) != 2:
         return None
@@ -261,19 +120,11 @@ def _parse_period_label(period_label):
 
 
 def _months_before(year, month, steps):
-    """(year, month) for `steps` calendar months before the given (year, month). steps=1 is the immediately preceding month. "12m" tweak support."""
     zero_based = (year * 12 + (month - 1)) - steps
     return zero_based // 12, (zero_based % 12) + 1
 
 
 def _build_padding_labels(first_real_label, n_pad):
-    """
-    Full 'Month YYYY' labels for n_pad synthetic periods immediately
-    preceding first_real_label, oldest first. Returns None if
-    first_real_label doesn't parse -- caller skips padding entirely in
-    that case rather than guessing at calendar months. "12m" tweak
-    support.
-    """
     parsed = _parse_period_label(first_real_label)
     if parsed is None:
         return None
@@ -286,16 +137,6 @@ def _build_padding_labels(first_real_label, n_pad):
 
 
 def _apply_padding(arr, n_pad, window_size):
-    """
-    Trim `arr` to its last `window_size` elements (no-op if arr is
-    already that length or shorter), then prepend `n_pad` NaNs. Used to
-    align every real per-period series (mean, median, Selected, each
-    peer group, target) onto the same final period axis uniformly --
-    "12m" tweak support, but a genuine no-op (window_size=len(arr),
-    n_pad=0) whenever the tweak isn't active, so this is always safe to
-    call. Returns None unchanged (some series, e.g. selected_y, are
-    legitimately None).
-    """
     if arr is None:
         return None
     trimmed = arr[-window_size:] if window_size < len(arr) else arr
@@ -305,12 +146,6 @@ def _apply_padding(arr, n_pad, window_size):
 
 
 def _format_value(value, format_modifier, decimals):
-    """Standard Base Chart formatting rule: "P" appends "%", "C" prefixes
-    "£", anything else (including "N", or blank) gets plain comma-thousands
-    formatting with no suffix at all. `decimals` is always supplied by the
-    caller (this chart's table decides it once per render, per
-    _sig_fig_decimals) rather than defaulting here, since a silent default
-    would let a call site forget to think about it."""
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return "-"
     if format_modifier == "P":
@@ -325,11 +160,6 @@ def _axis_formatter(format_modifier, decimals):
 
 
 def _nice_number(value, round_to_nearest=False):
-    """Nice-numbers axis algorithm (Heckbert-style): returns a rounded
-    figure close to `value` using only 1/2/3/4/5-times-a-power-of-ten
-    steps (a wider set than the classic 1/2/5 — agreed to give a snugger
-    fit against real data, e.g. a step of 300 rather than jumping straight
-    to 500)."""
     if value <= 0:
         return 1.0
     exponent = math.floor(math.log10(value))
@@ -364,18 +194,6 @@ def _nice_number(value, round_to_nearest=False):
 
 
 def _nice_axis_bounds(max_plotted_value, target_ticks=5):
-    """A round y-axis maximum a little above the highest plotted value,
-    with a matching 'nice' tick step. The step is derived directly from
-    the padded max divided by the target band count, then the axis max is
-    the smallest multiple of that step covering the padded max -- rather
-    than rounding the whole range up to a coarse tier first and deriving
-    the step from that afterwards, which could overshoot badly (e.g. a
-    padded max of 1353 jumping all the way to 2000 rather than landing on
-    1500) and didn't reliably give the target band count either. Band
-    count is no longer a guarantee under this approach -- it lands close
-    to target_ticks most of the time, but can come out higher or lower
-    depending on where the data falls; the trade-off is a consistently
-    snug axis instead."""
     if max_plotted_value <= 0:
         return 1.0, 0.2
     padded = max_plotted_value * 1.10
@@ -386,21 +204,7 @@ def _nice_axis_bounds(max_plotted_value, target_ticks=5):
 
 
 def _parse_tweaks(tweaks: str) -> dict:
-    """
-    Parse this chart's own tweaks convention: caret-separated key:value
-    pairs (key:value^key2:value2), OR a bare flag with no colon at all
-    (e.g. "12m") -- a bare flag's presence alone is the signal, stored as
-    True so a truthy check (`if tweak_values.get("12m")`) behaves the
-    same way as every key:value tweak. Owned by this Base Chart
-    individually, not enforced by ChartGen itself -- a de facto standard
-    shared with other Base Charts where practical, but a different chart
-    adopting a different structure is a legitimate design choice, not a
-    deviation. Keys are lower-cased and stripped. Values are stripped of
-    surrounding whitespace only ('target: 150', 'target:150' and
-    'target:   150' all parse identically) -- internal casing/content of
-    the value itself is preserved verbatim, since target's own value is
-    echoed back literally in its on-chart label.
-    """
+    """This chart's own tweaks grammar: caret-separated key:value pairs, or a bare flag with no colon. Two are read. target:N or target:median draws a reference line. 12m forces a fixed 12-month axis, most recent months rightmost, missing early months padded as an empty hatched band."""
     result = {}
     if not tweaks:
         return result
@@ -420,19 +224,6 @@ def _parse_tweaks(tweaks: str) -> dict:
 
 
 def _sig_fig_decimals(reference_value, sig_figs=3):
-    """
-    Decimal places needed for `sig_figs` significant figures against a
-    single reference value -- 3 sig figs by default, per this chart's own
-    table convention (a whole table shares one decimal count rather than
-    deciding it cell-by-cell, so its columns/rows stay aligned).
-    max(0, ...) is the floor that guarantees rounding never happens above
-    the unit level: a reference value of 5678 gives 0 decimals (rounds to
-    5678, the nearest whole unit -- never rounds away to the nearest ten
-    or hundred), rather than going negative to force a 3-sig-fig fit.
-    Reference values below 1 extend decimals the other way (0.0523 -> 4
-    decimals) under the same 3-sig-fig rule, since there's no unit-level
-    floor to protect below zero.
-    """
     if reference_value is None:
         return 0
     reference_value = abs(reference_value)
@@ -464,41 +255,6 @@ def _empty_chart(width_emu, height_emu):
 
 
 def _style_table(table, has_selected_row, n_pad, ax_table):
-    """Apply Community Indicators submission-table styling, toned down per
-    this chart's own convention: a softened header row, pale row-label
-    cells, light grey borders, colour-coded value text per row. n_pad
-    ("12m" tweak) hatches the first n_pad data columns' body cells (their
-    "n/a" columns) to match the chart's own hatched band -- same fill as
-    an ordinary body cell, with light grey hatch lines (the same colour
-    as the chart's own hatch, GREYED_HATCH_COL) showing through
-    underneath the "n/a" text. A Table draws as a single atomic block --
-    each cell's own fill, then its own text -- regardless of the cell's
-    or text's individual zorder relative to other artists, so a hatch
-    added as a separate overlay patch on ax_table can only end up
-    entirely above the whole table (covering the "n/a" text, an earlier
-    version's mistake) or entirely below it (then hidden under the
-    cell's own opaque fill) -- it can never land between the cell's fill
-    and its text via zorder alone. The hatch is therefore set directly
-    on the cell itself (guaranteeing it draws before that cell's own
-    text, within the same atomic step), which has one side effect: a
-    Cell's hatch colour and its border colour are the same underlying
-    property (edgecolor), so setting the hatch also recolours the
-    border. A second, border-only rectangle (transparent fill, ordinary
-    LEGEND_BORDER edge, no hatch) is then drawn on top of the whole
-    table to restore the correct border colour without covering the
-    text -- it only paints the cell's outline, not its interior, so the
-    "n/a" text and the hatch beneath it are untouched. A cell's real
-    position/size isn't settled until draw time (matplotlib auto-sizes
-    table columns against rendered text), so that border rectangle is
-    positioned from get_window_extent() -- the same authoritative,
-    post-layout bounding box matplotlib itself relies on -- converted
-    from display pixels into ax_table's own data coordinates, rather
-    than from the cell's own get_x/get_y/get_width/get_height/
-    get_transform, which don't reliably compose for this purpose (an
-    earlier version read those directly and got a rectangle collapsed
-    to a few pixels, identical for every cell). Header cells for those
-    columns are left alone, since the month label itself is still real
-    and informative even though the data beneath it isn't."""
     table.auto_set_font_size(False)
     table.set_fontsize(7.5 * TEXT_SCALE)
 
@@ -540,7 +296,6 @@ def _style_table(table, has_selected_row, n_pad, ax_table):
 
 
 def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
-    """Line chart of one Metric-Series across every period — mean and median reference lines, a highlighted line per subsequent layer (Selected or peer group), and a per-period table of Selected/Mean/Median values beneath the chart. Chart, legend and table each occupy a fixed, non-overlapping band within a single consistent outer margin. CI report styling. "12m" tweak pads/trims onto a fixed 12-month axis, most recent months rightmost, missing early months shown as an empty hatched band."""
     if not population_layers:
         return _empty_chart(width_emu, height_emu)
 
@@ -567,9 +322,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             unit = layer_metric.units[0] if layer_metric.units else None
             if unit is not None:
                 selected_y = _to_nan_array(unit.values)
-                # Falls back to unit_id, never the bare word "Selected" --
-                # the unit's own identity is always shown, even when it
-                # has no display code.
                 selected_code = unit.unit_code or unit.unit_id
         else:
             peer_means = _to_nan_array([ps.mean for ps in layer_metric.period_stats])
@@ -577,17 +329,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             peer_alpha_idx += 1
             peer_series.append((peer_means, layer.population_label, alpha))
 
-    # --- Tweaks-driven target reference line: "target:XXXX" in this row's
-    # own tweaks string (this chart's own tweaks convention -- see
-    # _parse_tweaks). XXXX numeric -> a flat line at that value across
-    # every period. XXXX the literal text "median" (case-insensitive) ->
-    # tracks this metric's own median line exactly, drawn as its own
-    # dashed purple line on top of, not instead of, the existing solid
-    # median line. Any other/invalid value is silently ignored -- no
-    # target line drawn, chart otherwise unaffected. Label always echoes
-    # the tweak's own literal text (whatever case/wording the user
-    # typed), with exactly one space after the colon regardless of
-    # spacing in the tweak itself. ---
     tweak_values = _parse_tweaks(tweaks)
     target_raw = tweak_values.get("target")
     target_series = None
@@ -600,11 +341,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             except ValueError:
                 target_series = None
 
-    # --- "12m" tweak: pad/trim every real per-period series onto a fixed
-    # 12-month axis, most recent real month rightmost. window_size/n_pad
-    # default to a no-op (window_size=n_real, n_pad=0) when the tweak
-    # isn't active, so _apply_padding is always safe to call below
-    # regardless of whether "12m" is set. See module docstring. ---
     pad_to_12 = bool(tweak_values.get("12m"))
     window_size = n_real
     n_pad = 0
@@ -620,9 +356,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
             if built_labels is not None:
                 n_pad = wanted_pad
                 padded_labels = built_labels
-            # else: first real period's label didn't parse as "Month YYYY"
-            # -- skip padding entirely for this render (n_pad stays 0)
-            # rather than guessing at calendar months.
 
     means = _apply_padding(means, n_pad, window_size)
     medians = _apply_padding(medians, n_pad, window_size)
@@ -636,10 +369,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     month_labels = [_month_label(l) for l in padded_labels] + \
                    [_month_label(p.period_label) for p in windowed_periods]
 
-    # y-axis scale is computed AFTER padding/trimming, from the final
-    # displayed series only -- a period trimmed off by "12m" (more than
-    # 12 real months given) must not be able to inflate the axis for
-    # months that are no longer even shown.
     all_values = list(means[~np.isnan(means)]) + list(medians[~np.isnan(medians)])
     if selected_y is not None:
         all_values.extend(list(selected_y[~np.isnan(selected_y)]))
@@ -651,8 +380,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     max_plotted = max(all_values) if all_values else 1.0
     y_max, y_step = _nice_axis_bounds(max_plotted)
 
-    # Whole visualisation (chart + legend + table) is sized to width_emu/
-    # height_emu - no extra scaling beyond that.
     w, h = _size_to_inches(width_emu, height_emu)
     fig = plt.figure(figsize=(w, h))
     fig.patch.set_facecolor(CARD_BG)
@@ -667,13 +394,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     ax.set_facecolor(PLOT_BG)
     ax_table.set_facecolor(CARD_BG)
 
-    # --- "12m" tweak: hatched band over the synthetic no-data months,
-    # plus a dashed divider marking exactly where real data begins.
-    # facecolor "none" (transparent) so the ordinary gridlines still show
-    # through between the hatch strokes -- this reads as "switched off",
-    # not "broken" or "an error". zorder sits just above the gridlines
-    # (0) but below the baseline (1) and every plotted line (2+), so the
-    # hatch never draws over real content. ---
     if n_pad:
         ax.axvspan(-0.5, n_pad - 0.5, facecolor="none", edgecolor=GREYED_HATCH_COL,
                    hatch="///", linewidth=0, zorder=0.5)
@@ -683,7 +403,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     handles = []
     legend_labels = []
 
-    # Draw order: median, mean, peer groups, selected organisation on top.
     line, = ax.plot(x, medians, color=MEDIAN_COL, linewidth=1.8 * TEXT_SCALE, zorder=2)
     handles.append(line)
     legend_labels.append("Median")
@@ -709,30 +428,15 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     if target_series is not None:
         target_handle, = ax.plot(x, target_series, color=TARGET_PURPLE, linewidth=2 * TEXT_SCALE,
                                   linestyle="--", zorder=6)
-        # Labelled via the legend (last entry, added after the reversal
-        # below) rather than an on-chart label -- an on-chart label's
-        # position can't be guaranteed clear of other chart content
-        # (data points, other lines, the plot's own edges), whereas the
-        # legend is a fixed, reserved band the label can never clash with.
 
-    # Month labels appear once only, as the table's header row below - the
-    # chart's own x-axis is left unlabelled to avoid repeating them.
     ax.set_xticks(x)
     ax.set_xticklabels([])
     ax.set_xlim(-0.5, n_periods - 0.5)
     _apply_axes_style(ax, y_max, y_step)
     ax.yaxis.set_major_formatter(_axis_formatter(base.format_modifier, 0))
 
-    # Legend occupies its own fixed figure-coordinate band between the
-    # chart and the table (positioned in absolute figure space, not
-    # relative to the chart axes, so it cannot bleed into either
-    # neighbouring band regardless of legend content length).
     reversed_handles = list(reversed(handles))
     reversed_labels = list(reversed(legend_labels))
-    # Target is appended after the reversal, not folded into `handles`
-    # beforehand, so it always lands as the legend's last (rightmost)
-    # entry regardless of how many other series are present -- reversing
-    # a list that already ended with target would instead put it first.
     if target_handle is not None:
         reversed_handles.append(target_handle)
         reversed_labels.append(f"Target: {target_raw}")
@@ -752,19 +456,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
     legend.get_frame().set_edgecolor(LEGEND_BORDER)
     legend.get_frame().set_linewidth(0.8 * TEXT_SCALE)
 
-    # --- Per-period table: header row of month labels, then Selected,
-    # Mean, Median rows, aligned with the chart's plot area above. Decimal
-    # places are decided once for the whole table (not per cell, since a
-    # table with different decimal counts per row/column wouldn't align)
-    # -- driven by the mean of this table's own values (Selected, Mean,
-    # Median together, NaNs excluded), via _sig_fig_decimals. Applies
-    # equally regardless of format_modifier (P/C included), per this
-    # chart's own table convention. "12m" tweak: the first n_pad columns
-    # get the literal text "n/a" in every row instead of the ordinary
-    # "-" no-data marker, and are greyed/hatched by _style_table -- there
-    # is by definition no real value to show for a synthetic month, so
-    # this is distinguished from an ordinary missing value within real
-    # data. ---
     table_values = []
     if selected_y is not None:
         table_values.extend(v for v in selected_y if not np.isnan(v))
@@ -800,13 +491,6 @@ def line_ci_full(population_layers: list, width_emu=5486400, height_emu=3086100,
         loc="upper center",
         bbox=[0.0, 0.0, 1.0, 1.0],
     )
-    # "12m" tweak: a table's real cell positions/sizes aren't finalised
-    # until the figure is actually drawn (matplotlib auto-sizes columns
-    # against rendered text at draw time) -- reading cell geometry any
-    # earlier returns stale placeholder values, which is what was
-    # producing a near-zero-size hatch overlay identical for every cell.
-    # Forcing a draw pass here resolves real column widths/positions
-    # first, so _style_table's hatch overlay reads genuine cell bounds.
     fig.canvas.draw()
     _style_table(table, selected_y is not None, n_pad, ax_table)
 

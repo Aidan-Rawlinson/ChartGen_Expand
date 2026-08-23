@@ -1,13 +1,4 @@
-"""
-radar_chart.py
-Base Chart — NumericCompositional. Radar / spider chart of component values
-on radial axes. Population layers not applicable — renders aggregated
-sample averages.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks).
-"""
+"""Base Chart, NumericCompositional. Radar chart of component values on radial axes."""
 
 import io
 import warnings
@@ -17,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -30,9 +18,6 @@ NAVY     = "#1F4E79"
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -64,7 +49,6 @@ def _axis_formatter(format_modifier):
 
 
 def radar_chart(population_layers: list, width_emu=3771900, height_emu=3771900, tweaks=""):
-    """Radar / spider chart — component values on radial axes."""
     base = population_layers[0]
     w, h = _size_to_inches(width_emu, height_emu)
     fig = plt.figure(figsize=(w, h))

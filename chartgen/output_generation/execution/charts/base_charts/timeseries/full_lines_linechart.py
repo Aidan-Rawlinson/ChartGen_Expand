@@ -1,15 +1,4 @@
-"""
-full_lines_linechart.py
-Base Chart — TimeSeries. Every individual unit in the largest population
-(population_layers[0], the scope) drawn as a light grey line; every
-subsequent population layer's own unit line(s) drawn on top, highlighted.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) — no report_context or any other runtime object. The
-Selected unit's label comes from its own unit_code in the
-"Selected"-labelled population layer.
-"""
+"""Base Chart, TimeSeries. Every unit in the scope drawn as a light grey line, each subsequent population layer's own unit lines highlighted on top."""
 
 import io
 import warnings
@@ -19,9 +8,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-# Calibri -- ChartGen's standard chart/table font. SVG text is kept as
-# real text, not glyph outlines -- see line_ci_full's own comment for
-# the full reasoning.
 matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
@@ -33,9 +19,6 @@ GREY_LIGHT   = "#D9D9D9"
 
 EMU_PER_INCH = 914400
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment for the full reasoning. Must match the system
-# layer's own CHART_RENDER_SCALE (assembly_engine.py) exactly.
 TEXT_SCALE = 5
 
 
@@ -73,7 +56,6 @@ def _axis_formatter(format_modifier):
 
 
 def full_lines_linechart(population_layers: list, width_emu=5486400, height_emu=3086100, tweaks=""):
-    """Line chart of one Metric-Series across every period — every individual unit in the largest population (population_layers[0], the scope) drawn as a light grey line; every subsequent population layer's own unit line(s) drawn on top, highlighted."""
     if not population_layers:
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=10 * TEXT_SCALE)

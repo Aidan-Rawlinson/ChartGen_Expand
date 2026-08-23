@@ -1,18 +1,4 @@
-"""
-celltest.py
-Base Chart -- diagnostic, not tied to any data shape. Ignores
-population_layers entirely; returns a single rectangle exactly
-width_emu x height_emu, filled with a 50% transparent green. Exists
-purely to show where a chart-cell rectangle actually sits and how big it
-actually is once spliced into a table or inserted into a report -- there
-is no data to plot, so any mismatch visible is the cell geometry itself,
-not a rendering quirk of a real chart.
-
-Standalone artefact: no imports from ChartGen's own code, third-party
-libraries only. Receives chart_inputs only (population_layers, width_emu,
-height_emu, tweaks) -- population_layers and tweaks are accepted but
-unused, kept for signature parity with every other Base Chart.
-"""
+"""Base Chart, diagnostic. Ignores population_layers and returns a single 50% transparent green rectangle of exactly width_emu x height_emu, to show where a chart-cell rectangle actually sits."""
 
 import io
 import matplotlib
@@ -31,10 +17,6 @@ def celltest(population_layers: list = None, width_emu=2736215, height_emu=68405
     w, h = _size_to_inches(width_emu, height_emu)
     fig = plt.figure(figsize=(w, h))
 
-    # 50% transparent green, filling the entire figure -- no axes, no
-    # margins, nothing else drawn. facecolor carries the alpha; transparent
-    # is explicitly False so that alpha is honoured rather than overridden
-    # to fully transparent.
     rgba = mcolors.to_rgba("green", alpha=0.5)
 
     buf = io.BytesIO()
