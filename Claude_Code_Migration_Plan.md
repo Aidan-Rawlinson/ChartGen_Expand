@@ -77,6 +77,20 @@ Commit before Stage 2 begins.
 
 ---
 
+## Stage order changed
+
+Stages 2 and 3 swapped. Stage 3 runs first.
+
+Reason: the plan produced the reference documents before the operative ones, so Stage 2 had to guess what Stage 3 would want. `ARCHITECTURE.md` absorbed rules that belong next to the code and would have had to move out again.
+
+Revised order: Stage 3 (`CLAUDE.md` files), then `DATA_FORMATS.md`, `GLOSSARY.md`, `FEATURES.md`, then `ARCHITECTURE.md` last, written from what no other document claimed.
+
+`CLAUDE.md` scope widened: one in every package with something operative to say, not the eight originally listed. Content sits closest to the code it governs. Root is kept thin because the content lives below it.
+
+Cull standard raised: delete anything that is justification or explanation. Keep a fact only if it is helpful and not obvious in the code.
+
+---
+
 ## Stage 2 - Documents
 
 *Lead: Claude Code - facts must be verified against the codebase, not carried over from the source documents*
@@ -90,7 +104,9 @@ Produce in this order, one at a time, each approved before the next:
 | `docs/GLOSSARY.md` | `ChartGen_Glossary.md`, Base Table count corrected to 4 |
 | `docs/FEATURES.md` | `ChartGen_Feature_List.md` |
 
-Do not carry forward: `ChartGen_Primer.md`, `ChartGen_Docs_Maintenance_Guide.md`.
+Do not carry forward: `ChartGen_Primer.md`, `ChartGen_Docs_Maintenance_Guide.md`, `ChartGen_Functional_Spec.md`.
+
+The Functional Spec is dropped, not redistributed. It recorded why the system works as it does. Its abstraction level does not survive being read back by an LLM across a growing codebase, and Aidan holds that understanding directly. Decided at the start of Stage 2.
 
 **Decision cull.** The 50 Architecture decisions are culled, not archived. For each first pass produce two lists for approval: proposed cull, and facts extracted from culled entries needing a new home. Extract before deleting.
 
@@ -101,6 +117,19 @@ Correct on migration:
 - `CHART_REGISTRY` holds 33 Base Charts.
 
 **At end of stage:** delete `dynamic_docs/` entirely - `Current_State.md`, `Next_Session.md`, `Progression_Log.md`, `Decisions.md`. No archive.
+
+Stage 2 outcome:
+- `DATA_FORMATS.md` 438 lines, `FEATURES.md` 234, `GLOSSARY.md` 204, `ARCHITECTURE.md` 164. 1040 total, replacing roughly 282KB of source.
+- Every schema, field list, constant and count in `DATA_FORMATS.md` was checked against the code. The source was accurate on all of them except the ones already known stale.
+- `workfile_info.json` carries a seventh key the source document omits: `file_version_id`.
+- A `TABLE_SANDBOX_FIELDS` exists alongside `CHART_SANDBOX_FIELDS` and appears in no source document.
+- `settings.csv` is an open key-value store, not a fixed schema. Documented as such, with the 17 keys currently in use.
+- `Metric-Series` is used throughout the codebase and was defined nowhere. Now in `GLOSSARY.md`.
+- Culled from the glossary: the Package Map, which duplicated the architecture layout, and most of the general Python terminology.
+- `ARCHITECTURE.md` cut from 337 lines to 164 once the operative content moved to `CLAUDE.md` files. It now carries the principles, the two domains, the layout, a report-assembly walkthrough, and a signpost table.
+- `dynamic_docs/` and `static_docs_mirror/` both deleted, 12 files, on Aidan's instruction. `static_docs_mirror/` was outside this plan's original scope; deleting it was authorised at the end of Stage 2. All 12 were git-tracked, none untracked, so all are recoverable from history.
+- Removed with `static_docs_mirror/`: `ChartGen_Architecture.md`, `ChartGen_Glossary.md`, `ChartGen_Feature_List.md`, `ChartGen_Functional_Spec.md`, `ChartGen_Primer.md`, `ChartGen_Docs_Maintenance_Guide.md`, `Project_Instructions.md`, `README.txt`.
+- The staged deletions are not yet committed.
 
 ---
 
@@ -139,6 +168,14 @@ Approval of these rules gates Stage 4.
 | `.../tables/base_tables/` | As above, full duplicate |
 
 Harvest from `shapes/__init__.py`, `base_charts/registry.py`, `base_tables/registry.py`.
+
+Stage 3 outcome:
+- 21 files, 526 lines total. Root 45 lines. The two scaling files are 67 and 76; every other file is 3 to 33.
+- Written: root, `acquisition/` and its `toolkit_nhs/`, `toolkit_indicators/`, `template/`; `definition/running_order/`; `execution/` and its `charts/base_charts/`, `charts/custom_charts/`, `tables/`, `tables/base_tables/`, `tables/custom_tables/`, `text/`, `pptx_com/`, `excel/`; `shared/` and its `infrastructure/`, `normalisation_containers/`, `normalisation_containers/shapes/`; `ui/`; `workfile/`.
+- Skipped as having nothing operative to say: `manifest_table/`, `pictures/`, `static_config/`, `session_shell/` and its subpackages, `ui/tabs/`, `ui/common/`, `ui/workfile/`, `workfile/setup/`, `workfile/state/`, the four `base_charts/` shape subfolders, and the pass-through `output_generation/`, `definition/`, `charts/` levels. An empty file costs a read and returns nothing.
+- The scaling explanation's required point "why a post-render transform wrapper does not fix it" traces to nothing in the code or the source documents. Dropped, not written. Requirements in this plan that cannot be traced to the codebase or a recorded observation are not facts and are not carried into a document.
+- Standing rules are written into the root file as authoritative. They were meant to be approved first. They still need a yes before Stage 4.
+- `docs/ARCHITECTURE.md` was written under the old order and now duplicates these files. It is cut back at the end of Stage 2, not now.
 
 ### Scaling explanation
 

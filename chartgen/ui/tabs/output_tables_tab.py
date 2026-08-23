@@ -300,18 +300,14 @@ def _restore_output_tables_sheet_state(workfile_state, the_settings, row_id_to_i
 
     width_pct = state.get("width_pct", 50.0)
     height_pct = state.get("height_pct", 50.0)
-    # A persisted value <1.0 (zero, negative, or corrupted) is treated as
-    # invalid rather than floored to 1.0 -- flooring would make a genuinely
-    # bad stored value look like a deliberate, valid 1% choice instead of
-    # falling back to the ordinary 50% default.
+    # A persisted value is shown as it is, however small. The 50.0 below
+    # applies only to a value that will not parse as a number at all.
     try:
-        width_pct = float(width_pct)
-        st.session_state["ots_width_pct"] = min(200.0, width_pct) if width_pct >= 1.0 else 50.0
+        st.session_state["ots_width_pct"] = min(200.0, float(width_pct))
     except (TypeError, ValueError):
         st.session_state["ots_width_pct"] = 50.0
     try:
-        height_pct = float(height_pct)
-        st.session_state["ots_height_pct"] = min(200.0, height_pct) if height_pct >= 1.0 else 50.0
+        st.session_state["ots_height_pct"] = min(200.0, float(height_pct))
     except (TypeError, ValueError):
         st.session_state["ots_height_pct"] = 50.0
 
@@ -432,19 +428,14 @@ def render_output_tables_tab():
                 st.session_state["ot_pending_table_choice"] = id_to_name.get(row_table_id)
                 st.session_state["ots_pending_table_type_ref"] = str(row.get("table_type_ref", "") or "")
                 st.session_state["ots_pending_tweaks_str"] = str(row.get("tweaks", "") or "")
-                # A near-zero computed percentage is treated the same as "no
-                # meaningful size stored" (fallback 50.0) rather than passed
-                # through -- without this, a row whose width_emu/height_emu
-                # is present but tiny (a genuinely small placeholder box, or
-                # a stale/corrupted value) would compute to e.g. 0.03%,
-                # which the Sizing widget's own min_value=1.0 then silently
-                # clamps to a misleading "1.0" display -- looking like a
-                # sensible default rather than a sign the stored size is
-                # degenerate.
-                width_pct_computed = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 0.0
-                height_pct_computed = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 0.0
-                st.session_state["ots_width_pct"] = width_pct_computed if width_pct_computed >= 1.0 else 50.0
-                st.session_state["ots_height_pct"] = height_pct_computed if height_pct_computed >= 1.0 else 50.0
+                # The computed percentage is shown as it is, however small.
+                # A tiny value means the row's stored EMU really is tiny
+                # relative to the page, and that is what the widget should
+                # say.
+                width_pct_computed = round(emu_to_percent(w_emu, page_w, page_h), 2) if w_emu else 0.0
+                height_pct_computed = round(emu_to_percent(h_emu, page_w, page_h), 2) if h_emu else 0.0
+                st.session_state["ots_width_pct"] = width_pct_computed
+                st.session_state["ots_height_pct"] = height_pct_computed
                 st.session_state["ots_target_row_choice"] = ro_choice
 
         if "ot_pending_table_choice" in st.session_state:
@@ -494,7 +485,7 @@ def render_output_tables_tab():
     # while the Sizing widget doesn't exist yet -- it only gets created once
     # Preview is actually opened. Confirmed by testing: without this
     # re-assertion immediately before that widget's first mount for a given
-    # viewing, the Sizing box would display 1.0 (its own min_value) instead
+    # viewing, the Sizing box would display its own min_value instead
     # of the correct value, despite session_state holding the right number
     # the whole time -- the widget's own first-mount behaviour wasn't
     # picking up a value written while it didn't yet exist.
@@ -508,11 +499,9 @@ def render_output_tables_tab():
         w_emu_r = _int_or_none(bound_row.get("width_emu"))
         h_emu_r = _int_or_none(bound_row.get("height_emu"))
         if w_emu_r:
-            recomputed_w = round(emu_to_percent(w_emu_r, page_w_r, page_h_r), 1)
-            st.session_state["ots_width_pct"] = recomputed_w if recomputed_w >= 1.0 else 50.0
+            st.session_state["ots_width_pct"] = round(emu_to_percent(w_emu_r, page_w_r, page_h_r), 2)
         if h_emu_r:
-            recomputed_h = round(emu_to_percent(h_emu_r, page_w_r, page_h_r), 1)
-            st.session_state["ots_height_pct"] = recomputed_h if recomputed_h >= 1.0 else 50.0
+            st.session_state["ots_height_pct"] = round(emu_to_percent(h_emu_r, page_w_r, page_h_r), 2)
 
     if mode == "Edit Grid":
         _render_grid_editor(workfile_state, table_id, grid_rows)
@@ -714,13 +703,13 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
             with w_col:
                 st.caption("Width")
                 width_pct = st.number_input(
-                    "Width", min_value=1.0, max_value=200.0, step=1.0, format="%.1f",
+                    "Width", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
                     key="ots_width_pct", label_visibility="collapsed",
                 )
             with h_col:
                 st.caption("Height")
                 height_pct = st.number_input(
-                    "Height", min_value=1.0, max_value=200.0, step=1.0, format="%.1f",
+                    "Height", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
                     key="ots_height_pct", label_visibility="collapsed",
                 )
 

@@ -554,19 +554,12 @@ def render_charts_tab():
                     st.session_state["cs_pending_end_period"] = extract_period_id(row.get("end_period", ""))
                     st.session_state["cs_pending_metric_periods_str"] = extract_metric_period_ids(row.get("metric_periods", ""))
                     st.session_state["cs_pending_tweaks_str"] = str(row.get("tweaks", "") or "")
-                    # A near-zero computed percentage is treated the same as
-                    # "no meaningful size stored" (fallback 50.0) rather than
-                    # passed through -- without this, a row whose width_emu/
-                    # height_emu is present but tiny relative to the page
-                    # computes to e.g. 0.03%, which the Sizing widget's own
-                    # min_value=1.0 then silently clamps to a misleading
-                    # "1.0" display -- looking like the box reverted to its
-                    # minimum even though the stored EMU value is untouched.
-                    # Mirrors output_tables_tab.py's own row-load guard.
-                    width_pct_computed = round(emu_to_percent(w_emu, page_w, page_h), 1) if w_emu else 0.0
-                    height_pct_computed = round(emu_to_percent(h_emu, page_w, page_h), 1) if h_emu else 0.0
-                    st.session_state["cs_width_pct"] = width_pct_computed if width_pct_computed >= 1.0 else 50.0
-                    st.session_state["cs_height_pct"] = height_pct_computed if height_pct_computed >= 1.0 else 50.0
+                    # The computed percentage is shown as it is, however
+                    # small. A tiny value means the row's stored EMU really
+                    # is tiny relative to the page, and that is what the
+                    # widget should say.
+                    st.session_state["cs_width_pct"] = round(emu_to_percent(w_emu, page_w, page_h), 2) if w_emu else 0.0
+                    st.session_state["cs_height_pct"] = round(emu_to_percent(h_emu, page_w, page_h), 2) if h_emu else 0.0
                     st.session_state["cs_target_row_choice"] = ro_choice
 
                     # Mutually exclusive with Chart Store line — this
@@ -623,17 +616,11 @@ def render_charts_tab():
                     # matters (output_tables_tab.py's row-load path already
                     # has the equivalent guard; this was the one load path
                     # here that didn't).
-                    cstore_width_pct_computed = (
-                        round(emu_to_percent(cstore_w_emu, cstore_page_w, cstore_page_h), 1) if cstore_w_emu else 0.0
-                    )
-                    cstore_height_pct_computed = (
-                        round(emu_to_percent(cstore_h_emu, cstore_page_w, cstore_page_h), 1) if cstore_h_emu else 0.0
-                    )
                     st.session_state["cs_width_pct"] = (
-                        cstore_width_pct_computed if cstore_width_pct_computed >= 1.0 else 50.0
+                        round(emu_to_percent(cstore_w_emu, cstore_page_w, cstore_page_h), 2) if cstore_w_emu else 0.0
                     )
                     st.session_state["cs_height_pct"] = (
-                        cstore_height_pct_computed if cstore_height_pct_computed >= 1.0 else 50.0
+                        round(emu_to_percent(cstore_h_emu, cstore_page_w, cstore_page_h), 2) if cstore_h_emu else 0.0
                     )
                     st.session_state["cs_chart_store_target_choice"] = chart_store_choice
                     st.session_state["cs_chart_store_action"] = "Overwrite selected entry"
@@ -1001,13 +988,13 @@ def render_charts_tab():
             with w_col:
                 st.caption("Width")
                 width_pct = st.number_input(
-                    "Width", min_value=1.0, max_value=200.0, step=1.0, format="%.1f",
+                    "Width", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
                     key="cs_width_pct", label_visibility="collapsed",
                 )
             with h_col:
                 st.caption("Height")
                 height_pct = st.number_input(
-                    "Height", min_value=1.0, max_value=200.0, step=1.0, format="%.1f",
+                    "Height", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
                     key="cs_height_pct", label_visibility="collapsed",
                 )
 
