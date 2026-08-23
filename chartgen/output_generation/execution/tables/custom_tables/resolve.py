@@ -12,7 +12,7 @@ grid), so every custom table is a valid option everywhere, always.
 
 from chartgen.output_generation.execution.tables.base_tables import TABLE_REGISTRY
 from chartgen.output_generation.execution.tables.custom_tables.gate import (
-    compile_custom_table, CustomTableError,
+    compile_custom_table,
 )
 
 

@@ -34,25 +34,6 @@ def get_tier_info(tier_id: int, token: str) -> dict:
     return response.json()
 
 
-def get_projects(year: int, token: str) -> list:
-    """
-    Retrieve the list of visible projects for a given year.
-    Returns a list of dicts with keys: project_id, project_name.
-    """
-    response = requests.get(
-        f"{BASE_URL}/projects/list",
-        params={"year": year},
-        headers={"Accept": "application/json", "Token": token},
-    )
-    response.raise_for_status()
-    project_list = response.json()["data"]["projectList"]
-    return [
-        {"project_id": p["projectId"], "project_name": p["projectName"]}
-        for p in project_list
-        if p.get("isVisible", {}).get("description") == "Yes"
-    ]
-
-
 def get_submissions(project_id: int, year: int, token: str, include_org_level: bool = False) -> list:
     """
     Retrieve the submission list for a given project and year, one dict per submission.

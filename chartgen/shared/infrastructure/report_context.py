@@ -11,7 +11,10 @@ from typing import Optional
 class ReportContext:
     """
     Runtime context for a single report in a batch run.
-    Constructed by the Assembly Engine; passed to render_chart.
+
+    Constructed by the Assembly Engine and held on the AssemblyContext.
+    Read by update_text, insert_picture, insert_from_excel and
+    insert_table. Never reaches a Base Chart or Base Table.
     """
     unit_id:            str
     unit_code:          str

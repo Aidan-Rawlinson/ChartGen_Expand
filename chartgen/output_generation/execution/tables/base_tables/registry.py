@@ -19,20 +19,3 @@ TABLE_REGISTRY = {
     "ci_grid": ci_grid,
     "ci_cardtile": ci_cardtile,
 }
-
-
-def render_table(table_type_ref: str, content: list, column_widths: list,
-                 row_heights: list, width_emu: int, height_emu: int, tweaks=""):
-    """
-    UNUSED. insert_table.py calls the registered function directly.
-
-    table_inputs contract: content (already-resolved grid), column_widths,
-    row_heights, width_emu, height_emu, tweaks. Returns
-    (image_bytes, chart_cells). No other ChartGen runtime object is passed
-    to a Base Table function.
-    """
-    if table_type_ref not in TABLE_REGISTRY:
-        raise ValueError(f"Unknown table_type_ref: {table_type_ref}")
-    return TABLE_REGISTRY[table_type_ref](
-        content, column_widths, row_heights, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks,
-    )

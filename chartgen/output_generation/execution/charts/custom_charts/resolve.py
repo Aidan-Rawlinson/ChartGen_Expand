@@ -16,7 +16,7 @@ unchanged.
 
 from chartgen.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from chartgen.output_generation.execution.charts.custom_charts.gate import (
-    compile_custom_chart, CustomChartError,
+    compile_custom_chart,
 )
 
 
@@ -24,8 +24,7 @@ def get_chart_callable(base_chart_name: str, custom_chart_code: dict):
     """
     Resolve a base_chart_name to a callable — built-in registry first, then
     the workfile's own saved custom charts. Raises ValueError if neither
-    has it (matching registry.render_chart's existing error for an unknown
-    ref). Raises CustomChartError if a custom chart's stored source no
+    has it. Raises CustomChartError if a custom chart's stored source no
     longer compiles (should not happen for anything that passed the gate
     at save time, but a workfile can be hand-edited outside the app).
     """

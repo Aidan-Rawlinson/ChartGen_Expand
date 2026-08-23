@@ -84,12 +84,6 @@ def grid_dimensions(grid_rows: list) -> tuple:
     return n_rows, n_cols
 
 
-def get_table_id(grid_rows: list) -> str:
-    if not grid_rows:
-        return ""
-    return str(grid_rows[0].get(col_key(0), ""))
-
-
 def get_column_widths(grid_rows: list) -> list:
     """Row 0, cols 1..M, as floats. Unparsable cells resolve to 0.0."""
     if not grid_rows:
@@ -132,11 +126,6 @@ def get_content_grid(grid_rows: list) -> list:
     for row in grid_rows[1:]:
         content.append([str(row.get(col_key(c), "") or "") for c in range(1, n_cols + 1)])
     return content
-
-
-def set_content_cell(grid_rows: list, r: int, c: int, value: str):
-    """r, c are 1-based content-grid coordinates (1..N, 1..M)."""
-    grid_rows[r][col_key(c)] = value
 
 
 def validate_grid(grid_rows: list) -> list:

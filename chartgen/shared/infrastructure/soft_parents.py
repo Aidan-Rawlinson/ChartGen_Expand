@@ -45,19 +45,6 @@ def parse_soft_parents(value: str) -> dict:
     return result
 
 
-def related_tables(rows: list) -> list:
-    """
-    Return the distinct table names a table's rows link to via soft_parents,
-    one hop only. Order follows first appearance across the rows.
-    """
-    seen = []
-    for row in rows:
-        for table_name in parse_soft_parents(row.get("soft_parents", "")):
-            if table_name not in seen:
-                seen.append(table_name)
-    return seen
-
-
 def resolve_related_rows(row: dict, tables: dict) -> dict:
     """
     Resolve one row's soft_parents links into the actual rows they point to,

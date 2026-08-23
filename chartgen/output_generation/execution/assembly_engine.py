@@ -492,7 +492,7 @@ def _render_chart_image(base_chart_name: str, population_layers: list, width_emu
     Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
     only job. Statistics/unit lists are read directly off population_layers
     (already in scope here) by whatever needs them, rather than being
-    relayed through render_chart.
+    relayed back through the Base Chart function.
 
     tweaks is the row's own tweaks column, passed straight through to the
     Base Chart function's tweaks parameter, uninterpreted here.

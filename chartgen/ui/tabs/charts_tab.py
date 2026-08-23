@@ -52,7 +52,7 @@ from chartgen.output_generation.execution.charts.chart_store_xlsx import (
 from chartgen.output_generation.execution.charts.chart_type_map import get_valid_chart_types
 from chartgen.output_generation.execution.charts.custom_charts import (
     validate_custom_chart_code, compile_custom_chart, CustomChartError,
-    get_chart_callable, merge_custom_refs_for_shape, custom_chart_descriptions,
+    get_chart_callable, custom_chart_descriptions,
     build_bundle,
 )
 from chartgen.shared.infrastructure.cg_extracts import get_extracts_folder
@@ -1255,8 +1255,8 @@ def render_charts_tab():
                 return
 
         # Stats and unit lists are a property of the data shape, read
-        # straight off pop_layers here — not relayed through render_chart,
-        # which only ever produces the image.
+        # straight off pop_layers here — not relayed back through the Base
+        # Chart function, which only ever produces the image.
         layer_summary_stats = summary_stats_by_layer(pop_layers)
         layer_units = units_by_layer(pop_layers)
 

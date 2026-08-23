@@ -52,8 +52,6 @@ ALL_FUNCTIONS = [
 SCOPE_VALUES = ["normal", "batch_open", "batch_close"]
 
 STRUCTURAL_FUNCTIONS = {"create_ppt", "set_default_populations", "update_text", "save_ppt", "save_pdf"}
-CONTENT_FUNCTIONS    = {"insert_chart", "insert_table", "insert_picture", "insert_from_excel", "empty_placeholder"}
-BATCH_FUNCTIONS      = {"open_excel", "close_excel"}
 
 # The Charts sheet sandbox's round-trip field list for one insert_chart row.
 # A single list, so extending the round-trip later is a one-line change here

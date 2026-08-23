@@ -133,7 +133,8 @@ create_ppt              open the cleaned template
 insert_chart            load the shape from cache
                         prepare_chart_cut     trim periods, resolve the population
                         build_population_layers
-                        render_chart          a Base Chart returns image bytes
+                        get_chart_callable    built-in, or a saved Custom Chart
+                        the chart function    returns image bytes
                         add_svg_picture       place it on the slide
 insert_table            resolve the grid, render a Base Table, layer any chart cells
 update_text             walk the presentation, replace every tag

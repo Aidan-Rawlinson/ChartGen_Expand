@@ -43,7 +43,6 @@ from datetime import datetime
 from chartgen.acquisition.toolkit_nhs.api_client import get_organisations as get_nhs_organisations
 from chartgen.shared.infrastructure.soft_parents import format_soft_parents
 
-TIMESERIES_TABLE_PREFIX = "submissions_timeseries_"
 ORGANISATIONS_TABLE = "nhs_organisations"
 
 

@@ -4,9 +4,10 @@ Maps base_chart_name to its Base Chart function. The one place in the
 codebase that treats Base Charts as a set; each is otherwise a standalone
 artefact importing nothing from ChartGen.
 
-render_chart's signature is the chart_inputs contract every Base Chart,
-built-in or custom, must accept: population_layers, width_emu, height_emu,
-tweaks.
+Every function here accepts the chart_inputs contract: population_layers,
+width_emu, height_emu, tweaks. Callers reach one through
+custom_charts.get_chart_callable, which checks this registry first and the
+workfile's saved Custom Charts second.
 
 Before adding one, check the proposed registry key, file name and function
 name against CHART_REGISTRY and the base_charts folder. These files arrive
@@ -88,22 +89,3 @@ CHART_REGISTRY = {
     "line_ci_full":         line_ci_full,
     "line_ci_na":           line_ci_na,
 }
-
-
-def render_chart(base_chart_name: str, population_layers: list,
-                 width_emu: int, height_emu: int, tweaks=""):
-    """
-    Returns image_bytes only. Statistics and unit lists are a property of the
-    data shape, not something the charting layer computes or relays: a caller
-    that needs them already holds population_layers and calls
-    summary_stats_by_layer or units_by_layer directly.
-
-    chart_inputs contract: population_layers, width_emu, height_emu, tweaks.
-    No report_context or other runtime object is passed. Selected-unit
-    identity is read from the "Selected"-labelled population_layers entry.
-    """
-    if base_chart_name not in CHART_REGISTRY:
-        raise ValueError(f"Unknown base_chart_name: {base_chart_name}")
-    return CHART_REGISTRY[base_chart_name](
-        population_layers, width_emu=width_emu, height_emu=height_emu, tweaks=tweaks,
-    )

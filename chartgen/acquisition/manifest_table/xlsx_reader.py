@@ -13,7 +13,7 @@ Unknown hex_ids in the file are rejected rather than guessed at.
 """
 
 from chartgen.workfile.state.workfile_file import (
-    MANIFEST_FIELDNAMES, new_manifest_row, renumber_chart_refs,
+    new_manifest_row, renumber_chart_refs,
 )
 from chartgen.acquisition.url_triage import url_to_database
 from chartgen.acquisition.manifest_table.xlsx_writer import EXPORT_COLUMNS

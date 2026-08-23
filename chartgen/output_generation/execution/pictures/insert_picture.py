@@ -5,7 +5,6 @@ substitution. Height is derived from the image's aspect ratio, not the placehold
 """
 
 import os
-import io
 from PIL import Image as PILImage
 from pptx.util import Emu
 

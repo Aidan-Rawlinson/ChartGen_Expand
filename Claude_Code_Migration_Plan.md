@@ -318,6 +318,45 @@ Known instance: `render_table` in `tables/base_tables/registry.py`, re-exported 
 - **Re-export shims.** `dialog_support.py` re-exports the `period_ids` helpers; `ui/common/formatting.py` re-exports `format_number`. Both marked `noqa: F401`, both load-bearing for their old call sites.
 - **Streamlit entry points.** Tab render functions are called from `app.py` only, and some helpers only from inside a widget callback.
 
+Stage 6 outcome:
+- 15 deletions across 18 files. 118 lines removed, 22 added. No behaviour change.
+- All three warned categories were real and all produced false positives. Every one was cleared by hand.
+
+Deleted, functions with zero callers:
+
+| Where | Name |
+|---|---|
+| `charts/base_charts/registry.py` | `render_chart` |
+| `tables/base_tables/registry.py` | `render_table` |
+| `execution/tables/grid_store.py` | `get_table_id`, `set_content_cell` |
+| `shared/infrastructure/soft_parents.py` | `related_tables` |
+| `workfile/setup/new_workfile.py` | `list_projects_for_year` |
+| `acquisition/toolkit_nhs/api_client.py` | `get_projects` |
+
+`render_chart` and `render_table` were superseded by `get_chart_callable` and `get_table_callable`, which check saved Custom Charts and Tables as well as the built-in registry. `render_table`'s own docstring already said "UNUSED". Each took three edits: the `def`, the `__init__.py` import, the `__all__` entry.
+
+Deleted, constants with no consumers: `TIMESERIES_TABLE_PREFIX` (`toolkit_indicators/population_tables.py`), and `CONTENT_FUNCTIONS` and `BATCH_FUNCTIONS` from `running_order/schema.py` with their `__init__.py` import and `__all__` entries. `STRUCTURAL_FUNCTIONS` stays: used once, at `xlsx_writer.py:190`. The three read as a designed taxonomy but only one third of it was ever consumed and the split appeared in no document.
+
+Deleted, unused imports: `MANIFEST_FIELDNAMES` (`manifest_table/xlsx_reader.py`), `CustomChartError` (`custom_charts/resolve.py`), `CustomTableError` (`custom_tables/resolve.py`), `io` (`pictures/insert_picture.py`), `merge_custom_refs_for_shape` (`ui/tabs/charts_tab.py`). Neither exception import was load-bearing; each package's `__init__.py` takes the exception from `gate` directly.
+
+**One cascade.** Deleting `list_projects_for_year` orphaned `get_projects`, its only caller, which was then deleted on Aidan's decision. It was the only function in `toolkit_nhs/api_client.py` with no callers; the other six are all used. Its `/projects/list` endpoint and its `isVisible.description == "Yes"` filter are recoverable from Git history if project listing is ever wanted again. Removing it and its import also made `workfile/setup/new_workfile.py`'s own docstring true for the first time: it claims "no NHS toolkit involvement of any kind" while importing from the NHS api_client.
+
+**The analyser needed three fixes before its output could be trusted.** Each had been inventing candidates:
+- Relative imports (`from .transformers import transform`) were unresolvable, so all 10 acquisition-layer functions showed as dead.
+- An aliased import rebinds the name, so `new_workfile` showed as dead while `workfile/setup/new_workfile.py` imports it as `_create_workfile_file`.
+- `import x.y` then `x.y.func()` is attribute access, not a name load, so all 8 Streamlit tab functions showed as dead.
+
+A fourth limitation was left in place because it only over-reports: the analyser cannot follow a re-export chain more than three hops, which is why `build_metric_periods_string` still shows as unreferenced. It reaches `charts_tab:835` and `text_tab:236` through `period_ids` to `dialog_support` to `running_order/__init__`.
+
+Prose corrected, since deleting `render_chart` orphaned five references and leaving them would reintroduce what Stage 4 removed: `assembly_engine.py`, `charts_tab.py`, `custom_charts/resolve.py`, `base_charts/registry.py`, and the assembly walkthrough in `docs/ARCHITECTURE.md`. Also corrected while there: `report_context.py` claimed the context is "passed to render_chart", which was already false. It is held on the `AssemblyContext` and read by `update_text`, `insert_picture`, `insert_from_excel` and `insert_table`, never by a chart.
+
+Not touched: the 33 Base Charts and 4 Base Tables. Only their two `registry.py` and two `__init__.py` files are in scope, being system-boundary plumbing.
+
+Raised, not fixed:
+- `_apply_spine_style` in `categorical_compositional/yn_bar.py` is defined and never called. `diverging_bar.py` carries the same helper and does use it. Left in place: these files are handed whole to an external AI and pasted back, so an edit there is lost the next time that happens, and the do-not-refactor fence covers them.
+
+Verification: all 182 files compile and all 181 modules import; the analyser now reports only the 8 tab entry points, the `build_metric_periods_string` shim and `_apply_spine_style`; `CHART_REGISTRY` still holds 33 callables and `TABLE_REGISTRY` 4; all 33 charts and 4 tables render byte-for-byte identically to `ebfd25b`; both bundle documents build; the app serves its sign-in page, HTTP 200, no errors logged.
+
 ---
 
 ## Stage 7 - Fix the known defects

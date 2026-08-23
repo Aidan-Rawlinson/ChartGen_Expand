@@ -8,14 +8,7 @@ exist, and nothing there knows a workfile might be brand new. Keep it that
 way.
 """
 
-from chartgen.acquisition.toolkit_nhs.api_client import get_projects
 from chartgen.workfile.state.workfile_file import new_workfile as _create_workfile_file, write_lock, save_workfile
-
-
-def list_projects_for_year(year: int, token: str) -> dict:
-    """Return {project_name: project_id} for the given year."""
-    project_list = get_projects(year, token)
-    return {p["project_name"]: p["project_id"] for p in project_list}
 
 
 def create_new_workfile(workfile_path: str, workfile_name: str, description: str, username: str):
