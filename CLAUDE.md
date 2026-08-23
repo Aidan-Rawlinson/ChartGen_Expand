@@ -48,8 +48,6 @@ Deliberate or accepted, not oversights to fix in passing. Raise before acting on
 
 **No test suite.** Nothing under `tests/`, anywhere. Never claim a change is verified by tests. A pure function can be exercised directly in a throwaway script, which is worth doing and is not the same thing as having tests.
 
-**`installer/Output/ChartGen.zip` and `ChartGen_Setup.exe` are tracked in Git**, against the stated intent in `ChartGen.iss` that the compiled artefact is never stored there. The `.gitignore` pattern matches now, but Git keeps tracking what it already tracks, so they stay versioned until explicitly untracked.
-
 **Two unused definitions, both left on purpose.** `has_valid_unit_data` on the data shapes, to be revisited when the tool is mature if still unused. `_apply_spine_style` in `base_charts/categorical_compositional/yn_bar.py`, left because these files are handed whole to an external AI and pasted back, so an edit there is lost the next time that happens.
 
 ## Documentation

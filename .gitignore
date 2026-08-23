@@ -45,3 +45,6 @@ desktop.ini
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Last-used username, rewritten on every sign-in -- machine-local, never versioned
+chartgen/session_shell/auth/credentials.csv
