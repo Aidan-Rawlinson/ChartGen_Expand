@@ -160,24 +160,23 @@ def filter_time_series_periods(shape: "TimeSeries", start_period_id: str = "",
     every other, so this is a pure slice of periods, each metric's values,
     and period_stats down to the same index range.
 
-    An id given but not found, or a start resolving after the end, produces
-    an empty range.
+    An id given but not found falls back to that end of the shape's own
+    period axis, the same as a blank: an unresolvable start means from the
+    first period, an unresolvable end means to the last. An unresolvable
+    period is a no-data case, not an error — the row renders what the shape
+    actually has, rather than failing or discarding the bound at the other
+    end. This happens in practice, and what it needs is a person reviewing
+    the output, not a blank row.
+
+    Only a start resolving after the end produces an empty range.
     """
     ids_in_order = [p.period_id for p in shape.periods]
 
-    start_found = (not start_period_id) or (start_period_id in ids_in_order)
-    end_found = (not end_period_id) or (end_period_id in ids_in_order)
-    if start_period_id and not start_found and end_found:
-        return shape
+    start_idx = ids_in_order.index(start_period_id) if start_period_id in ids_in_order else 0
+    end_idx = (ids_in_order.index(end_period_id) if end_period_id in ids_in_order
+               else len(ids_in_order) - 1)
 
-    start_idx = 0 if not start_period_id else (
-        ids_in_order.index(start_period_id) if start_period_id in ids_in_order else None
-    )
-    end_idx = len(ids_in_order) - 1 if not end_period_id else (
-        ids_in_order.index(end_period_id) if end_period_id in ids_in_order else None
-    )
-
-    if start_idx is None or end_idx is None or start_idx > end_idx:
+    if start_idx > end_idx:
         new_periods = []
         new_metrics = [replace(m, units=[replace(u, values=[]) for u in m.units], period_stats=[])
                        for m in shape.metrics]

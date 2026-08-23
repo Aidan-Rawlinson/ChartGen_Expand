@@ -81,7 +81,7 @@ ZOOM_OPTIONS = ["0.75x", "Actual size (approximately)", "1.25x", "1.5x", "2x", "
 ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 1.25, "1.5x": 1.5, "2x": 2.0}
 DEFAULT_ZOOM = "Actual size (approximately)"
 
-# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# MUST match TEXT_SCALE in every file that defines one, and the
 # copies in assembly_engine.py, insert_table.py and charts_tab.py. Nothing
 # enforces this and a mismatch fails silently. Full mechanism in
 # output_generation/execution/tables/base_tables/CLAUDE.md.
@@ -275,18 +275,22 @@ def _restore_output_tables_sheet_state(workfile_state, the_settings, row_id_to_i
     st.session_state["ots_table_type_ref"] = state.get("table_type_ref", "plain_grid")
     st.session_state["ots_tweaks_str"] = state.get("tweaks", "")
 
-    width_pct = state.get("width_pct", 50.0)
-    height_pct = state.get("height_pct", 50.0)
-    # A persisted value is shown as it is, however small. The 50.0 below
-    # applies only to a value that will not parse as a number at all.
-    try:
-        st.session_state["ots_width_pct"] = min(200.0, float(width_pct))
-    except (TypeError, ValueError):
-        st.session_state["ots_width_pct"] = 50.0
-    try:
-        st.session_state["ots_height_pct"] = min(200.0, float(height_pct))
-    except (TypeError, ValueError):
-        st.session_state["ots_height_pct"] = 50.0
+    # A persisted value is shown exactly as stored, however small or large.
+    # The Sizing box is a save-back surface, so any number substituted here
+    # gets committed to the row on the next save. A value that will not
+    # parse at all is reported rather than replaced silently; the key is
+    # left unset and the setdefault further down supplies the starting
+    # value, with the user told why.
+    for key, label in (("width_pct", "Width"), ("height_pct", "Height")):
+        raw = state.get(key, 50.0)
+        try:
+            st.session_state["ots_" + key] = float(raw)
+        except (TypeError, ValueError):
+            st.error(
+                f"Stored Preview {label.lower()} ({raw!r}) is not a number, so it could not be "
+                f"restored. The box below shows a starting value, not your stored one. Use Reset "
+                f"to clear the saved Preview configuration."
+            )
 
     manual_page_size = state.get("manual_page_size")
     if manual_page_size in STANDARD_PAGE_SIZES_EMU:
@@ -497,7 +501,11 @@ def _render_new_table_form(workfile_state, name_to_id, the_settings):
         elif name in name_to_id:
             st.error(f"'{name}' already exists. Choose a different name.")
         else:
-            table_id = next_table_id(workfile_state.settings)
+            # Both the index rows and the grid store, since either can hold
+            # an id the settings counter never saw.
+            ids_in_use = {r.get("table_id") for r in workfile_state.output_table_rows}
+            ids_in_use |= set(workfile_state.output_tables)
+            table_id = next_table_id(workfile_state.settings, ids_in_use)
             workfile_state.output_tables[table_id] = new_grid(table_id, DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLUMNS)
             workfile_state.output_table_rows.append({
                 "table_id": table_id, "table_name": name,
@@ -677,13 +685,13 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
             with w_col:
                 st.caption("Width")
                 width_pct = st.number_input(
-                    "Width", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
+                    "Width", min_value=0.0, step=1.0, format="%.2f",
                     key="ots_width_pct", label_visibility="collapsed",
                 )
             with h_col:
                 st.caption("Height")
                 height_pct = st.number_input(
-                    "Height", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
+                    "Height", min_value=0.0, step=1.0, format="%.2f",
                     key="ots_height_pct", label_visibility="collapsed",
                 )
 

@@ -20,7 +20,11 @@ Sandbox values that should survive a Close are captured into a settings key as a
 
 The Sizing controls on the Charts sheet and the Output Tables tab show percent of the shorter page dimension. That is the only place percent exists. It converts to and from EMU immediately on read and write, and never travels further. Nothing in session state, in a saved JSON blob, or in any render call holds a percentage.
 
-The Sizing box shows the real converted value, however small. It does not substitute a plausible-looking default for a value it finds surprising. A stored size that converts to 0.03% displays as 0.03%, because that is what is stored. Anything that would silently write a different number into that box is a defect, not a safeguard: the box is a save-back surface, so a substituted value gets committed to the row on the next save.
+The Sizing box shows the real converted value, however small or large. It does not substitute a plausible-looking default for a value it finds surprising. A stored size that converts to 0.03% displays as 0.03%, because that is what is stored. Anything that would silently write a different number into that box is a defect, not a safeguard: the box is a save-back surface, so a substituted value gets committed to the row on the next save.
+
+The box therefore carries no upper bound. `st.number_input` raises if session state holds a value above its `max_value`, so a ceiling on the widget forces a clamp on the restore path, and the clamp is the defect. A user can consequently type a size that runs off the page. That is visible on the next preview and it is their choice.
+
+A stored value that will not parse as a number at all is reported with `st.error`, and the session key is left unset so the ordinary starting value applies. Not `st.stop()`: the restore runs once per session, and the Reset control that clears a corrupted snapshot lives inside the tab, so halting the render would remove the only route out.
 
 ## Render scale
 

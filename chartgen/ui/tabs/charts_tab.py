@@ -78,7 +78,7 @@ ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 
 DEFAULT_ZOOM = "Actual size (approximately)"
 CS_KEY_PREFIX = "cs_"
 
-# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# MUST match TEXT_SCALE in every file that defines one, and the
 # copies in assembly_engine.py, insert_table.py and output_tables_tab.py.
 # Nothing enforces this and a mismatch fails silently. Full mechanism in
 # output_generation/execution/charts/base_charts/CLAUDE.md.
@@ -223,13 +223,22 @@ def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label
     st.session_state["cs_metric_periods"] = list(state.get("metric_periods", []))
     st.session_state["cs_tweaks_str"] = state.get("tweaks", "")
 
-    width_pct = state.get("width_pct", 50.0)
-    height_pct = state.get("height_pct", 50.0)
-    try:
-        st.session_state["cs_width_pct"] = min(200.0, max(1.0, float(width_pct)))
-        st.session_state["cs_height_pct"] = min(200.0, max(1.0, float(height_pct)))
-    except (TypeError, ValueError):
-        pass
+    # A persisted value is shown exactly as stored, however small or large.
+    # The Sizing box is a save-back surface, so any number substituted here
+    # gets committed to the row on the next save. A value that will not
+    # parse at all is reported rather than replaced silently; the key is
+    # left unset and the setdefault further down supplies the starting
+    # value, with the user told why.
+    for key, label in (("width_pct", "Width"), ("height_pct", "Height")):
+        raw = state.get(key, 50.0)
+        try:
+            st.session_state["cs_" + key] = float(raw)
+        except (TypeError, ValueError):
+            st.error(
+                f"Stored Charts sheet {label.lower()} ({raw!r}) is not a number, so it could not "
+                f"be restored. The box below shows a starting value, not your stored one. Use "
+                f"Reset to clear the saved Charts sheet configuration."
+            )
 
     manual_page_size = state.get("manual_page_size")
     if manual_page_size in STANDARD_PAGE_SIZES_EMU:
@@ -785,9 +794,9 @@ def render_charts_tab():
             # operation); needed here only so the Convert-to-Metrics
             # multiselect offers the periods actually left in range, not
             # the full unrestricted list. A stale start_period/end_period
-            # never raises here (filter_time_series_periods falls back to
-            # an empty range on an unmatched id) — only metric_periods
-            # itself can raise, below.
+            # never raises here (filter_time_series_periods falls an
+            # unmatched id back to that end of the period axis) — only
+            # metric_periods itself can raise, below.
             _widget_scope_shape = shape
             if start_period or end_period:
                 _widget_scope_shape = apply_period_range(shape, start_period, end_period)
@@ -942,13 +951,13 @@ def render_charts_tab():
             with w_col:
                 st.caption("Width")
                 width_pct = st.number_input(
-                    "Width", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
+                    "Width", min_value=0.0, step=1.0, format="%.2f",
                     key="cs_width_pct", label_visibility="collapsed",
                 )
             with h_col:
                 st.caption("Height")
                 height_pct = st.number_input(
-                    "Height", min_value=0.0, max_value=200.0, step=1.0, format="%.2f",
+                    "Height", min_value=0.0, step=1.0, format="%.2f",
                     key="cs_height_pct", label_visibility="collapsed",
                 )
 

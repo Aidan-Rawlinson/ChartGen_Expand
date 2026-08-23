@@ -25,7 +25,7 @@ Columns are named c0..cM generically. col_key() is the single source of
 truth for that naming, reused by grid_xlsx.py so the two cannot drift.
 """
 
-from chartgen.shared.infrastructure.id_generation import next_id
+from chartgen.shared.infrastructure.id_generation import next_id, from_base36
 
 OUTPUT_TABLE_COUNTER_KEY = "next_table_id"
 
@@ -41,7 +41,31 @@ DEFAULT_TABLE_COLUMNS = 4
 SIZE_SUM_TOLERANCE = 0.5
 
 
-def next_table_id(settings: dict) -> str:
+def next_table_id(settings: dict, existing_ids=None) -> str:
+    """
+    Issue and persist the next table_id. Unlike a Stat Tag ("T") or a Chart
+    Store id ("C") this carries no prefix, so nothing is stripped before
+    decoding.
+
+    existing_ids -- every table_id currently in use, if known to the
+    caller. The persisted counter cannot be assumed to be the true maximum:
+    a hand-edited workfile can carry table CSVs whose ids run ahead of the
+    counter in settings. The counter is resynced to the actual maximum
+    among existing_ids, if that is higher, before being incremented.
+    """
+    if existing_ids:
+        current = int(settings.get(OUTPUT_TABLE_COUNTER_KEY, "0") or "0")
+        highest = current
+        for eid in existing_ids:
+            suffix = str(eid or "")
+            if not suffix:
+                continue
+            try:
+                highest = max(highest, from_base36(suffix))
+            except ValueError:
+                continue  # not a base-36 id this counter ever issued -- ignore, don't let it break resync
+        if highest > current:
+            settings[OUTPUT_TABLE_COUNTER_KEY] = str(highest)
     return next_id(settings, OUTPUT_TABLE_COUNTER_KEY)
 
 

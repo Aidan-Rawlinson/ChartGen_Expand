@@ -37,7 +37,7 @@ from chartgen.workfile.state.workfile_file import master_table_rows
 # Hyperlink icon — optional, insert_chart only
 # ---------------------------------------------------------------------------
 
-# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# MUST match TEXT_SCALE in every file that defines one, and the
 # copies in insert_table.py, charts_tab.py and output_tables_tab.py. Nothing
 # enforces this and a mismatch fails silently. Full mechanism in
 # charts/base_charts/CLAUDE.md.

@@ -56,7 +56,11 @@ def merge_output_tables_from_template(template_result, *, workfile_state) -> dic
             name = f"Table_{n}"
         existing_names.add(name)
 
-        table_id = next_table_id(workfile_state.settings)
+        # Both the index rows and the grid store, since either can hold an
+        # id the settings counter never saw.
+        ids_in_use = {r.get("table_id") for r in workfile_state.output_table_rows}
+        ids_in_use |= set(workfile_state.output_tables)
+        table_id = next_table_id(workfile_state.settings, ids_in_use)
         workfile_state.output_tables[table_id] = new_grid(table_id, DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLUMNS)
         workfile_state.output_table_rows.append({
             "table_id": table_id, "table_name": name,

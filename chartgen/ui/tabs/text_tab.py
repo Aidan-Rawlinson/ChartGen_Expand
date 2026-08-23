@@ -305,8 +305,10 @@ def render_text_tab():
                         )
 
                         if st.button("➕  Add selected tag(s)", type="primary", disabled=not selected_tags):
+                            tags_in_use = {r.get("tag") for r in workfile_state.text_stats_rows}
                             for ref_id in selected_tags:
-                                tag = next_stat_tag(the_settings)
+                                tag = next_stat_tag(the_settings, tags_in_use)
+                                tags_in_use.add(tag)
                                 workfile_state.text_stats_rows.append({
                                     "tag": tag,
                                     "hex_id": hex_id,

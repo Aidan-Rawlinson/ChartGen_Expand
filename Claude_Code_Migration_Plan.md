@@ -383,10 +383,60 @@ This scenario genuinely occurs in practice, and it does need action when it does
 
 **Verification is behavioural.** There are no tests. 7.1 needs an xlsx import carrying pre-filled ids. 7.2 needs a row with a stored size outside 1 to 200, and a row whose `start_period` is absent from its report.
 
+Stage 7 outcome:
+- All three fixed. 7.1 and 7.3 sit in pure functions, so both were exercised directly rather than clicked through, and both tests were first run against the unfixed code to prove they bite.
+
+**7.1.** `next_stat_tag` and `next_table_id` gained an optional `existing_ids` argument, resyncing the counter to the true maximum before incrementing. Copied from `next_chart_store_id` field for field, including the `try/except ValueError: continue` so an unrecognisable id cannot break the resync. One difference: a table_id carries no prefix, so nothing is stripped before decoding. The set is passed from all four call sites, with the running set updated per issue so two blanks in one import cannot collide either.
+
+The collision was reproduced before the fix: a stat_tags.xlsx re-uploaded with tags T1 to T5 against a counter stale at 2 reissued **T3 and T4, both already in use**. Template text pointing at the original T3 would have resolved to the new row's value. After the fix the same input issues T6 and T7. Table ids reissued `3` against `1`-`5` in use; now `6`.
+
+For table ids the exposure is narrower than expected and worth recording: no new `table_id` ever enters from outside, because the grid import assigns the imported grid to an id already chosen in the UI and ignores whatever sits in the file's A1. The remaining risk is a hand-edited `.cgw` whose counter has fallen behind its table CSVs. The existing-id set is the union of `output_table_rows` and the `output_tables` keys, since reading only one of them would be the same class of bug.
+
+**7.2.** All three silent rewrites removed. A stored size now reaches the Sizing box unchanged, however small or large.
+
+`max_value=200.0` came off all four Sizing widgets, because `st.number_input` raises if session state holds a value above its max, so a ceiling on the widget forces a clamp on the restore path and the clamp is the defect. Accepted side effect: a user can now type a size that runs off the page. The Resize Rows/Columns controls keep their own `max_value=200`, which is a real grid bound, not a sizing clamp.
+
+An unparseable stored value is now reported with `st.error` and the session key left unset. **Not `st.stop()`**, which was considered and rejected: the restore runs once per session and the Reset control that clears a corrupted snapshot lives inside the tab, so halting the render would have removed the only route out. Reporting is enough - the substitution stops being silent, which was the defect.
+
+**Scope addition, agreed:** `charts_tab.py` carried the same defect and worse - `min(200.0, max(1.0, float(pct)))` rewrote both ends, and the `max(1.0, ...)` floor turned a stored 0.5% into 1.0%, directly contradicting `ui/CLAUDE.md`'s own worked example of 0.03% displaying as 0.03%. Fixed alongside; leaving it would have had the two tabs silently disagree about the same stored value.
+
+Checked while there and found clean: `percent_to_emu` and `emu_to_percent` carry no clamp of their own and round-trip losslessly at 0.03% and at 350%, so the whole stored-EMU-to-box-to-EMU path is now faithful.
+
+**7.3.** The early return that discarded a resolved end bound when the start did not resolve is gone. An unresolvable bound now falls back to that end of the shape's own period axis, the same as a blank. The blank and unresolvable cases collapsed into one expression, so the `None` handling disappeared entirely and the function got shorter.
+
+**Scope addition, agreed:** the unresolvable *end* was never settled by this plan and produced an empty range - the row rendered nothing. Fixing only the start would have left the function incoherent: an unresolvable start rendering from period 1 while an unresolvable end renders blank, for no reason a reader could infer. The same principle covers both. The empty-range branch remains, now reachable only when a resolvable start falls after a resolvable end.
+
+A ten-case truth table over blank, resolvable and unresolvable at each end: four cases failed before the fix, all ten pass after.
+
+**Comment corrections made in passing.** `charts_tab.py` claimed `filter_time_series_periods` "falls back to an empty range on an unmatched id", already wrong before this stage. And all four `CHART_RENDER_SCALE` comments repeated "must match `TEXT_SCALE` in every Base Chart and Base Table file", the same claim corrected in `execution/CLAUDE.md` after Stage 5; 10 of the 37 files define none. All five corrected.
+
+`ui/CLAUDE.md` records the new rules: the Sizing box carries no upper bound and why, and the `st.stop()` decision.
+
+Verification: 182 files compile and 181 modules import; both direct tests pass and were proved to fail on the unfixed code; all 33 charts and 4 tables render byte-for-byte identically to `1689810`, confirming 7.3 reached no further than intended; both bundle documents build; the app serves its sign-in page with no errors.
+
+**Outstanding, needs a real workfile.** The 7.2 in-app check is the one thing not verified here: a Running Order row with a stored size outside 0 to 200 showing its real value, a row storing 0.5% showing 0.5% rather than 1.0%, and a hand-corrupted `output_tables_sheet_state` producing a visible error with Reset still reachable.
+
 ---
+
+## Migration complete
+
+All seven stages are done. Stage 5 `42ef3b9`, the `TEXT_SCALE` document corrections `ebfd25b`, Stage 6 `1689810`, Stage 7 as committed below.
 
 ## Open items
 
 1. Adopt `.claude/rules/` path-scoped rules - deferred.
 2. Replacement for the Wake up, Close-down and Scrap Session protocols.
-3. Confirm lead surface for Stages 2 and 3 after Stage 1 completes - provisional.
+3. The 7.2 in-app check, which needs a real workfile. See the Stage 7 outcome.
+
+Item 3 of the original list, confirming the lead surface for Stages 2 and 3, is settled and dropped.
+
+## Raised across the migration and still open
+
+Recorded rather than fixed, each outside the stage that found it:
+
+- **No `tests/` anywhere in the tree.** Stage 1. Every stage since has verified behaviourally, and Stage 7 had to hand-write throwaway harnesses for two pure functions that a test suite would have held permanently.
+- **No version pins.** Stage 1. `requirements.txt` names 10 packages with no constraints, so every venv rebuild resolves to whatever is current on PyPI.
+- **Tracked installer binaries.** Stage 1. `installer/Output/ChartGen.zip` and `ChartGen_Setup.exe` are in Git against the stated intent in `ChartGen.iss`. The `.gitignore` pattern matches now, but Git keeps tracking what it already tracks, so they stay versioned until explicitly untracked.
+- **`has_valid_unit_data`** is unused. Stage 4. Revisit when the tool is mature if still unused.
+- **`base_charts/registry.py`'s collision warning** - externally-authored Base Chart files arrive with stale or colliding internal names, and a name match is not evidence of intended replacement. Stage 4. Appears in no governed document.
+- **`_apply_spine_style` in `categorical_compositional/yn_bar.py`** is defined and never called; `diverging_bar.py` carries the same helper and uses it. Stage 6. Left because these files are handed whole to an external AI and pasted back, so an edit there is lost the next time that happens.

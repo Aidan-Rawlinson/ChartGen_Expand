@@ -118,8 +118,24 @@ def assign_missing_tags(rows: list, settings: dict) -> list:
     Issue a fresh tag (next_stat_tag) for any row read back with a blank
     "tag" column — see read_stat_tags_xlsx. Mutates settings' counter in
     place; caller marks the workfile dirty as usual.
+
+    Passes every non-blank tag already in `rows` to next_stat_tag as
+    existing_ids, so the counter resyncs against them before issuing a new
+    one — a row uploaded with its own tag already filled in (the common
+    case: re-uploading a previously-downloaded stat_tags.xlsx) never
+    advances the counter itself, so without this a fresh tag issued
+    afterwards could collide with one of those. The running set is updated
+    as each new tag is issued too, so two blank rows in the same upload
+    can't collide with each other either.
     """
+    existing_ids = {
+        str(row.get("tag", "") or "").strip()
+        for row in rows
+        if str(row.get("tag", "") or "").strip()
+    }
     for row in rows:
         if not str(row.get("tag", "") or "").strip():
-            row["tag"] = next_stat_tag(settings)
+            new_tag = next_stat_tag(settings, existing_ids)
+            row["tag"] = new_tag
+            existing_ids.add(new_tag)
     return rows

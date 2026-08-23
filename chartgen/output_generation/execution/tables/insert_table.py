@@ -34,7 +34,7 @@ from chartgen.output_generation.execution.charts.custom_charts import get_chart_
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from chartgen.shared.normalisation_containers.population_layers import build_population_layers
 
-# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# MUST match TEXT_SCALE in every file that defines one, and the
 # copies in assembly_engine.py, charts_tab.py and output_tables_tab.py.
 # Nothing enforces this and a mismatch fails silently. Full mechanism in
 # tables/base_tables/CLAUDE.md.
