@@ -1,21 +1,11 @@
 """
 cg_extracts.py
-Resolves the CG_Extracts folder used by every Excel export/import
-round-trip (Chart URL manifest, Chart Store, Output Table grids,
-population tables) -- a single folder alongside the .cgw, replacing the
-browser's own Downloads folder as the fixed destination/source for these
-files. Created on first use if it doesn't already exist.
+Resolves the CG_Extracts folder alongside the .cgw, used by every Excel
+export/import round-trip. Created on first use.
 
-Excel export previously went through st.download_button and import through
-st.file_uploader -- both browser-sandboxed widgets that give the server no
-way to choose where a download lands or to default an upload dialog to a
-particular folder. This module underpins the alternative: a direct
-filesystem write on export, and a native OS picker (chartgen.ui.common.pickers)
-defaulted to this folder on import.
-
-Reachable only from screens that require an already-saved .cgw (Imports,
-Charts, Output Tables, Populations), so workfile_path is always expected to
-be non-empty here -- no fallback for an unsaved workfile is provided.
+Callers are reached only from screens requiring an already-saved .cgw, so
+workfile_path is expected to be non-empty. There is no unsaved-workfile
+fallback.
 """
 
 import os

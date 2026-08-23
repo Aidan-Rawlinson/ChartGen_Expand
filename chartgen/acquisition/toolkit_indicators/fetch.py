@@ -1,20 +1,16 @@
 """
 fetch.py
 Orchestrates data acquisition for every non-deleted manifest row whose
-database is "indicators". Mirrors toolkit_nhs/fetch.py's shape, with two
-deliberate differences: the population table is merged on every row, not
-built once and then skipped (see population_tables.py for why), and one
-project-level API call (/projects/{id}/submissions) is fetched once per
-project_id per run, not once per row — the source VBA re-fetches its
-date-only equivalent every row, but it's genuinely project-level data, so
-caching it here avoids a same-value round trip per chart. That same call
-now also supplies the live organisation-id mapping and real submission
-names used by population_tables.py — see get_project_submissions_data.
+database is "indicators".
 
-Accumulates a single any_unmapped_org flag across every row in the run
-(population_tables.merge_timeseries_population reports one per call) and,
-if set, appends one synthetic "warning"-status entry to the returned
-results — see population_tables.py for what triggers it.
+Two differences from the NHS side. The population table is merged on every
+row rather than built once and then skipped. And /projects/{id}/submissions
+is fetched once per project_id per run rather than once per row, since it is
+project-level data; it also supplies the live organisation-id mapping and
+real submission names population_tables.py needs.
+
+Accumulates a single any_unmapped_org flag across the run and, if set,
+appends one synthetic warning entry to the returned results.
 """
 
 import os

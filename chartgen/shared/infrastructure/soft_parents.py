@@ -1,19 +1,15 @@
 """
 soft_parents.py
-Generic helper for the soft_parents column shared by every population-level
-table. A soft-parent relationship links a row to another table without
-assuming a strict one-parent-per-row structure — a row may hold zero, one,
-or several ids in a given table, and may link to any number of different
-tables at once. Recorded on the child side only; the parent table carries
-no reverse reference.
+The soft_parents column, shared by every population-level table. A row may
+hold zero, one or several ids in a given table, and may link to any number
+of tables at once. Recorded on the child side only; the linked-to table
+carries no reverse reference.
 
-Format: "table_name:id1^id2|table_name:id3" — "|" separates entries for
-different tables, "^" separates multiple ids within the same table.
+Format: "table_name:id1^id2|table_name:id3". "|" separates entries for
+different tables, "^" separates ids within one table.
 
-Resolution here is deliberately one hop only: given a row, find the tables
-and rows it links to directly. Nothing here follows a resolved row's own
-soft_parents onward to a second hop — that's a separate step for whenever
-it's actually needed, not something to fold in here.
+Resolution is one hop only. Nothing here follows a resolved row's own
+soft_parents onward to a second hop.
 """
 
 
@@ -131,14 +127,13 @@ def resolve_full_unit_set(row: dict, own_table_name: str, tables: dict) -> dict:
     The full one-hop unit set for a row: itself (under its own table), plus
     every row related to it in either direction (resolve_all_related_rows).
 
-    This is the single source of truth for "which row(s) represent this same
-    real-world unit in each table" — used both for display (the Select tab's
-    Full Unit(s) table) and, during a batch run, for resolving which unit(s)
-    a chart should treat as Selected, based on that chart's own
-    population_table. A table entry can hold more than one row — that's not
-    a bug to collapse; e.g. an organisation genuinely supporting two ICBs
-    means the ICB entry holds two rows, and a chart against the ICB table is
-    expected to highlight both.
+    The single source of truth for which rows represent this same real-world
+    unit in each table. Read by the Select tab's display, and during a batch
+    run to resolve which units a chart treats as Selected, based on that
+    chart's own population_table.
+
+    A table entry can hold more than one row, and both are expected to be
+    highlighted. This is not a case to collapse to one.
     """
     full = {own_table_name: [row]}
     related = resolve_all_related_rows(row, own_table_name, tables)

@@ -1,14 +1,10 @@
 """
 api_client.py
-API calls to the NHS Benchmarking Indicators (ICS) toolkit API. Token
-issuing is shared with the NHS submissions API (confirmed: one credential
-set/token authorises both) — get_token is not duplicated here, callers
-reuse chartgen.acquisition.toolkit_nhs.api_client.get_token directly.
+API calls to the NHS Benchmarking Indicators (ICS) toolkit API.
 
-Deliberately NOT implemented: the tiers/tier/{tier_id} endpoint (VBA's
-GetInfo). The VBA calls it and extracts a TierName from the response, but
-never uses that value anywhere else — report title comes from
-reportDetails instead. No data this pipeline stores depends on it.
+One credential set and token authorises both this API and the NHS
+submissions API, so get_token is not duplicated here. Callers reuse
+toolkit_nhs.api_client.get_token directly.
 """
 
 import requests
@@ -50,23 +46,14 @@ def get_project_submissions_data(project_id, token: str) -> dict:
     - projectDates: each with an outputAvailability timestamp — a period is
       only visible once that timestamp has passed.
     - userOrganisations: every organisation this project exposes, each
-      carrying organisationId (the ics-side id used throughout this
-      toolkit) alongside externalOrganisationId (the matching
-      nhs_organisations unit_id) — a live, per-project, always-current
-      version of the mapping a static CSV extract used to stand in for
-      (see Architecture Decision 10 and population_tables.py). Each
-      organisation's submissionList also carries the real submissionName
-      per submissionId, not just anonSubmissionCode.
+      carrying organisationId (the ics-side id) alongside
+      externalOrganisationId (the matching nhs_organisations unit_id).
+      This is the live organisation-id mapping, resolved per project on
+      every call. Each organisation's submissionList also carries the real
+      submissionName per submissionId, not just anonSubmissionCode.
 
-    One call serves both purposes (dates, and org/submission identity) —
-    callers extract whichever keys they need rather than this module
-    duplicating the request per purpose.
-
-    Note: the source VBA (GetVisibleDates) hardcodes project 42 regardless
-    of the project_id argument it's given — confirmed as a VBA bug, not
-    replicated here. This calls the actual project_id parsed from the
-    chart's own URL, consistent with table_naming.py's own project_id-based
-    naming (not hardcoded to one project either).
+    One call serves both purposes. Callers extract whichever keys they
+    need.
     """
     response = requests.get(
         f"{BASE_URL}/projects/{project_id}/submissions",

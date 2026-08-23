@@ -1,25 +1,14 @@
 """
 chart_store.py
-Defines the Chart Store: a flat, unordered set of independently-authored
-chart-defs (workfile_config/chart_store.csv, WorkfileState.chart_store_rows),
-for use as chart components inside Output Table cells (sparklines, grid
-layouts, etc) -- independent of the Running Order, which is strictly a
-sequence of report content with its own position/sequence concept a Chart
-Store entry deliberately has none of.
+The Chart Store: a flat, unordered set of independently-authored chart-defs,
+for use as chart components inside Output Table cells. Independent of the
+Running Order, and with no position concept of its own.
 
-A Chart Store row carries the same fields the Charts sheet already
-round-trips to an insert_chart Running Order row (CHART_SANDBOX_FIELDS --
-base_chart_name, cache_file, populations, start_period/end_period/
-metric_periods, width_emu/height_emu, tweaks), plus its own chart_store_id
-and an optional free-text description. It is authored, previewed, and
-edited from the same Charts sheet sandbox a Running Order row is -- a
-third, always-available entry point alongside "Running Order row" and
-"Data shape" (Decisions.md).
+A row carries the same fields as CHART_SANDBOX_FIELDS, plus its own
+chart_store_id and an optional description. Authored from the same Charts
+sheet sandbox a Running Order row is, as a third entry point.
 
-Chart Store ids are issued from a persisted, monotonically increasing
-counter (settings["next_chart_store_id"]), the same base-36 encoding as
-Stat Tags/Output Tables but its own counter key -- see
-chartgen.shared.infrastructure.id_generation.
+Ids come from settings["next_chart_store_id"], its own counter key.
 """
 
 from dataclasses import replace
@@ -96,8 +85,8 @@ def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state,
     No AssemblyContext involved -- both callers run from a Streamlit tab,
     not a report assembly run, so a blank populations field is resolved
     against the workfile's own set_default_populations Running Order row
-    directly, mirroring charts_tab.py's own Preview fallback (see
-    Architecture Decision 31 for the full reasoning). Returns [] on any
+    directly, the same fallback charts_tab.py's own Preview uses.
+    Returns [] on any
     resolution failure (missing cache_file, a cache load error, an
     unresolvable cut) -- callers treat that the same way as "nothing to
     show", never raise.
@@ -122,7 +111,7 @@ def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state,
         )
     except Exception:
         # Genuinely unexpected failures only now (e.g. a malformed cut) --
-        # an unresolvable metric_periods id no longer raises here (see
+        # an unresolvable metric_periods id does not raise here (see
         # time_series_to_numeric_series' own docstring); it comes through
         # as a real metric with no data. Callers of this function treat
         # any resolution failure the same as "nothing to show" (this

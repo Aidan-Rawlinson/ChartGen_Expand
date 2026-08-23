@@ -9,12 +9,12 @@ Text tab — two independent tag tables:
   - Stat tags — short, permanent ids (e.g. [T3], [Ta7]) each standing in for
     one summary-stats value from one chart's own independently-authored
     cut of its cached data (hex_id + its own single-population/period
-    fields + which Reference id). Not tied to any Running Order row — see
-    Decisions.md. Genuinely a different kind of thing from the table
-    above: a Reference id isn't globally unique (shapes/reference_ids.py),
-    so a stat tag needs hex_id + population + reference_id to mean
-    anything, where a text tag needs nothing beyond its own literal
-    string.
+    fields + which Reference id). Not tied to any Running Order row.
+
+    A different kind of thing from the table above: a Reference id is not
+    globally unique, so a stat tag needs hex_id plus population plus
+    reference_id to mean anything, where a text tag needs nothing beyond
+    its own literal string.
 
 Both tables are read by update_text (chartgen.output_generation.execution.text)
 at generation time; this tab only defines/previews them.

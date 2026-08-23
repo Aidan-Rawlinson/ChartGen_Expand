@@ -1,11 +1,9 @@
 """
 row_ops.py
-Generic Running Order row operations used by the Charts sheet's save-back
-control (Overwrite / Insert above / Insert below). Deliberately separate
-from generation.py (builds rows from a template read result) and
-dialog_support.py (row-edit dialog validity rules) — this module only
-moves rows around a list and renumbers row_id, with no knowledge of charts,
-shapes, or the Charts sheet itself.
+Generic Running Order row operations: Overwrite, Insert above, Insert below.
+
+Moves rows around a list and renumbers row_id, with no knowledge of charts,
+shapes or any particular caller. Keep it that way.
 """
 
 from chartgen.output_generation.definition.running_order.schema import COLUMNS

@@ -2,9 +2,8 @@
 startup_file.py
 Optional double-click-to-open support: if ChartGen was launched with a .cgw
 path as a startup argument (e.g. via the .cgw file association), route it
-into the existing Open Workfile flow - same compatibility check, same
-lock-state decision step (Functional Spec Section 5) - rather than opening
-it silently.
+into the existing Open Workfile flow, with the same compatibility check and
+the same lock-state decision step, rather than opening it silently.
 
 Opening via double-click is optional, the same way opening Word or Excel
 without a file is normal: with no startup argument, ChartGen starts exactly

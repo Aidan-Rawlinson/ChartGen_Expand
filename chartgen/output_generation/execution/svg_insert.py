@@ -1,23 +1,18 @@
 """
 svg_insert.py
 
-Inserts an SVG image into a python-pptx presentation as a native SVG
-picture, rather than a rasterised one. This is ChartGen's standard
-mechanism for placing every Base Chart and Base Table's rendered output
-onto a slide (see Architecture, SVG rendering methodology) -- called from
-both charts (assembly_engine.py's chart insertion) and tables
-(tables/insert_table.py), which is why it lives at this shared level
-rather than under tables/ (its original, table-only spike location).
+Inserts an SVG into a python-pptx presentation as a native SVG picture
+rather than a raster one. The single mechanism for placing every Base Chart
+and Base Table's output onto a slide, called from both assembly_engine.py
+and tables/insert_table.py.
 
-Why this isn't a one-line change: python-pptx's own add_picture() has no
-concept of SVG -- it only ever writes a single raster blip relationship.
-PowerPoint (2016+) stores an SVG picture as a *dual*-format blip instead:
-a fallback raster image (shown only by a viewer that doesn't understand
-the SVG extension) plus the SVG itself as a second, separate part, wired
-together via an <a:extLst> "local content extension" living inside the
-picture's own <a:blip>, pointing at the SVG part's relationship id.
-python-pptx exposes no method for this extension, so it's hand-built here
-directly against the underlying lxml element tree.
+python-pptx's own add_picture() has no concept of SVG; it writes a single
+raster blip relationship. PowerPoint stores an SVG picture as a dual-format
+blip: a fallback raster, shown only by a viewer that does not understand the
+extension, plus the SVG as a second part, wired together by an <a:extLst>
+inside the picture's own <a:blip> pointing at the SVG part's relationship
+id. python-pptx exposes no method for that extension, so it is hand-built
+here against the lxml element tree.
 
 Verified against python-pptx 1.0.2: a picture built this way round-trips
 through Presentation.save()/Presentation(path) without error, and the SVG

@@ -12,8 +12,7 @@ Two tag families, both resolved per report:
     permanent id (e.g. [T3], [Ta7]) standing in for one summary-stats value
     from one chart's own independently-authored cut of its cached data.
 
-Covers ordinary text frames and, as of this session, PowerPoint table
-cells too (shape.table) — previously the one remaining gap.
+Covers ordinary text frames and PowerPoint table cells (shape.table) alike.
 """
 
 from chartgen.output_generation.execution.results import ok_result, err_result

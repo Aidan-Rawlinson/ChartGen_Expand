@@ -44,12 +44,8 @@ class NumericCompositional:
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
     population_table:   Optional[str]       = None  # name of the population table this data's units belong to (e.g. "submissions_2026_123", "nhs_organisations") — a plain reference to an existing table name, not derived at read time
 
-    # Auxiliary metadata — NOT a conceptual part of the data shape itself.
-    # A side pocket for information that travels with the shape without
-    # describing what the shape actually is. Not part of the chart_inputs
-    # contract, and not normally relied on downstream — an exception is for
-    # the specific circumstance that needs it, not the norm. Carries
-    # through filtering/replace() unchanged, same as every other field.
+    # Travels with the shape without being part of it. Not in the
+    # chart_inputs contract. Carries through filtering and replace().
     metadata:           dict                = field(default_factory=lambda: {"source_url": None})
 
     # Data — one NumericCompositionalMetric per Metric-Series
@@ -80,16 +76,13 @@ def compute_numeric_compositional_metric_stats(units: list) -> "NumericCompositi
 
 def numeric_compositional_summary_stats(shape: "NumericCompositional") -> dict:
     """
-    Summary statistics for a NumericCompositional shape — everything on
-    tap, independent of any visualisation: raw component values, their sum,
-    and each component's share of that sum. Keyed by Metric-Series name:
+    Raw component values, their sum, and each component's share of that sum,
+    keyed by Metric-Series name:
     {metric_name: {Total, Components: {component: {Value, %}}}}.
 
-    Iterates component_names (structural, always present) rather than a
-    unit's own values list — an empty population layer (no units matched)
-    still needs one Components entry per named component, so the metric's
-    component breakdown is still shown (as blank/None), rather than
-    disappearing entirely along with the (empty) unit list.
+    Iterates component_names, which is structural and always present, rather
+    than a unit's own values, so an empty population layer still returns one
+    Components entry per named component.
     """
     out = {}
     for metric in shape.metrics:

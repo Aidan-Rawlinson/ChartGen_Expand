@@ -29,16 +29,13 @@ from chartgen.output_generation.execution.tables.base_tables import TABLE_REGIST
 from chartgen.output_generation.execution.tables.custom_tables.contract import build_static_sections
 
 # Same marker grammar every Base Table's own _chart_cell_id recognises
-# independently (Decisions.md: "{" + id + "}", id starting with "C") --
-# written once here since bundle.py is core system code, not a Base
-# Table itself, with no standalone-artefact restriction against a shared
-# helper. Deliberately as permissive as _chart_cell_id's own real check
-# (inner.startswith("C"), nothing more) -- an earlier version of this
-# regex additionally required [0-9a-z]+ after the "C", assuming every id
-# would be shaped like the auto-generated base-36 ones; confirmed wrong
-# against a real table using hand-typed ids like "{CH1}"/"{CV1}", which
-# _chart_cell_id itself already treats as valid markers (it only checks
-# the "C" prefix) but this regex was silently excluding.
+# independently: "{" + id + "}", id starting with "C". Written once here
+# because bundle.py is system code, not a Base Table.
+#
+# Must stay exactly as permissive as _chart_cell_id's real check:
+# inner.startswith("C"), nothing more. Requiring [0-9a-z]+ after the "C"
+# excludes hand-typed ids such as "{CH1}" and "{CV1}", which
+# _chart_cell_id treats as valid.
 _CHART_MARKER_RE = re.compile(r"^\{(C.*)\}$")
 
 
@@ -61,11 +58,8 @@ def _get_table_source(table_type_ref: str, custom_table_code: dict) -> str:
 
 def _get_chart_source(base_chart_name: str, custom_chart_code: dict) -> str:
     """
-    Same purpose as custom_charts/bundle.py's own _get_chart_source -- kept
-    as its own copy here rather than imported, matching how
-    custom_tables/contract.py already keeps its own copy rather than
-    sharing with the chart domain (Decisions.md: the two rendering domains
-    are deliberately independent).
+    Same purpose as custom_charts/bundle.py's own _get_chart_source, kept as
+    its own copy because the two rendering domains are independent.
     """
     if base_chart_name in CHART_REGISTRY:
         module = inspect.getmodule(CHART_REGISTRY[base_chart_name])
@@ -145,7 +139,7 @@ is still drawn; nothing is composited into it).
 This chart is not rendered by the table's own code. The table function's
 only job for this cell is recognising the marker string above and
 reporting back the rectangle it reserved for it (the `chart_cells` return
-value alongside `image_bytes` -- Decisions.md). The chart itself is
+value alongside `image_bytes`). The chart itself is
 rendered completely separately, using `base_chart_name` below, at that
 reserved rectangle's own width/height (never this row's own stored
 width_emu/height_emu), then composited as a second, layered image on top

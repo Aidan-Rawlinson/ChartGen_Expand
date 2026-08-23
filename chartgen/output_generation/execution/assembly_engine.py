@@ -5,11 +5,8 @@ template to produce one report. Dispatches each row to its Running Order
 function (create_ppt, insert_chart, insert_picture, insert_from_excel,
 update_text, save_ppt, etc) via FUNCTION_MAP and returns a per-run log.
 
-Note (Restructure_Plan.md Open Item 1): this module was previously described
-as "the only package touching python-pptx directly" — that is no longer
-true now insert_picture and insert_from_excel also manipulate python-pptx
-objects. Its actual purpose is dispatch/execution of one report's Running
-Order rows, not exclusive ownership of python-pptx.
+Not the only module touching python-pptx: insert_picture, insert_from_excel
+and insert_table do too.
 """
 
 import os
@@ -40,21 +37,10 @@ from chartgen.workfile.state.workfile_file import master_table_rows
 # Hyperlink icon — optional, insert_chart only
 # ---------------------------------------------------------------------------
 
-# PowerPoint SVG-text-compression workaround. Every Base Chart is called
-# with width_emu/height_emu multiplied by this factor, then its rendered
-# image is placed back on the slide at the real, unmultiplied target
-# size -- add_svg_picture already scales an SVG's own content to
-# whatever box it's given, so no resize-after-insert is needed. This is
-# only half the mechanism: a Base Chart's own absolute point-based sizes
-# (fontsize, linewidth, markersize) don't scale automatically just
-# because its canvas got bigger, so every individual Base Chart also
-# carries its own local multiplier applied to those literals (see each
-# file's own TEXT_SCALE constant). This number must match every Base
-# Chart's own constant exactly for that chart's text/lines to come out
-# correctly proportioned; not enforced in code, per "Base Charts are
-# outside the system boundary" (no shared import between this file and
-# any Base Chart). insert_table.py carries this same constant
-# independently for table rendering and chart-in-table-cell placement.
+# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# copies in insert_table.py, charts_tab.py and output_tables_tab.py. Nothing
+# enforces this and a mismatch fails silently. Full mechanism in
+# charts/base_charts/CLAUDE.md.
 CHART_RENDER_SCALE = 5
 
 DEFAULT_HYPERLINK_COLOUR = "#0563C1"   # standard Office hyperlink blue
@@ -129,14 +115,8 @@ class AssemblyContext:
         self.prs: Presentation = None
         self.output_path: str = ""
         self.template_path: str = ""
-        # No consumer reads this full list today — batch_process.py's
-        # per-unit run log only surfaces the first error, now prefixed
-        # with its own row_id (see results.py's err_result and
-        # batch_process.py) so a failure is attributable to a specific
-        # row even from a one-line summary. Left in deliberately rather
-        # than stripped: a full per-row (function/status/message) log of
-        # one report's run could be genuinely useful for future
-        # debugging/diagnostics, if a real consumer is ever built.
+        # Nothing reads this full list. batch_process.py surfaces only the
+        # first error per unit, prefixed with its row_id.
         self.log: list[dict] = []
         self.report_context = None      # set by run_running_order
         self.full_unit_set: dict = {}   # {table_name: [row, ...]} for the current reporting unit, set by run_running_order
@@ -173,10 +153,6 @@ def create_ppt(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     # compress images in file" checkbox controls (ISO/IEC 29500-1,
     # section 19.2.1.26), stored per-presentation. python-pptx has no
     # dedicated property for this; set directly on the underlying element.
-    # TEST, not yet a settled decision -- see Architecture, Structural
-    # Design Principles ("Validate only where designed"): confirming
-    # whether PowerPoint's own PDF export is silently downsampling images
-    # before deciding whether this stays.
     ctx.prs.part._element.set("autoCompressPictures", "0")
     ctx.output_path = output_path
     ctx.template_path = template_path
@@ -233,18 +209,11 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
     except Exception as e:
         return err_result(row, f"insert_chart: failed to load cache '{cache_file}': {e}")
 
-    # --- Resolve this row's own cut of the data shape. Period-range trim,
-    # metric-periods conversion, and population-table/target-rows/
-    # selected-ids resolution are all composed in
-    # cut_resolution.prepare_chart_cut, shared with the Charts sheet and
-    # stat tags — see that module. data_shape comes back trimmed/converted
-    # regardless of whether any layers are actually resolved below, so the
-    # "no populations" fallback reflects those same trims rather than
-    # reverting to the untrimmed shape. An unresolvable metric_periods id
-    # doesn't raise (see time_series_to_numeric_series' own docstring) —
-    # it comes through as a real metric with no data for any unit, for
-    # the Base Chart itself to handle, the same as any other missing
-    # value. ---
+    # --- Resolve this row's own cut, via cut_resolution.prepare_chart_cut.
+    # data_shape comes back trimmed and converted whether or not any layers
+    # resolve below, so the "no populations" fallback reflects those trims.
+    # An unresolvable metric_periods id does not raise; it arrives as a
+    # metric with no data for any unit. ---
     start_period = str(row.get("start_period", "") or "").strip()
     end_period = str(row.get("end_period", "") or "").strip()
     metric_periods_str = str(row.get("metric_periods", "") or "").strip()
@@ -284,24 +253,17 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
             ctx.prs, slide_index,
             image_bytes, left_emu, top_emu, width_emu, height_emu
         )
-        # Named for traceback against the Running Order (Position Finder
-        # tool, running_order_tab.py) -- keyed on row_id, this row's
-        # current line number. row_id is renumbered whenever rows are
-        # inserted/reordered/deleted (row_ops.renumber_row_ids), so this
-        # name only stays accurate until the Running Order is next
-        # edited -- an accepted trade-off (Aidan's own call) rather than
-        # a genuinely stable identity like hex_id or a Stat Tag id.
+        # Named for traceback, and read by the Position Finder. row_id
+        # renumbers on insert, delete or reorder, so this name is accurate
+        # only until the Running Order is next edited.
         chart_shape.name = f"CG_Chart_{row.get('row_id')}"
     except Exception as e:
         return err_result(row, f"insert_chart: failed to insert image on slide {slide_index}: {e}")
 
-    # --- Optional hyperlink icon, positioned relative to the chart's own
-    # top-right corner. Generates only when BOTH hyperlink_left and
-    # hyperlink_top are present on the row -- blank in either means no
-    # icon at all. (0, 0) is a valid, meaningful value distinct from
-    # blank: it places the icon's own top-left corner exactly at the
-    # chart's top-right corner. hyperlink_size/hyperlink_colour each fall
-    # back to their own default independently of whether they're blank. ---
+    # --- Optional hyperlink icon, offset from the chart's own top-right
+    # corner. Drawn only when BOTH hyperlink_left and hyperlink_top are
+    # present; blank in either means no icon. (0, 0) is a valid value,
+    # distinct from blank. ---
     hyperlink_left_raw = str(row.get("hyperlink_left", "") or "").strip()
     hyperlink_top_raw = str(row.get("hyperlink_top", "") or "").strip()
     if hyperlink_left_raw != "" and hyperlink_top_raw != "":
@@ -391,49 +353,27 @@ def save_pdf(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
             try:
                 deck = powerpoint.Presentations.Open(os.path.abspath(ctx.output_path))
                 try:
-                    # TEST, not yet a settled decision -- see Architecture, Structural
-                    # Design Principles ("Validate only where designed"). ExportAsFixedFormat
-                    # is the newer PDF export pathway (FixedFormatType=2 = ppFixedFormatTypePDF),
-                    # called with default settings for everything else. Decision 26 originally
-                    # moved away from this method because it produced visibly downsampled
-                    # embedded images even with autoCompressPictures forced off -- revisited
-                    # here at Aidan's request; that finding may still apply and is worth
-                    # re-checking against raster (non-SVG) content before treating this as settled.
+                    # FixedFormatType=2 is ppFixedFormatTypePDF. Every other
+                    # parameter is left at its default. Raster (non-SVG)
+                    # content may still come out downsampled; unconfirmed.
                     deck.ExportAsFixedFormat(os.path.abspath(pdf_path), 2)
                 finally:
                     # Nested so a failure in ExportAsFixedFormat still
-                    # closes this specific presentation -- previously
-                    # Close()/Quit() only ran on the success path,
-                    # meaning any exception here (a genuine export
-                    # failure, not what prompted this fix, but a real
-                    # gap) left PowerPoint.exe open and visible
-                    # indefinitely, with nothing in the log to explain why.
+                    # closes this presentation. Otherwise POWERPNT.EXE is
+                    # left open indefinitely with nothing in the log.
                     deck.Close()
             finally:
-                # Same reasoning one level up -- guarantees Quit() runs
-                # even if Presentations.Open() itself is what failed.
+                # Same one level up: Quit() must run even if
+                # Presentations.Open() is what failed.
                 powerpoint.Quit()
-            # Explicit reference release before CoUninitialize -- COM
-            # objects are reference-counted, and comtypes can hold an
-            # interface pointer alive slightly longer than the Python
-            # variable's own scope would suggest, meaning the
-            # POWERPNT.EXE process can outlive a successful Quit() call
-            # with no error anywhere in the log. Confirmed distinct from
-            # the exception-path gap above: this can happen even when
-            # ExportAsFixedFormat and Close both succeed cleanly, and the
-            # PDF itself comes out completely correct. del alone drops
-            # both to a zero reference count, which CPython's ordinary
-            # reference counting releases immediately -- no gc.collect()
-            # needed for that, and a full collection was confirmed adding
-            # a real 10-30s delay (walking the whole live object graph,
-            # sized by everything a report run leaves in memory: every
-            # chart's own matplotlib figures/SVG buffers, now larger
-            # again since CHART_RENDER_SCALE). If PowerPoint is ever
-            # observed lingering again after this, that would point to a
-            # genuine reference cycle rather than plain scope-exit timing,
-            # and gc.collect(0) (youngest generation only, far cheaper
-            # than a full collection) would be the next thing to try
-            # before reaching for a full collect() again.
+            # Explicit release before CoUninitialize. comtypes can hold a
+            # COM interface pointer past the Python variable's scope, so
+            # POWERPNT.EXE can outlive a successful Quit() with no error
+            # anywhere. del drops both to zero references, which CPython
+            # releases immediately.
+            #
+            # Do not use gc.collect() here: a full collection was measured at
+            # 10-30s.
             del deck
             del powerpoint
         finally:
@@ -551,30 +491,22 @@ def _render_chart_image(base_chart_name: str, population_layers: list, width_emu
     Render a Matplotlib chart to SVG bytes sized to the placeholder.
     Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
     only job. Statistics/unit lists are read directly off population_layers
-    (already in scope here) by whatever needs them, e.g. Autotables
-    (Feature List: Not built), rather than being relayed through render_chart.
+    (already in scope here) by whatever needs them, rather than being
+    relayed through render_chart.
 
     tweaks is the row's own tweaks column, passed straight through to the
     Base Chart function's tweaks parameter, uninterpreted here.
 
-    base_chart_name is resolved built-in first, then against this workfile's
-    own saved custom charts (get_chart_callable) — a custom chart behaves
-    identically to a built-in from this point on. No report_context or any
-    other runtime object is passed to a Base Chart function (Architecture,
-    chart_inputs contract) — Selected-unit identity is already carried on
-    the "Selected"-labelled entry in population_layers by the time this is
-    called.
+    base_chart_name resolves built-in first, then against this workfile's
+    own saved custom charts. A custom chart behaves identically to a
+    built-in from here on. No report_context or other runtime object is
+    passed; Selected-unit identity is already on the "Selected"-labelled
+    population_layers entry.
 
-    width_emu/height_emu are the row's real target size. A Base Chart is
-    called here with both multiplied by CHART_RENDER_SCALE (see that
-    constant's own comment) -- the resulting image_bytes is at that
-    inflated size internally, but insert_chart places it back on the
-    slide at the real, unmultiplied width_emu/height_emu, exactly like
-    every other chart, so nothing about placement changes. EMU is the
-    one real unit of size in this system (Architecture, Structural
-    Design Principles); a Base Chart function converts to inches
-    internally (divide by 914400) for its own matplotlib figsize. No
-    percent conversion happens at this boundary any more.
+    width_emu/height_emu are the row's real target size. The Base Chart is
+    called with both multiplied by CHART_RENDER_SCALE, so image_bytes comes
+    back at that inflated size, and insert_chart places it at the real
+    size. Placement is unchanged by the mechanism.
     """
     chart_func = get_chart_callable(base_chart_name, custom_chart_code)
     return chart_func(
@@ -591,8 +523,7 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
     """
     Insert an SVG image at the exact EMU position on the given slide, via
     the shared add_svg_picture dual-blip mechanism (see svg_insert.py) --
-    every Base Chart returns SVG bytes (Architecture, SVG rendering
-    methodology). Sub-step of insert_chart. Returns the inserted shape --
+    every Base Chart returns SVG bytes. Sub-step of insert_chart. Returns the inserted shape --
     insert_chart names it (CG_Chart_{row_id}) once it's back in scope
     there, rather than this function knowing about Running Order row
     identity at all.
@@ -613,40 +544,28 @@ def _insert_image_at_position(prs: Presentation, slide_index: int,
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-# Fraction-of-a-second scale deliberately -- see _delete_existing_and_save's
-# own docstring. Not a long-timeout retry loop; if the file hasn't
-# settled within this bounded number of checks, something's genuinely
-# wrong (a stuck sync, a locked file) and the row should fail loudly
-# rather than wait indefinitely or proceed with an unstable file.
+# Bounded, not a long-timeout retry loop. If the file has not settled
+# within these checks, something is wrong and the row fails loudly.
 SETTLE_CHECK_INTERVAL_S = 0.3
 MAX_SETTLE_CHECKS = 5
 
 
 def _delete_existing_and_save(prs: Presentation, output_path: str):
     """
-    Deletes any existing file at output_path before saving -- this is
-    always an overwrite of a previous run's output, never a first save
-    to a brand-new path, so a stale file (possibly still mid-sync from a
-    OneDrive/SharePoint-backed output folder) is never left sitting
-    underneath the new one. Confirms the deletion actually completed
-    before proceeding, rather than assuming os.remove succeeded.
+    Deletes any existing file at output_path before saving, and confirms the
+    deletion completed rather than assuming os.remove succeeded. This is
+    always an overwrite of a previous run's output, so a stale file
+    possibly still mid-sync is never left underneath the new one.
 
     After saving, waits for the file's size to stop changing across two
-    consecutive checks (SETTLE_CHECK_INTERVAL_S apart) before returning --
-    a negligible wait from a human point of view (a fraction of a second
-    in the normal case), but enough to avoid handing a file that's still
-    being flushed/synced straight to COM automation. This is the
-    suspected cause of a save_pdf run that hung with PowerPoint open for
-    a long time then failed with "Cannot perform this action with a
-    modal dialog showing" against a SharePoint/OneDrive-synced output
-    path (Progression_Log.md) -- COM's own Presentations.Open() catching
-    the file mid-write/mid-sync-lock, rather than any actual corruption
-    (the same file opened cleanly by hand afterwards).
+    consecutive checks before returning. Output folders are usually
+    OneDrive-synced, and handing COM automation a file still being flushed
+    produced a save_pdf failure with "Cannot perform this action with a
+    modal dialog showing".
 
-    Raises RuntimeError if the deletion or the settle check doesn't
-    complete within their own bounded attempts -- fails loudly with a
-    clear message rather than retrying indefinitely or silently
-    proceeding with a file that hasn't actually finished writing.
+    Raises RuntimeError if the deletion or the settle check does not
+    complete within its bounded attempts. Do not replace this with a longer
+    timeout or a silent retry.
     """
     if os.path.exists(output_path):
         os.remove(output_path)

@@ -213,6 +213,26 @@ Includes `base_charts/registry.py` and `base_tables/registry.py`.
 
 **Flagged cases.** Strip aggressively by default. Queue anything that may carry value; review in batches per package. Kept content goes to the package `CLAUDE.md`, a short inline comment, or `ARCHITECTURE.md`.
 
+Changed on Aidan's instruction: one consolidated borderline list at the end of the full sweep, not batches per package.
+
+Stage 4 outcome:
+- Scope was 111 non-empty files, not the "roughly 60" this plan assumed. 77 changed.
+- Prose down from 5,047 lines to 4,371, a 13% cut. Docstrings 3,645 to 3,198; comments 1,402 to 1,173.
+- Dead references to deleted documents: around 100, now zero.
+- 13% rather than 40% because the remaining prose is contract statements and framework constraints. All history, dead references and self-justification are gone. Cutting further would mean deleting return-value contracts and Streamlit ordering notes, which a reader needs.
+- One out-of-scope edit, kept deliberately: a `Decisions.md` reference removed from `custom_tables/bundle.py`'s AI-facing string constant. Both `*_INPUTS_EXPLANATION` constants left byte-identical, verified by hash.
+- A regex removing dead-reference parentheticals mangled two comments where the parenthetical spanned a line prefix. Both caught by the verification harness, rewritten by hand, whole codebase re-checked.
+- Verification: every file compiles, all 181 modules import cleanly, AST comparison against HEAD confirms no code changed, and the app starts and renders the sign-in gate with no errors.
+
+Stage 4 close-out, after review of the borderline list:
+- All 14 items decided. Final prose figure 5,047 lines to 4,360, a 14% cut.
+- New standing rule, generalised from one objection to a count of "the four data shapes that have charts": **name the set, never count it.** A derived count rots the moment a file is added, and a count that partitions things into done and not-done reads as a design boundary rather than a snapshot of incompleteness. Every count of that kind stripped from the four documents and the `CLAUDE.md` files.
+- The rule does not extend to a closed, designed set. "Three scopes", "three yellow-box outcomes", "two domains" all stay: adding a member there would be an architectural act, so the count carries meaning and should be wrong when the design changes.
+- `autoCompressPictures="0"` confirmed settled; the UNRESOLVED note removed.
+- The `filter_time_series_periods` claim that "the agreed design is padding with placeholder periods" traces to nothing and was removed. The behaviour it described is real and moves to Stage 7.
+- `ORGANISATION_ID = 232` is a placeholder organisation, not a real one, and correctly hardcoded. Comment corrected to say so.
+- `has_valid_unit_data` left in place; revisit when the tool is mature if still unused.
+
 Known flag: `base_charts/registry.py` warns that externally-authored Base Chart files arrive with stale or colliding internal names, and a name match is not evidence of intended replacement. Appears in no governed document.
 
 ---
@@ -224,6 +244,50 @@ Known flag: `base_charts/registry.py` warns that externally-authored Base Chart 
 Full strip across all 37 files.
 
 Remove the per-file `TEXT_SCALE` comment entirely. No residual pointer line.
+
+Settled at the end of Stage 4: the four system-layer `CHART_RENDER_SCALE` markers stay. This stage still removes the per-file `TEXT_SCALE` comments with no pointer.
+
+---
+
+## Stage 6 - Dead code removal
+
+*Lead: Claude Code*
+
+Permission for functional change is granted for this stage. Deletion only; no behaviour is intended to change.
+
+Known instance: `render_table` in `tables/base_tables/registry.py`, re-exported from `__init__.py` and listed in `__all__`, with no callers anywhere.
+
+**Method.** Build the set of module-level definitions across `chartgen/` from the AST, then the set of referenced names, and diff. Produce a candidate list for approval, then delete in one pass.
+
+**Confirm every candidate by hand.** Three things look dead and are not:
+
+- **String dispatch.** `FUNCTION_MAP`, `CHART_REGISTRY` and `TABLE_REGISTRY` reach their targets by string key, so every Running Order function and every Base Chart and Base Table appears unreferenced. Roughly 50 functions.
+- **Re-export shims.** `dialog_support.py` re-exports the `period_ids` helpers; `ui/common/formatting.py` re-exports `format_number`. Both marked `noqa: F401`, both load-bearing for their old call sites.
+- **Streamlit entry points.** Tab render functions are called from `app.py` only, and some helpers only from inside a widget callback.
+
+---
+
+## Stage 7 - Fix the known defects
+
+*Lead: Claude Code*
+
+Permission for functional change is granted for these three items and no others. Raised during Stage 4.
+
+**7.1 Id counter resync, all three id spaces.** `chart_store.next_chart_store_id` resyncs its counter to the true maximum among ids already in use before incrementing. `next_stat_tag` (`execution/text/stat_tags.py`) and `next_table_id` (`execution/tables/grid_store.py`) call `next_id` directly and do not, so the collision Decision 32 fixed for the Chart Store is still open for both.
+
+Stat Tags is the live risk: `stat_tags_xlsx.assign_missing_tags` issues ids alongside imported ones. Reuse the existing pattern - an optional `existing_ids` set, decoded with `id_generation.from_base36` - rather than inventing a second one, and pass the set from each call site.
+
+**7.2 Silent fallbacks.** Same family as the 50% sizing fallback removed at the end of Stage 3.
+
+| Where | Now |
+|---|---|
+| `output_tables_tab.py` restore path | `min(200.0, float(pct))` silently caps a stored percentage above 200 |
+| `output_tables_tab.py` restore path | `except (TypeError, ValueError)` substitutes 50% for an unparseable stored value |
+| `shapes/timeseries.py` `filter_time_series_periods` | If `start_period_id` does not resolve but `end_period_id` does, the shape is returned completely untrimmed, discarding the end bound too |
+
+The third needs the behaviour agreed before it is changed. It does not merely fall back on a missing value: it discards a bound the user did set, so a row asking for a range ending March 2025 silently renders the full history. Consistent with "an unresolvable period is a no-data case, not an error", the likely answer is to honour the end bound and treat the missing start as "from the first period". Design before build.
+
+**Verification is behavioural.** There are no tests. 7.1 needs an xlsx import carrying pre-filled ids. 7.2 needs a row with a stored size outside 1 to 200, and a row whose `start_period` is absent from its report.
 
 ---
 

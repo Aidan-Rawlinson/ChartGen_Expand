@@ -1,6 +1,6 @@
 # base_charts
 
-33 built-in Base Charts, grouped into a folder per canonical data shape. Dispatch in `registry.py`.
+The built-in Base Charts, one folder per canonical data shape. Dispatch in `registry.py`.
 
 ## These files are outside the system boundary
 

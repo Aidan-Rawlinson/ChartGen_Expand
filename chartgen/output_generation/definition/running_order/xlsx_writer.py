@@ -46,21 +46,9 @@ def write_xlsx(rows: list[dict], output_path: str,
     Used only to build the start_period/end_period/metric_periods dropdown
     option lists.
 
-    start_period/end_period/metric_periods are written exactly as stored
-    on the row — no derivation, no lookup, nothing recomputed here. The
-    canonical stored value is whatever the person actually picked or
-    typed: typically "period_label(period_id)" (e.g. "July 2025(1338)")
-    from a dropdown pick, or a bare id typed by hand. The numeric id is
-    extracted back out only at the point a chart's cut is actually
-    resolved (chartgen.shared.infrastructure.period_ids.extract_period_id,
-    called once from cut_resolution.prepare_chart_cut) — never here, and
-    never on read either (xlsx_reader.py). An earlier version derived the
-    label fresh at export time by checking whether the id was still in
-    that row's cache_file's current period list, which meant it silently
-    reverted to a bare id the moment a report's own period range moved
-    past it, discarding a deliberate choice for a reason unconnected to
-    that choice (see Decisions.md). Storing the full string as the
-    canonical value, unmodified, avoids that entirely.
+    start_period/end_period/metric_periods are written exactly as stored on
+    the row. No derivation, no lookup, nothing recomputed here or on read.
+    The numeric id is extracted only in cut_resolution.prepare_chart_cut.
     """
     if not OPENPYXL_AVAILABLE:
         raise ImportError("openpyxl is required to write the Running Order xlsx.")
@@ -70,18 +58,14 @@ def write_xlsx(rows: list[dict], output_path: str,
     ws = wb.active
     ws.title = "Running Order"
 
-    # --- Hidden list sheet for start_period/end_period/metric_periods
-    # dropdowns -- options are "period_label(period_id)", matching the
-    # canonical stored form exactly (see module docstring), so picking
-    # from the dropdown produces the same string the Charts sheet itself
-    # would store. Excel's inline list formula1 (used for function/
-    # base_chart_name/etc.) is capped at 255 characters — fine for a
-    # handful of options, not for a chart's full period history. Each
-    # distinct cache_file's period options get their own column here
-    # (consecutive — column 1 for the first cache_file encountered,
-    # column 2 for the next, and so on); start_period, end_period, and
-    # metric_periods all validate against the same column for a given
-    # cache_file, since they share one option list. ---
+    # --- Hidden list sheet for the three period dropdowns. Options are
+    # "period_label(period_id)", matching the stored form exactly, so a
+    # dropdown pick produces the same string the Charts sheet would store.
+    #
+    # A hidden sheet rather than an inline list because Excel caps inline
+    # list validation at 255 characters, which a full period history
+    # exceeds. One column per distinct cache_file, consecutive; all three
+    # period columns validate against the same column. ---
     period_list_ws = wb.create_sheet("_period_lists")
     period_list_ws.sheet_state = "hidden"
 
@@ -214,13 +198,10 @@ def write_xlsx(rows: list[dict], output_path: str,
             if value == "" or value is None:
                 value = ""
             if col_name == "cache_file" and value:
-                # Displayed/copy-paste value drops the ".json" suffix that's
-                # the actual cache dict key internally -- matches table_id's
-                # own bare-id convention for insert_table rows, so a value
-                # copied from one column reads consistently with the other.
-                # xlsx_reader.py adds ".json" back on read. Row-level logic
-                # above (row_cache_file, chart_refs, period_dv lookups)
-                # still uses the untrimmed value -- only this cell's display
+                # The displayed value drops the ".json" suffix that is the
+                # real cache dict key. xlsx_reader.py adds it back on read.
+                # Row-level logic above still uses the untrimmed value; only
+                # this cell's display
                 # changes.
                 stripped = str(value).strip()
                 if stripped.lower().endswith(".json"):
@@ -292,17 +273,13 @@ def write_xlsx(rows: list[dict], output_path: str,
                 ctr_col = COLUMNS.index("base_chart_name") + 1
                 chart_dv.add(ws.cell(row=excel_row, column=ctr_col))
 
-            # Per-row start_period/end_period/metric_periods dropdown — only
-            # for a TimeSeries cache_file with a known period list. All
-            # three columns validate against the same hidden-sheet range
-            # for this cache_file (built once, above), not a fresh list per
-            # row. The dropdown itself always offers one period at a time —
-            # metric_periods is the one column where more than one may be
-            # wanted, and Excel's list validation is single-value only. A
-            # cell already holding a '^'-delimited value (from the Charts
-            # sheet's multi-select, or typed by hand) isn't blocked by the
-            # dropdown being there; the dropdown just makes adding/replacing
-            # a single value easy without needing to know a period_id.
+            # Per-row period dropdowns, only for a TimeSeries cache_file
+            # with a known period list. All three columns validate against
+            # the same hidden-sheet range, built once above.
+            #
+            # Excel list validation is single-value only, so the dropdown
+            # offers one period at a time. A cell already holding a
+            # '^'-delimited metric_periods value is not blocked by it.
             period_dv = period_dv_by_cache_file.get(row_cache_file)
             if period_dv is not None:
                 for period_col_name in ("start_period", "end_period", "metric_periods"):

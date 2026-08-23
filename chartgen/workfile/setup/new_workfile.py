@@ -3,10 +3,9 @@ new_workfile.py
 The New Workfile flow's file-creation half only: create_new_workfile makes
 a blank .cgw with no project data whatsoever — no NHS toolkit involvement.
 
-Population tables are a separate, acquisition-layer concern now — see
-chartgen.acquisition.toolkit_nhs.population_tables (add_project_tables,
-ensure_population_tables). Nothing here knows tables exist; nothing there
-knows a workfile might be brand new.
+Population tables are an acquisition-layer concern. Nothing here knows they
+exist, and nothing there knows a workfile might be brand new. Keep it that
+way.
 """
 
 from chartgen.acquisition.toolkit_nhs.api_client import get_projects

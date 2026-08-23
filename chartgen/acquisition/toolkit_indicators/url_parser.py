@@ -1,23 +1,19 @@
 """
 url_parser.py
-Parses Indicators toolkit URLs into their component parts. Mirrors
-chartgen.acquisition.template.url_parser's job for the NHS side, but the URL
-shape is entirely different — confirmed against real examples:
+Parses Indicators toolkit URLs into their component parts. The URL shape is
+entirely different from the NHS side. Real examples:
 
   https://members.nhsbenchmarking.nhs.uk/project/42/toolkit?a=6657&b=6658&reportId=420995&date=1353
   https://members.nhsbenchmarking.nhs.uk/project/42/toolkit?a=4646&date1353&reportId=420702&b=4647&c=4651&d=4652
 
 project_id comes from the path (/project/{id}/toolkit), not a query param.
-tier_id is a drill-down breadcrumb across up to four query params (a, b, c,
-d, and an "o" seen in the source VBA but not in any real example so far) —
-only the deepest one present actually identifies the report's tier; the
-others are shallower ancestor nodes in the same hierarchy and are not
-needed once the deepest one is known. reportId is used directly. date is
-the period id the URL was generated against — some real examples are
-missing its "=" ("date1353" rather than "date=1353"); this is mirrored
-from the source VBA as a graceful "not present" case (the VBA falls back to
-inferring the period from the fetched data itself when this happens), not
-treated as malformed input.
+tier_id is a drill-down breadcrumb across up to five query params (a, b, c,
+d, o). Only the deepest one present identifies the report's tier; the others
+are shallower ancestors in the same hierarchy.
+
+reportId is used directly. date is the period id the URL was generated
+against. Some real URLs are missing its "=" ("date1353" rather than
+"date=1353"); that is treated as "not present", not as malformed input.
 """
 
 import re
@@ -25,8 +21,8 @@ from urllib.parse import urlparse
 
 _PROJECT_ID_RE = re.compile(r"^/project/(\d+)/toolkit$")
 
-# Priority order matches the source VBA exactly: prefer the deepest
-# drill-down parameter present ("o" deepest, "b" the shallowest fallback).
+# Deepest drill-down parameter present wins. "o" is deepest, "b" the
+# shallowest fallback.
 _TIER_PARAM_PRIORITY = ["o", "d", "c", "b"]
 
 

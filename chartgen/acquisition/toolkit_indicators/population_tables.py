@@ -1,68 +1,41 @@
 """
 population_tables.py
-Building and maintaining the Indicators toolkit's own population table
-(submissions_timeseries_{project_id}) — deliberately NOT the same trigger
-model as toolkit_nhs/population_tables.py's ensure_population_tables.
+Builds and maintains the Indicators toolkit's own population table,
+submissions_timeseries_{project_id}.
 
-Two things make the NHS "build once, then no-op forever" model wrong here:
-1. A single Indicators report fetch already returns every period at once —
-   the first build has to union submissions across every period in that one
-   response, not just whatever's present "now".
-2. Submissions genuinely drop in and out of the Indicators toolkit over
-   time (confirmed) — so even after the table exists, a later fetch (a
-   refresh, or a different metric under the same project) can reveal
-   submissions the table doesn't have yet. Every fetch has to reconcile,
-   not just the first.
+This merges on every fetch, unlike the NHS side's build-once model. Two
+reasons: one report fetch returns every period at once, so even the first
+build has to union submissions across every period in that response; and
+submissions genuinely drop in and out of this toolkit over time, so an
+established table has to reconcile on every fetch. Same append-by-unit_id,
+never-overwrite rule as nhs_organisations, just run every time.
 
-So this module merges on every call, the same append-by-unit_id, no-
-overwrite rule nhs_organisations already uses for cross-project merging —
-just applied on every fetch here, not only the first.
+soft_parents links each submission to nhs_organisations:{unit_id} through a
+live org_id_map (ics organisation_id to nhs unit_id), sourced fresh on every
+fetch from this project's own /projects/{id}/submissions response. The two
+databases' organisation id spaces do not match, so the Indicators
+organisation_id cannot be used directly.
 
-soft_parents links each submission row to nhs_organisations:{unit_id} —
-translated via a live org_id_map (ics organisation_id -> nhs unit_id),
-sourced fresh on every fetch from this project's own
-/projects/{id}/submissions response (see api_client.get_project_submissions_data
-and fetch.py) — not the Indicators API's own organisation_id directly
-(confirmed: the two databases' organisation id spaces do not match), and
-NOT a static CSV extract either (retired — a live per-project mapping needs
-no manual upkeep and can't go stale). If org_id_map has no entry — or an
-explicit None — for a submission's organisation_id, the submission is
-still added, but with no soft_parents link and Region() left blank — see
-"Unmapped organisations" below.
+A submission whose organisation_id has no entry in org_id_map, or an
+explicit None, is still added, with no soft_parents link and a blank
+Region(). merge_timeseries_population reports that back to fetch.py as a
+boolean, so one warning is surfaced per fetch run rather than per
+submission.
 
-If a referenced organisation IS resolved but isn't already in
-nhs_organisations, it is enriched from the NHS organisations endpoint
-(toolkit_nhs.api_client.get_organisations — the same call toolkit_nhs
-itself uses to source Region(), reused here rather than duplicated, the
-same precedent as sharing get_token, see Architecture Decision 10) before
-its row is built, rather than being built from the Indicators response's
-own organisation_name/organisation_code with a blank Region(). The
-Indicators toolkit has no year of its own (periods only, see Decision 10),
-so this lookup is queried against the current calendar year as the best
-available stand-in — confirmed as the intended behaviour, not a guess.
-Falls back to the Indicators response's own name/code with a blank
-Region() only if the resolved id genuinely isn't present in that year's
-NHS organisations list (e.g. a retired organisation).
+A resolved organisation not already in nhs_organisations is enriched from
+toolkit_nhs.api_client.get_organisations first. This toolkit has no year of
+its own, so that lookup uses the current calendar year. Falls back to the
+Indicators response's own name and code with a blank Region() only if the id
+is genuinely absent from that year's list, for example a retired
+organisation.
 
-Region() on the submission row itself is resolved from this same
-now-enriched organisation data — not from whatever was in
-nhs_organisations before this call started — so a submission whose
-organisation is newly discovered in this same fetch still gets its correct
-Region() immediately, rather than only on some later fetch.
+Region() on the submission row is resolved from that same now-enriched
+data, not from whatever nhs_organisations held before this call, so a
+newly-discovered organisation gets its correct Region() immediately.
 
-unit_name is sourced from submission_name_map (the same live
-/projects/{id}/submissions response's real submissionName per
-submissionId), falling back to anonSubmissionCode only if a submission is
-genuinely absent from that map. unit_code stays as anonSubmissionCode
-throughout — the two are deliberately different fields now, rather than
-both holding the same anonymised value.
-
-Unmapped organisations. A submission whose organisation_id has no entry in
-org_id_map (Functional Spec Section 7.4) is not treated as an error at this
-layer: it's added to the population table exactly as normal, just with no
-organisation link. merge_timeseries_population reports this back to its
-caller (fetch.py) as a boolean, so a single warning can be surfaced once
-per fetch run rather than per submission.
+unit_name comes from submission_name_map, the same response's real
+submissionName, falling back to anonSubmissionCode only if absent.
+unit_code stays anonSubmissionCode, so the two fields differ.
 """
 
 from datetime import datetime
@@ -168,8 +141,8 @@ def merge_timeseries_population(
         resolved.append((sub, org_id))
 
     if to_enrich:
-        # Current calendar year — Indicators data has no year of its own
-        # (periods only), so "now" is the intended stand-in, not a guess.
+        # Current calendar year: this data has no year of its own, so the
+        # NHS organisations lookup is queried against now.
         nhs_orgs = {str(o["organisation_id"]): o for o in get_nhs_organisations(datetime.now().year, token)}
         for org_id in to_enrich:
             nhs_org = nhs_orgs.get(org_id)
@@ -182,10 +155,9 @@ def merge_timeseries_population(
                     "Region()":     nhs_org.get("region_name", ""),
                 }
             else:
-                # Resolved via the live org_id_map but not present in this
-                # year's NHS organisations list (e.g. a retired
-                # organisation) — fall back to the Indicators response's
-                # own values, same as before this enrichment step existed.
+                # Resolved via org_id_map but absent from this year's NHS
+                # organisations list, for example a retired organisation.
+                # Fall back to the Indicators response's own values.
                 fallback_sub = first_sub_for_org[org_id]
                 new_row = {
                     "unit_id":      org_id,

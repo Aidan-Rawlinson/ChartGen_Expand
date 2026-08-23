@@ -11,8 +11,7 @@ directly rather than a flat one-row-per-record table -- row 1 holds the
 table_id (A1) and column widths; column A holds row heights; the rest is
 content. Content cells get a dropdown of the workfile's current Stat Tag
 ids ("[T3]" style), the same hidden-list-sheet pattern the Running Order's
-period columns use (Architecture Decision 12) -- free text is still
-accepted alongside the dropdown, matching that same precedent (no
+period columns use. Free text is still accepted alongside the dropdown (no
 showErrorMessage/errorStyle is set, so Excel doesn't reject a typed value
 outside the list).
 """

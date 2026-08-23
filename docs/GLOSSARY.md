@@ -105,11 +105,11 @@ Not ChartGen-specific. Here so the same words mean the same thing in discussion.
 
 **Chart data** - a comparative dataset for one analysis. Named for where it usually comes from and ends up, but the data itself is agnostic to that and can equally feed a table.
 
-**Data shape** - a container for normalised chart data. Five canonical shapes: NumericSeries, NumericCompositional, CategoricalCompositional, TimeSeries, PairedSurveyData.
+**Data shape** - a container for normalised chart data. The canonical shapes: NumericSeries, NumericCompositional, CategoricalCompositional, TimeSeries, PairedSurveyData.
 
 **Metric-Series** - one measured series within a shape: one name plus one value per unit. A shape can hold several independent Metric-Series, all over the same population. NumericSeries and PairedSurveyData carry them in a flat structure; the compositional shapes and TimeSeries wrap them in a `metrics` list.
 
-**PairedSurveyData** - the fifth canonical shape, for data where each unit contributes a collection of individual records rather than one value. Always exactly one Metric-Series. Has no Base Charts, no `chart_type_map.csv` row, and no reference-id converter.
+**PairedSurveyData** - a canonical shape for data where each unit contributes a collection of individual records rather than one value. Always exactly one Metric-Series. Has no Base Charts, no `chart_type_map.csv` row, and no reference-id converter.
 
 **Population table** - a table sharing the common spine of `unit_id`, `unit_code`, `unit_name`, `soft_parents`, plus any number of `Name()` peer-group columns. A workfile can hold any number of them.
 
@@ -165,7 +165,7 @@ A Text Tag needs nothing beyond its own literal string. A Stat Tag needs `hex_id
 
 ## Chart construction
 
-**Base Chart** - one of ChartGen's chart-rendering functions. A standalone artefact, one per file, handling one canonical data shape. 33 built in.
+**Base Chart** - one of ChartGen's chart-rendering functions. A standalone artefact, one per file, handling one canonical data shape. `CHART_REGISTRY` is the list of built-ins.
 
 **chart_inputs** - the fixed call every Base Chart receives: `population_layers`, `width_emu`, `height_emu`, `tweaks`. Returns image bytes.
 
@@ -187,7 +187,7 @@ A Text Tag needs nothing beyond its own literal string. A Stat Tag needs `hex_id
 
 **Output Table** - a grid of constant text and Stat Tag values, composited into a single image by a Base Table function. The table equivalent of a chart. Identified by a permanent base-36 `table_id`. Authored on its own tab, not the Charts sheet.
 
-**Base Table** - one of ChartGen's table-rendering functions. A standalone artefact, one per file, the table equivalent of a Base Chart. Not scoped to any data shape. Four built in: `plain_grid`, `table_cardtile`, `ci_grid`, `ci_cardtile`.
+**Base Table** - one of ChartGen's table-rendering functions. A standalone artefact, one per file, the table equivalent of a Base Chart. Not scoped to any data shape. Built in: `plain_grid`, `table_cardtile`, `ci_grid`, `ci_cardtile`.
 
 **table_inputs** - the fixed call every Base Table receives: `content`, `column_widths`, `row_heights`, `width_emu`, `height_emu`, `tweaks`. Returns `(image_bytes, chart_cells)`.
 

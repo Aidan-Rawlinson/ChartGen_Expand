@@ -2,7 +2,7 @@
 
 The Running Order is an ordered sequence of report content. `schema.py` owns the column list, the function names, the scope values, and the function groupings.
 
-Twelve functions: `create_ppt`, `set_default_populations`, `update_text`, `insert_chart`, `insert_table`, `insert_picture`, `insert_from_excel`, `open_excel`, `close_excel`, `empty_placeholder`, `save_ppt`, `save_pdf`.
+The functions: `create_ppt`, `set_default_populations`, `update_text`, `insert_chart`, `insert_table`, `insert_picture`, `insert_from_excel`, `open_excel`, `close_excel`, `empty_placeholder`, `save_ppt`, `save_pdf`.
 
 Three scopes: `normal`, `batch_open`, `batch_close`.
 

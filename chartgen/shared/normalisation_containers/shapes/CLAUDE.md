@@ -1,6 +1,8 @@
 # shapes
 
-Five canonical data shapes, one module each: NumericSeries, NumericCompositional, CategoricalCompositional, TimeSeries, PairedSurveyData. Four have Base Charts. PairedSurveyData has none, has no `chart_type_map.csv` row, and has no `REFERENCE_ROW_CONVERTERS` entry, so it does not participate in Stat Tags.
+The canonical data shapes, one module each: NumericSeries, NumericCompositional, CategoricalCompositional, TimeSeries, PairedSurveyData.
+
+PairedSurveyData has no Base Charts, no `chart_type_map.csv` row, and no `REFERENCE_ROW_CONVERTERS` entry, so it does not participate in Stat Tags.
 
 Each module owns its own stats computation and summary statistics. Generic behaviour dispatches in `dispatch.py`, keyed on the shape-type strings also used by `chart_type_map.csv` and `cache_reader.DESERIALISE_MAP`.
 

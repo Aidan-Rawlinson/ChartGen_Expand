@@ -4,36 +4,28 @@ Converts each shape type's own summary_stats() output into short, stable
 id-tagged rows — {"id", "label", "kind", "value"} per stat — for display in
 the Charts sheet and, eventually, as PowerPoint table replacement tags.
 
-Ids are deliberately short (e.g. "Mn", "1Mna", "P2a") since they will be
-used as literal PPT tags — a tag wider than the table cell it sits in
-changes the table's own size, which is unacceptable. Scope is per
-shape-type, not global: the same id (e.g. "{Mn}") means "Mean" in every
-NumericSeries table, wherever that table template is reused, because every
-NumericSeries shape has the identical fixed stat set. A CategoricalCompositional
-or NumericCompositional shape's component count varies per metric-series, so
-those ids include a running component number that isn't meaningful outside
-that one metric-series' own table.
+Ids must stay short, because they are used as literal PowerPoint tags and a
+tag wider than its cell changes the table's size.
 
-Series letter (a, b, c, ...) is appended only when a shape carries more than
-one metric-series, and restarts at "a" every time — i.e. it identifies a
-metric-series' position within *this* shape instance's own table set, not
-a persistent identity across shapes. Omitted entirely for a single series,
-by design (accepted trade-off: an id's meaning depends on current data
-shape, not fixed at authoring time).
+Scope is per shape type, not global: "Mn" means Mean in every NumericSeries
+table, because every NumericSeries shape carries the identical fixed stat
+set. A compositional shape's component count varies per metric-series, so
+those ids carry a running component number meaningful only within that one
+metric-series' table.
 
-Period number (TimeSeries only) is prefixed ahead of the stat letter,
-1-based in shape.periods order, so no two digits are ever adjacent (an id
-component is always letter-bounded on both sides where two numbers would
-otherwise collide, e.g. period 1 + component 1 cannot arise together since
-TimeSeries carries no components).
+A series letter (a, b, c, ...) is appended only when a shape carries more
+than one metric-series, and restarts at "a" per shape instance. Omitted
+entirely for a single series, so an id's meaning depends on the shape's
+current series count rather than being fixed at authoring time.
 
-"kind" on each row governs display/PPT formatting, not calculation:
-  - "value"   — respects the shape's own format_modifier (£, %, plain)
-  - "count"   — always a plain integer, regardless of format_modifier
-  - "percent" — always shown as a %, independent of format_modifier
-    (matches CategoricalCompositional's own chart-rendering convention —
-    Functional Spec Section 10.2 — extended here to NumericCompositional's
-    component-share figures for the same reason)
+A period number (TimeSeries only) is prefixed ahead of the stat letter,
+1-based in shape.periods order. No two digits are ever adjacent, since
+TimeSeries carries no components.
+
+"kind" governs display formatting, not calculation:
+  - "value"   — respects the shape's own format_modifier
+  - "count"   — always a plain integer
+  - "percent" — always a percentage, whatever format_modifier says
 """
 
 
@@ -84,13 +76,12 @@ def numeric_series_reference_rows(stats: dict) -> dict:
 def time_series_reference_rows(stats: dict) -> dict:
     """
     {metric_name: [{"id", "label", "kind", "value"}, ...]} from
-    time_series_summary_stats() output — one row per (stat, period)
-    combination, grouped by stat type first so every period of one
-    statistic (e.g. every period's Mean) sits together, rather than every
-    statistic within one period. Period number (1-based, in shape.periods
-    order) prefixes the stat letter regardless of this grouping — ids are
-    unaffected, only row order changes. Series letter appended only if
-    more than one metric-series is present.
+    time_series_summary_stats output. One row per stat and period, grouped
+    by stat type first, so every period's Mean sits together.
+
+    Grouping affects row order only. The period number still prefixes the
+    stat letter. A series letter is appended only if more than one
+    metric-series is present.
     """
     multi = len(stats) > 1
     out = {}

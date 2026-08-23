@@ -1,14 +1,10 @@
 """
 page_sizing.py
-Conversion between the Charts sandbox's user-facing size unit — a percentage
-of the associated PowerPoint page's shorter dimension — and the raw EMU
-values stored on the Running Order (width_emu/height_emu). The shorter
-dimension is used as the reference so a chart's felt size stays consistent
-regardless of whether the page is portrait or landscape.
+Conversion between the Sizing widgets' percent-of-shorter-page-dimension
+unit and the EMU the Running Order stores. The shorter dimension is the
+reference, so a size means the same thing on a portrait or landscape page.
 
-This is a Charts-sandbox concern only. It has no bearing on how a chart is
-actually rendered or inserted at batch run time (assembly_engine.py's own
-internal EMU-to-render-resolution conversion is unrelated and untouched).
+Authoring concern only. Batch execution works in EMU throughout.
 """
 
 
@@ -31,9 +27,9 @@ def emu_to_percent(emu_value: int, page_width_emu: int, page_height_emu: int) ->
     return (float(emu_value) / ref) * 100.0
 
 
-# Standard page sizes, in EMU (914400 EMU = 1 inch; 360000 EMU = 1cm).
-# Offered as a manual Charts-sheet choice only when no template has been
-# processed yet, so no real page size is known — hidden once one is.
+# 914400 EMU = 1 inch; 360000 EMU = 1cm.
+# Offered as a manual choice only while no template has been processed, so
+# no real page size is known. Hidden once one is.
 STANDARD_PAGE_SIZES_EMU = {
     "A4 (portrait, 21.0 x 29.7cm)":     (7560000, 10692000),
     "A4 (landscape, 29.7 x 21.0cm)":    (10692000, 7560000),

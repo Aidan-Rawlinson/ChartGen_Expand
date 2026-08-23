@@ -6,18 +6,17 @@ Two separate steps, deliberately not merged:
   - validate_custom_chart_code: a static check over the code's structure
     (imports, banned names, function shape) — runs before anything is
     compiled or executed. This is the whole of the "AST gate" — no
-    sandboxing, no runtime isolation (Decisions.md). It can confirm the
-    function accepts the right inputs; it cannot confirm what the function
-    returns, since Python doesn't enforce return types statically.
+    sandboxing and no runtime isolation. It can confirm the function accepts
+    the right inputs; it cannot confirm what the function returns, since
+    Python does not enforce return types statically.
   - compile_custom_chart: turns already-validated source text into a
     callable. Whether the callable actually returns valid image bytes is
     only knowable by calling it — that check lives at the render call site,
     not here.
 
 A Base Chart file may define any number of top-level functions — every
-built-in already does (its own inlined palette/sizing/formatting helpers,
-Decisions.md — no shared internal helpers module, each file is fully
-standalone). Only one of those functions is the entry point the system
+built-in already does, since each file is fully standalone and carries its
+own helpers. Only one of those functions is the entry point the system
 actually calls: whichever one carries the chart_inputs signature
 (population_layers, width_emu, height_emu, tweaks). The other functions are
 private helpers, exactly like every existing Base Chart already has, and

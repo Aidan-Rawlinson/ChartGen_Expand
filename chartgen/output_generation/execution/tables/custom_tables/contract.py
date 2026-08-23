@@ -10,7 +10,7 @@ enforced can never drift apart.
 Mirrors chartgen.output_generation.execution.charts.custom_charts.contract
 field-for-field, for the table domain rather than the chart domain. Kept
 as its own copy, not shared with the charts version, since base_tables and
-base_charts are deliberately separate rendering domains (Decisions.md) --
+base_charts are deliberately separate rendering domains --
 if tables ever need a different library allowance than charts, that's a
 one-line change here with no risk to the chart side.
 

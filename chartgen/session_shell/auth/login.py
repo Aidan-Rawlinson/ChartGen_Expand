@@ -1,9 +1,7 @@
 """
 login.py
-Credential validation, token handling, and last-used-username persistence —
-mechanics only. Widgets and the sign-in form live in chartgen/ui/login_form.py.
-Split out of the old streamlit_frontend/login.py (mechanics fused with
-widgets) and local_config.py (username persistence misfiled as shared infra).
+Credential validation, token handling, and last-used-username persistence.
+Mechanics only; the sign-in form lives in ui/auth/login_form.py.
 """
 
 import os

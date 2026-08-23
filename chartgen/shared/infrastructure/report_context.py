@@ -1,7 +1,6 @@
 """
 report_context.py
 Per-report identity context, rebuilt fresh for each unit in a batch run.
-Split out of local_config.py — a domain model, not session or peer-group logic.
 """
 
 from dataclasses import dataclass

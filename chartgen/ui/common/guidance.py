@@ -1,31 +1,19 @@
 """
 guidance.py
-Per-tab guidance links — one page-length guidance URL per tab, opened in a
-new browser tab. Exists because st.tabs() never reports which tab is
-active into session_state (tab switching is pure client-side CSS/JS), so a
-single "smart" sidebar button that adapts to the active tab isn't possible
-(Current_State, "Open current sheet's guidance PDF" note). Each tab renders
-its own link from inside its own render function instead — Streamlit only
-displays that tab's content when it's the one open, so no active-tab
-detection is needed at all, and the sidebar/tab-agnostic design principle
-(Functional Spec Section 3.1) is untouched.
+Per-tab guidance links, one URL per tab, maintained here rather than
+scattered across the tabs. A blank entry renders nothing, so a tab with no
+guidance page yet shows a plain title and no dead link.
 
-The link is rendered inline after the tab's own title, muted (small, grey,
-no underline) rather than as a button, so it reads as a quiet footnote
-rather than a competing action — this means the title itself is written as
-raw HTML (via render_tab_header) rather than st.header(), trading away
-st.header()'s hover-to-reveal "#" anchor link for the inline placement.
-Header text colour still comes from Streamlit's own theme CSS (only
-margin is set inline here), so light/dark mode is unaffected; the link's
-grey is hardcoded, since it's meant to look the same regardless of theme.
+Each tab renders its own link, because st.tabs() never reports which tab is
+active into session_state: tab switching is pure client-side CSS, so a
+single sidebar button that adapts to the active tab is not possible.
 
-guidance_link_html is exposed separately (not just render_tab_header) for
-outputs_tab.py, whose title is a bespoke sized <h1> rather than a plain
-header — it splices the fragment into its own markdown call directly.
+The title is raw HTML via render_tab_header rather than st.header(), so the
+link can sit inline after it. That trades away st.header()'s anchor link.
+Header colour comes from Streamlit's theme CSS; only margin is set inline.
 
-URLs are maintained here, in one place, rather than scattered across each
-tab's own code. Blank entries render nothing, so a tab without its
-guidance page written yet shows a plain title with no dead link.
+guidance_link_html is exposed separately for outputs_tab.py, whose title is
+a bespoke <h1> and which splices the fragment in itself.
 """
 
 import streamlit as st

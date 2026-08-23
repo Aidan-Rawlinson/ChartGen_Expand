@@ -1,11 +1,11 @@
 """
 peer_groups.py
-Peer-group menu-building — which Name()/Name(Value) populations-string tokens
-to offer for a given unit table. Split out of local_config.py, where this was
-misfiled as "shared infra" — it is peer-group domain logic. Uses the shared
-column/token rule in shared.normalisation_containers.peer_group_tokens rather
-than re-deriving it (population_layers.py is the other caller of that rule,
-for resolving tokens rather than listing them).
+Peer-group menu-building: which Name() and Name(Value) tokens to offer for a
+given unit table.
+
+Reads the shared token rule from shared.normalisation_containers.peer_group_tokens
+rather than re-deriving it. population_layers.py is the other caller of that
+rule, for resolving tokens rather than listing them.
 """
 
 from chartgen.shared.normalisation_containers.peer_group_tokens import (

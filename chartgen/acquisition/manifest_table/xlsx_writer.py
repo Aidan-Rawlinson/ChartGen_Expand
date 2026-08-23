@@ -1,15 +1,14 @@
 """
 xlsx_writer.py
-Writes the manifest table to a formatted .xlsx for user editing — the same
-download/edit/upload pattern as the Running Order xlsx.
+Writes the manifest table to a formatted .xlsx for user editing.
 
-Deliberately excluded columns: chart_ref (renumbered on import, so exporting
-it would only invite conflicts) and deleted (deleted rows are simply not
-exported; deleting a row in Excel is how a user deletes a chart).
+Two columns are excluded. chart_ref, because it renumbers on import. deleted,
+because deleted rows are not exported at all: deleting a row in Excel is how
+a chart is deleted.
 
-hex_id is exported — it is the round-trip identity. Rows that come back
-with a hex_id are existing rows; rows without one are new. Users add a
-chart by adding a row with just a URL.
+hex_id is exported and is the round-trip identity. A row returning with a
+hex_id is an existing row; a row without one is new. A chart is added by
+adding a row carrying just a URL.
 """
 
 from chartgen.workfile.state.workfile_file import MANIFEST_FIELDNAMES

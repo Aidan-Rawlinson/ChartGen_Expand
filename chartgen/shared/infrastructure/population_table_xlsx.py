@@ -5,27 +5,19 @@ any submissions_{year}_{project_id} table, submissions_timeseries_{project_id},
 and any future table) — the same download/edit/upload pattern as the
 manifest table (chartgen.acquisition.manifest_table) and the Running Order.
 
-Generic across any population table: column list is read from the table's
-own rows (spine first, via SPINE_COLUMN_ORDER, then any Name() columns in
-their existing order) rather than a fixed schema, matching the "identical
-headers, no single fixed schema" convention population tables already
-follow (see Architecture, Section 5).
+Generic across any population table. The column list is read from the
+table's own rows, spine first via SPINE_COLUMN_ORDER then any Name()
+columns in their existing order, rather than from a fixed schema.
 
-Identity is unit_id, not a system-generated key like the manifest's hex_id —
-unit_id originates from the API (or, for a manually-added row, from the
-user). Import semantics:
-- Row present with a unit_id matching an existing row -> existing row;
-  fields updated to the file's values.
-- Row present with a unit_id not matching any existing row -> new row.
-- Row present with a blank unit_id -> skipped; there's nothing to anchor
-  a population-table row to without one (contrast the manifest table,
-  where the URL itself identifies a new row).
-- Known unit_id absent from the file -> row removed from the table. There
-  is no soft-delete flag on population tables (unlike the manifest's
-  deleted column) — removal is real. A soft_parents reference elsewhere
-  pointing at a removed unit_id is left as-is; resolution already treats
-  an unresolvable id as skipped (Functional Spec, Section 7.2), so this
-  is tolerated rather than cleaned up.
+Identity is unit_id, which originates from the API or from the user for a
+manually added row. Import semantics:
+- unit_id matches an existing row -> that row's fields are updated.
+- unit_id matches nothing -> new row.
+- unit_id blank -> skipped. There is nothing to anchor the row to.
+- Known unit_id absent from the file -> row removed. Removal is real;
+  population tables carry no soft-delete flag. A soft_parents reference
+  pointing at a removed unit_id is left dangling, and resolution treats an
+  unresolvable id as skipped.
 """
 
 from chartgen.shared.infrastructure.constants import SPINE_COLUMN_ORDER
@@ -45,10 +37,9 @@ BLANK_INPUT_ROWS = 100
 
 def _table_columns(rows: list) -> list:
     """Spine columns first, then any other (Name() peer-group) columns, in
-    the order they appear on the row. Mirrors
-    chartgen.ui.common.formatting.population_table_columns — kept here too so
-    this module has no dependency on the ui package (one-way dependency
-    rule, Architecture Section 2)."""
+    the order they appear on the row. Duplicated from
+    ui.common.formatting.population_table_columns so this module needs no
+    ui import."""
     if not rows:
         return []
     present = list(rows[0].keys())

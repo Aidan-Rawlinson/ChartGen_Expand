@@ -10,7 +10,7 @@ from chartgen.shared.infrastructure.constants import SPINE_COLUMN_ORDER
 # Re-exported for existing callers — the logic itself now lives in
 # chartgen.shared.infrastructure.value_formatting, since execution-layer code
 # (update_text / stat tags) needs it too and can't import from ui
-# (Architecture, Section 2 — one-way dependencies).
+# so execution-layer code can use it without importing from ui.
 from chartgen.shared.infrastructure.value_formatting import format_number  # noqa: F401
 
 
@@ -76,13 +76,13 @@ def format_uk_time(iso_str: str) -> str:
 
 # Internal column name -> display label. A single mapping so the
 # internal/display split happens in exactly one place — same pattern as the
-# Tab short/full naming convention (Functional Spec §3.2).
+# Tab short/full naming convention.
 #
 # NOTE FOR CLAUDE / FUTURE MAINTAINERS: the internal name is soft_parents,
 # not "parents", deliberately. "Parent" implies a strict one-parent-per-row
 # structure, which is exactly the wrong assumption here — these relationships
 # can be one-to-many, many-to-many, or multiple independent links per row
-# (e.g. one organisation may support two ICBs; see Decisions.md). Calling it
+# (e.g. one organisation may support two ICBs). Calling it
 # "parents" in code or in conversation about this code risks defaulting back
 # to single-value/lookup logic. Keep "soft_parents" everywhere except this
 # one display-label swap — do not rename the underlying column, and do not

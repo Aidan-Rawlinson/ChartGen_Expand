@@ -1,22 +1,14 @@
 """
 compact_layout.py
-Small drop-in replacements for st.subheader/st.caption/st.divider that
-carry the tight, hand-set margins the Outputs tab already uses (its own
-custom-HTML header/section-label/divider style) rather than Streamlit's
-own default block spacing, which is considerably more generous. Exists so
-Imports/Populations/Text can adopt the same visual density as Outputs
-without every call site re-typing the same inline style.
+Drop-in replacements for st.subheader, st.caption and st.divider carrying
+tighter margins than Streamlit's own block spacing.
 
-Deliberately separate from chartgen.ui.common.layout_css, which is a one-off
-global CSS override scoped to the sidebar only (see that module's own
-docstring) — these are per-element markdown substitutions used at
-individual call sites, not a blanket rule applied to a whole content area
-(Streamlit gives no reliable per-tab CSS selector to scope a global rule to
-just these three tabs and not the others).
+Per-element markdown substitutions, used at individual call sites. Distinct
+from layout_css.py, which is a global override: Streamlit gives no reliable
+per-tab selector to scope a global rule to some tabs and not others.
 
-st.markdown still parses ordinary markdown syntax (backtick code spans,
-**bold**, etc.) inside the surrounding HTML tags here, so existing caption
-text using those doesn't need rewriting.
+st.markdown still parses ordinary markdown inside the surrounding HTML tags
+here, so caption text using backticks or bold needs no rewriting.
 """
 
 import streamlit as st

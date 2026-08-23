@@ -20,9 +20,8 @@ def _get_chart_source(base_chart_name: str, custom_chart_code: dict) -> str:
     """
     Built-in: read the whole module the function lives in, not just the
     function itself — each Base Chart module carries its own inlined
-    helpers/constants (Decisions.md; every chart is a standalone artefact,
-    no shared internal helpers module), so inspect.getsource on the
-    function object alone would silently drop everything it depends on.
+    helpers and constants, so inspect.getsource on the function object
+    alone would silently drop everything it depends on.
     Custom: stored source text is already the complete file as pasted in.
     """
     if base_chart_name in CHART_REGISTRY:

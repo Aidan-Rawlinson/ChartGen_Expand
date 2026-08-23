@@ -10,14 +10,8 @@ processing populates the manifest table only, and the single fetch process
 (the Imports tab's Fetch button, chartgen.acquisition.fetch_dispatch) is the
 one place data is pulled.
 
-Also the target for the second trigger described in Architecture Decision 2
-(Running Order regeneration after a structural template re-upload) — this is
-why this coordinator lives here rather than as a one-off function inside the
-Imports tab: the capability isn't unique to that tab.
-
-output_generation.definition.running_order never imports this module or
-anything under acquisition — only this coordinator knows about both
-concerns, so there is no two-way dependency between them.
+Also the entry point for Running Order regeneration after a structural
+template re-upload.
 """
 
 from chartgen.acquisition.template.template_reader import read_template
@@ -34,18 +28,17 @@ from chartgen.output_generation.definition.running_order import (
 
 def merge_output_tables_from_template(template_result, *, workfile_state) -> dict:
     """
-    Create a brand-new Output Table for every [Table] yellow box found in
-    the template — every occurrence, matched or free-floating, always gets
-    its own new table, never matched against an existing one (Decisions.md:
-    the box is just the literal word "Table", with no identity of its own
-    to key off — re-uploading the same template creates a second,
-    independent set of tables rather than reusing the first; the user
-    re-links Running Order rows to whichever set they want). Every table
-    starts at the same fixed size (grid_store.DEFAULT_TABLE_ROWS x
-    DEFAULT_TABLE_COLUMNS) and an auto-generated name (Table_1, Table_2,
-    ...), never colliding with a name already in use. Sets table_id
-    directly on each matching placeholder — must run before
-    generate_from_template, which reads ph.table_id straight off it.
+    Create a brand-new Output Table for every [Table] yellow box in the
+    template. Every occurrence, matched or free-floating, gets its own new
+    table and is never matched against an existing one, so re-uploading the
+    same template produces a second independent set.
+
+    Each table starts at grid_store.DEFAULT_TABLE_ROWS x
+    DEFAULT_TABLE_COLUMNS with an auto-generated name that never collides
+    with one in use.
+
+    Sets table_id directly on each matching placeholder, so this must run
+    before generate_from_template, which reads ph.table_id off it.
 
     Returns {"created": int}.
     """

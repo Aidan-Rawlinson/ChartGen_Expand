@@ -1,23 +1,19 @@
 """
 registry.py
-Chart registry and dispatch — maps base_chart_name to its Base Chart function
-across all four data shapes.
+Maps base_chart_name to its Base Chart function. The one place in the
+codebase that treats Base Charts as a set; each is otherwise a standalone
+artefact importing nothing from ChartGen.
 
-Each Base Chart function is a standalone artefact (its own module, no
-imports from ChartGen's own code) — this is the one place in the codebase
-that treats them as a set. render_chart's signature is the chart_inputs
-contract every Base Chart, built-in or custom, must accept:
-population_layers, width_emu, height_emu, tweaks. No report_context or any other
-runtime object is passed through.
+render_chart's signature is the chart_inputs contract every Base Chart,
+built-in or custom, must accept: population_layers, width_emu, height_emu,
+tweaks.
 
-Before adding a new Base Chart: check the proposed registry key, file
-name, and function name against CHART_REGISTRY and the base_charts
-folder. Base Chart files arrive externally-authored (download/AI-edit/
-paste-back), so a file's own internal module docstring or function name
-may be stale or coincidentally match an existing entry — a name match is
-not evidence the file is meant to replace that entry. Flag any collision
-and confirm with the user before overwriting or reusing an existing
-key/file/function name; do not assume replacement was intended.
+Before adding one, check the proposed registry key, file name and function
+name against CHART_REGISTRY and the base_charts folder. These files arrive
+externally authored, so a file's own docstring or function name may be stale
+or may coincidentally match an existing entry. A name match is not evidence
+that replacement was intended: flag any collision and confirm before
+overwriting.
 """
 
 from chartgen.output_generation.execution.charts.base_charts.numeric_series.ranked_column import ranked_column
@@ -97,18 +93,14 @@ CHART_REGISTRY = {
 def render_chart(base_chart_name: str, population_layers: list,
                  width_emu: int, height_emu: int, tweaks=""):
     """
-    Returns image_bytes only — a Base Chart function's sole job is
-    producing the visual. Statistics and unit lists are a property of the
-    data shape (chartgen.shared.normalisation_containers.shapes), not something
-    the charting layer computes or relays: a caller that needs them already
-    has population_layers in scope and calls summary_stats_by_layer /
-    units_by_layer directly, rather than routing through here.
+    Returns image_bytes only. Statistics and unit lists are a property of the
+    data shape, not something the charting layer computes or relays: a caller
+    that needs them already holds population_layers and calls
+    summary_stats_by_layer or units_by_layer directly.
 
-    chart_inputs contract: population_layers, width_emu, height_emu, tweaks. No
-    report_context or any other ChartGen runtime object is passed to a
-    Base Chart function — Selected-unit identity is read from the
-    "Selected"-labelled entry in population_layers by whichever chart
-    needs it.
+    chart_inputs contract: population_layers, width_emu, height_emu, tweaks.
+    No report_context or other runtime object is passed. Selected-unit
+    identity is read from the "Selected"-labelled population_layers entry.
     """
     if base_chart_name not in CHART_REGISTRY:
         raise ValueError(f"Unknown base_chart_name: {base_chart_name}")

@@ -1,10 +1,7 @@
 """
 table_naming.py
-Naming convention for the population tables built from nhs toolkit data.
-nhs-specific: a different database will have its own naming convention, not
-necessarily this one. Kept separate from new_workfile.py (which builds the
-tables) so acquisition.toolkit_nhs.fetch can also use it, without acquisition
-code depending on workfile.setup.
+Naming convention for the population tables built from NHS toolkit data.
+NHS-specific: another database has its own convention.
 """
 
 

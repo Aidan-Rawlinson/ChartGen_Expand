@@ -1,27 +1,20 @@
 """
 resolve.py
-Resolves an Output Table's grid into plain values ready for a base_table
-renderer: parsed column widths / row heights, and a content grid with every
-"[tag]" Stat Tag resolved to its current value for the reporting unit --
-the same token map update_text uses (build_stat_tag_tokens,
-chartgen.output_generation.execution.text.text_engine), not duplicated here.
-Literal text passes straight through.
+Resolves an Output Table's grid into plain values ready for a Base Table:
+parsed column widths and row heights, and a content grid with every Stat Tag
+resolved to its current value for the reporting unit. Uses the same token
+map update_text builds, not a duplicate. Literal text passes through.
 
-Chart-component cells ("{Cn}") are recognised by the grid's own grammar
-(grid_store.py) but left untouched here, exactly like any other
-unresolved literal text -- a Base Table function itself recognises and
-acts on them (Decision 28), reporting back the cell rectangle it reserved
-for each one rather than drawing it as text. Text resolution (this
-module) and chart-cell resolution (inside the Base Table function) are
-deliberately two separate steps against the same content grid.
+The one shared place both the final report and the Preview resolve content
+through, so two conventions are handled here and nowhere else.
 
-Line breaks: a typed "<br>" (also "<br/>" and "<br />", case-insensitive)
-is converted to a real newline here -- the one shared place both the
-final report (insert_table.py) and the Preview (output_tables_tab.py) both
-resolve content through, so a Base Table function only ever needs to
-handle an actual "\\n" character, never the typed convention itself.
-Matplotlib's own Text renders an embedded "\\n" as stacked lines natively;
-no Base Table function needs to know "<br>" exists.
+Chart-component cells ("{Cn}") are left untouched, like any other literal.
+The Base Table function recognises them itself and reports back the
+rectangle it reserved, rather than drawing them as text.
+
+A typed "<br>", "<br/>" or "<br />", case-insensitive, becomes a real
+newline, so a Base Table only ever handles an actual newline character.
+Matplotlib renders an embedded newline as stacked lines natively.
 """
 
 import re

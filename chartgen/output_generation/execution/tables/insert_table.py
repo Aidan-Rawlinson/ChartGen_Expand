@@ -1,36 +1,26 @@
 """
 insert_table.py
-Running Order function: insert_table -- renders an Output Table (a grid of
-constant text and resolved Stat Tag values, composited to a single image by
-a Base Table function) and inserts it at the row's position. The Output
-Table equivalent of insert_chart (assembly_engine.py), kept in its own
-module under execution/tables/ rather than folded into assembly_engine,
-mirroring how update_text was promoted to its own module under
-execution/text/ (Architecture Decision 20).
+Running Order function: insert_table. Renders an Output Table, a grid of
+constant text and resolved Stat Tag values composited to a single image by a
+Base Table function, and inserts it at the row's position. The Output Table
+equivalent of insert_chart, in its own module.
 
-An Output Table is defined independently of any Running Order row (the
-same relationship a Stat Tag has to insert_chart rows) -- table_id anchors
-an insert_table row to one of WorkfileState.output_tables, not the other
-way round.
+An Output Table is defined independently of any Running Order row. table_id
+anchors an insert_table row to one of WorkfileState.output_tables, not the
+other way round.
 
-table_type_ref is resolved built-in first, then against this workfile's
-own saved Custom Tables (get_table_callable) -- a custom table behaves
-identically to a built-in from this point on, mirroring insert_chart's own
-get_chart_callable resolution exactly.
+table_type_ref resolves built-in first, then against this workfile's saved
+Custom Tables. A custom table behaves identically to a built-in from here on.
 
-Chart-component cells (Decision 28) -- a Base Table function returns
-(image_bytes, chart_cells), chart_cells being {tag: {"x","y","width",
-"height"}} in EMU, one entry per "{Cn}" cell it actually drew space for.
-For each one found, the Chart Store entry it names is rendered at that
-cell's own EMU rectangle -- never the entry's own stored size -- and
-inserted as a second picture, layered on top of the table's own, rather
-than composited into the table's own SVG (Decisions.md: charts inside
-tables are always layered PowerPoint shapes, not merged image data).
+A Base Table returns (image_bytes, chart_cells), chart_cells being
+{tag: {"x", "y", "width", "height"}} in EMU, one entry per "{Cn}" cell it
+reserved space for. For each, the Chart Store entry it names is rendered at
+that rectangle, never the entry's own stored size, and inserted as a second
+picture layered over the table's own. A chart inside a table is always a
+layered PowerPoint shape, never merged image data.
 
-A Chart Store entry's own blank populations field inherits the Running
-Order default (ctx.default_populations, set by a set_default_populations
-row earlier in the same run) -- the same inherit rule an insert_chart
-row's own blank populations field follows.
+A Chart Store entry's blank populations field inherits the Running Order
+default, the same rule an insert_chart row follows.
 """
 
 from dataclasses import replace as _dc_replace
@@ -44,38 +34,29 @@ from chartgen.output_generation.execution.charts.custom_charts import get_chart_
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from chartgen.shared.normalisation_containers.population_layers import build_population_layers
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
-# full reasoning. Must match every Base Chart's and Base Table's own
-# local TEXT_SCALE, and assembly_engine.py's own CHART_RENDER_SCALE,
-# exactly -- not enforced in code, per "Base Charts are outside the
-# system boundary" (no shared import between this file and any Base
-# Chart/Table).
+# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# copies in assembly_engine.py, charts_tab.py and output_tables_tab.py.
+# Nothing enforces this and a mismatch fails silently. Full mechanism in
+# tables/base_tables/CLAUDE.md.
 #
-# A Base Table is called here with width_emu/height_emu multiplied by
-# this factor, same as insert_chart. Its returned chart_cells rectangle
-# (Decision 28) comes back in that same inflated space, since a Base
-# Table derives it proportionally from whatever width_emu/height_emu it
-# was actually given -- so before that rectangle is used as a real
-# slide-EMU placement offset (add_svg_picture's own left/top/width/
-# height), it must be divided back down by CHART_RENDER_SCALE. The
-# embedded chart's own *render* call needs no such division -- chart_rect's
-# raw (undivided) width/height is already exactly CHART_RENDER_SCALE
-# times the real cell size, which is exactly what a Base Chart expects
-# to be called with under this same mechanism.
+# A Base Table's returned chart_cells rectangle comes back in inflated
+# space, since the table derives it from the width_emu/height_emu it was
+# given. Divide by this factor before using it as a real slide placement
+# offset. Do NOT divide before the embedded chart's own render call: the
+# raw rectangle is already what a Base Chart expects.
 CHART_RENDER_SCALE = 5
 
 
 def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, workfile_state):
     """
     Render one Chart Store entry's own saved chart-def, sized to
-    chart_rect (a Base Table's own reserved rectangle for this cell) --
-    Decisions.md: a chart embedded in a table cell is always drawn to fit
-    the cell, never its own stored size. Mirrors insert_chart's own
-    cache-load / cut / population-layers / render pipeline
-    (assembly_engine.py) field for field, sourced from a Chart Store row
-    instead of a Running Order row. Returns None on any failure -- one
-    broken chart cell doesn't abort the whole table.
+    chart_rect, the Base Table's own reserved rectangle for this cell. A
+    chart in a table cell is always drawn to fit the cell, never its own
+    stored size.
+
+    Runs the same cache-load, cut, population-layers and render pipeline
+    insert_chart uses, sourced from a Chart Store row. Returns None on any
+    failure: one broken chart cell does not abort the whole table.
 
     chart_rect is in the *render*-space the enclosing Base Table was
     actually called at (already CHART_RENDER_SCALE times the real cell
@@ -92,10 +73,9 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
     if not cache_file or not base_chart_name:
         return None
 
-    # A blank populations field on the Chart Store entry means "inherit the
-    # Running Order default" (the same inherit rule any insert_chart row
-    # follows) -- ctx.default_populations is set live by a
-    # set_default_populations row earlier in this same run.
+    # A blank populations field inherits the Running Order default, the same
+    # rule any insert_chart row follows. ctx.default_populations is set by a
+    # set_default_populations row earlier in this run.
     row_populations = str(chart_store_row.get("populations", "") or "").strip()
     populations_str = row_populations if row_populations else ctx.default_populations
 
@@ -114,12 +94,9 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
             workfile_state.tables, workfile_state.table_order, ctx.full_unit_set or {},
         )
     except Exception:
-        # An unresolvable metric_periods id no longer raises here (see
-        # time_series_to_numeric_series' own docstring) — it comes
-        # through as a real metric with no data. Genuinely unexpected
-        # failures only now; still returns None rather than propagating,
-        # per this function's own "one broken chart cell doesn't abort
-        # the whole table" contract.
+        # An unresolvable metric_periods id does not raise; it arrives as a
+        # metric with no data. So this catches genuinely unexpected failures
+        # only, and still returns None rather than aborting the table.
         return None
 
     population_layers = []
@@ -195,8 +172,7 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
 
     try:
         slide = ctx.prs.slides[slide_index]
-        # Every Base Table returns SVG bytes (see Architecture, SVG
-        # rendering methodology) -- inserted via the shared add_svg_picture
+        # Every Base Table returns SVG bytes -- inserted via the shared add_svg_picture
         # dual-blip mechanism rather than a plain add_picture call. Placed
         # at the row's real, unmultiplied width_emu/height_emu -- the
         # inflated image_bytes shrinks back down to this on the slide,

@@ -18,19 +18,13 @@ from chartgen.shared.infrastructure.version_compatibility import (
     get_file_version_written, get_software_id,
 )
 
-# Population-level tables (nhs_organisations, submissions_{year}_{project_id},
-# and any future table) have no single fixed column schema here — each is
-# written using its own rows' keys (see _rows_to_csv's fallback). Every such
-# table shares a common spine (unit_id, unit_code, unit_name, soft_parents,
-# plus any number of Name() peer-group columns); the actual column list for
-# a given table is owned by whichever module builds its rows — new_workfile.py
-# for the tables built at New Workfile time.
+# Population-level tables have no fixed column schema here. Each is written
+# from its own rows' keys (see _rows_to_csv's fallback). The shared spine is
+# a convention owned by whichever module builds the rows, not enforced here.
 
-# data_cache/manifest.csv column schema — the URL/chart table. One row per
-# chart URL, keyed permanently by hex_id. Replaces the former
-# workfile_config/urls.csv and data_cache/manifest.json (single source of
-# truth; the manifest is the index to the data_cache it sits inside).
-# Unfetched cells hold the PLACEHOLDER value rather than sitting empty.
+# data_cache/manifest.csv column schema. One row per chart URL, keyed
+# permanently by hex_id. The manifest is the index to the data_cache it sits
+# inside. Unfetched cells hold PLACEHOLDER rather than sitting empty.
 MANIFEST_FIELDNAMES = [
     "chart_ref",        # display index, Chart_0001 style — renumbers across non-deleted rows
     "hex_id",           # 5-digit hexadecimal, stable internal key — never reused, never renumbered
@@ -49,33 +43,21 @@ MANIFEST_FIELDNAMES = [
 
 PLACEHOLDER = "..."
 
-# workfile_config/custom_charts/custom_charts.csv column schema — the index
-# of every custom Base Chart saved into this workfile. Source code itself
-# lives alongside it, one file per row, at
-# workfile_config/custom_charts/{shape_type}/{base_chart_name}.py — the same
-# folder-per-shape convention the built-in Base Charts use (Architecture,
-# base_charts/{shape}/). Mirrors the manifest/cache split: this file is the
-# index, the .py files are the payload.
+# workfile_config/custom_charts/custom_charts.csv: the index of every custom
+# Base Chart in this workfile. Source lives one file per row at
+# custom_charts/{shape_type}/{base_chart_name}.py, the same folder-per-shape
+# convention the built-ins use. Index here, payload in the .py files.
 CUSTOM_CHART_FIELDNAMES = ["base_chart_name", "shape_type", "added_at", "notes"]
 
-# workfile_config/custom_tables/custom_tables.csv column schema -- the
-# index of every custom Base Table saved into this workfile (Decisions.md).
-# Source code lives alongside it, one file per row, directly at
-# workfile_config/custom_tables/{table_type_ref}.py -- no per-shape
-# subfolder, unlike custom_charts, since a Base Table isn't scoped to any
-# one canonical data shape (every one takes the same already-resolved
-# grid). Mirrors the manifest/cache split the same way custom_charts does:
-# this file is the index, the .py files are the payload.
+# workfile_config/custom_tables/custom_tables.csv: the index of every custom
+# Base Table in this workfile. Source lives one file per row at
+# custom_tables/{table_type_ref}.py, flat, because a Base Table is not scoped
+# to a data shape. Index here, payload in the .py files.
 CUSTOM_TABLE_FIELDNAMES = ["table_type_ref", "added_at", "notes"]
 
-# workfile_config/text_stats.csv column schema — "stat tags": short,
-# permanent tag ids (Decisions.md) standing in for one summary-stats value
-# from one chart's own independently-authored cut of its cached data, for
-# use in update_text (ordinary text frames and, as of this session, table
-# cells too). Anchored on hex_id — the manifest's stable identity — rather
-# than chart_ref, which renumbers whenever the manifest table changes.
-# Genuinely new state, not derived from any Running Order row: a stat tag
-# isn't tied to any specific insert_chart row.
+# workfile_config/text_stats.csv: Stat Tags. Anchored on hex_id, the
+# manifest's stable identity, never chart_ref, which renumbers. Not tied to
+# any Running Order row.
 TEXT_STATS_FIELDNAMES = [
     "tag",             # "T" + base-36 id, never reused — the literal [tag] template text
     "hex_id",          # manifest hex_id this tag's data comes from
@@ -87,32 +69,22 @@ TEXT_STATS_FIELDNAMES = [
     "description",     # optional free text, user reference only, ignored at resolution
 ]
 
-# workfile_config/output_tables/output_tables.csv column schema -- the
-# index of every Output Table defined in this workfile (Decisions.md). This
-# is the index only; the grid itself is one CSV per table_id, held
-# alongside it at workfile_config/output_tables/{table_id}.csv, with no
-# fixed column schema of its own (same convention as the population tables
-# above) -- see chartgen.output_generation.execution.tables.grid_store for its
-# internal layout (column widths / row heights / content cells).
+# workfile_config/output_tables/output_tables.csv: the index only. Each
+# grid is its own CSV at output_tables/{table_id}.csv, with no fixed column
+# schema. Layout in tables/grid_store.py.
 OUTPUT_TABLE_FIELDNAMES = [
     "table_id",    # base-36 id, never reused -- also written, cosmetically only, into the grid's own corner cell
     "table_name",  # user-facing name -- user-typed for a manually-created table,
                    # auto-generated (Table_1, Table_2, ...) for a yellow-box one
-                   # (Decisions.md: re-upload always creates a fresh set, never
-                   # matched against an existing table by name)
+                   # re-upload always creates a fresh set, never matched
+                   # against an existing table by name
     "rows",        # content grid row count (N), excluding the header row
     "columns",     # content grid column count (M), excluding the header column
 ]
 
-# workfile_config/chart_store.csv column schema -- the Chart Store: a flat,
-# unordered set of independently-authored chart-defs, for use as chart
-# components inside Output Table cells (sparklines, grid layouts, etc) --
-# independent of the Running Order, which is strictly a sequence of report
-# content. Mirrors CHART_SANDBOX_FIELDS (the Charts sheet's own
-# insert_chart round-trip field list) plus its own base-36 id (mirroring
-# Stat Tags/Output Tables -- id_generation, settings["next_chart_store_id"])
-# and an optional free-text description, the same convention text_stats.csv
-# uses for its own rows.
+# workfile_config/chart_store.csv: the Chart Store. Flat and unordered, with
+# no position field, and independent of the Running Order. Mirrors
+# CHART_SANDBOX_FIELDS plus its own id and an optional description.
 CHART_STORE_FIELDNAMES = [
     "chart_store_id",  # "C" + base-36 id, never reused
     "base_chart_name",
@@ -202,10 +174,8 @@ class WorkfileState:
     cache: dict = field(default_factory=dict)         # keyed by filename ({hex_id}.json) -> json string
 
     # workfile_config/custom_charts/ — user- or AI-authored Base Charts,
-    # saved into this workfile. custom_chart_rows mirrors manifest_rows
-    # (the index); custom_chart_code mirrors cache (the payload, keyed by
-    # base_chart_name rather than filename since that's this store's own
-    # stable identity — see Decisions.md).
+    # saved into this workfile. custom_chart_rows is the index,
+    # custom_chart_code the payload, keyed by base_chart_name.
     custom_chart_rows: list = field(default_factory=list)  # CUSTOM_CHART_FIELDNAMES rows
     custom_chart_code: dict = field(default_factory=dict)  # {base_chart_name: source_text}
 
@@ -216,19 +186,16 @@ class WorkfileState:
     custom_table_rows: list = field(default_factory=list)  # CUSTOM_TABLE_FIELDNAMES rows
     custom_table_code: dict = field(default_factory=dict)  # {table_type_ref: source_text}
 
-    # workfile_config/text_stats.csv — "stat tags" (Decisions.md), TEXT_STATS_FIELDNAMES rows
+    # workfile_config/text_stats.csv — "stat tags", TEXT_STATS_FIELDNAMES rows
     text_stats_rows: list = field(default_factory=list)
 
-    # workfile_config/chart_store.csv -- Chart Store (Decisions.md):
-    # independently-authored chart-defs, for use as chart components inside
-    # Output Table cells. CHART_STORE_FIELDNAMES rows, flat and unordered --
-    # no position/sequence concept, unlike running_order_rows.
+    # workfile_config/chart_store.csv, CHART_STORE_FIELDNAMES rows. Flat
+    # and unordered: no position concept, unlike running_order_rows.
     chart_store_rows: list = field(default_factory=list)
 
-    # workfile_config/output_tables/ -- Output Tables (Decisions.md).
-    # output_table_rows mirrors custom_chart_rows (the index, OUTPUT_TABLE_FIELDNAMES);
-    # output_tables mirrors WorkfileState.tables (population tables) -- one
-    # grid per table_id, no fixed column schema -- see grid_store.py.
+    # workfile_config/output_tables/. output_table_rows is the index
+    # (OUTPUT_TABLE_FIELDNAMES); output_tables holds one grid per table_id,
+    # with no fixed column schema.
     output_table_rows: list = field(default_factory=list)
     output_tables: dict = field(default_factory=dict)
 

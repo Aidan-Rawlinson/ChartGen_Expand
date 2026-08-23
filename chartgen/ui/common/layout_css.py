@@ -12,20 +12,13 @@ that no native Streamlit parameter controls:
    content area) via the stSidebar ancestor selector, so this doesn't
    affect chart-tab spacing etc.
 
-An earlier version of this file also forced padding-top down on the main
-content area's block-container, as a first guess at the sidebar gap before
-the real cause (stSidebarHeader/stLogoSpacer, below) was found via browser
-inspection. That rule was never actually doing anything useful — but it
-was left in place unnecessarily, and eventually clipped the main "ChartGen"
-title against Streamlit's fixed header bar (too tight for that font size).
-Removed for that reason: it wasn't fixing anything real, and it broke
-something real.
+Do not add a padding-top rule on the main block-container: it clips the
+"ChartGen" title against Streamlit's fixed header bar.
 
-This is a deliberate, narrow exception to keeping the UI free of custom
-CSS — the underlying spacing genuinely isn't reachable through Streamlit's
-own widget parameters (unlike, e.g., st.header's anchor=False). If a
-future Streamlit upgrade changes these selectors again, this is the one
-place to update.
+A narrow, deliberate exception to keeping the UI free of custom CSS, because
+this spacing is not reachable through Streamlit's own widget parameters. If
+a Streamlit upgrade changes these selectors, this is the one place to
+update.
 """
 
 import streamlit as st

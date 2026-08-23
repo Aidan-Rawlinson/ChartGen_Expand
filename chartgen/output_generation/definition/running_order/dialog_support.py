@@ -9,10 +9,9 @@ Order's own schema and validity, not about rendering.
 
 from chartgen.output_generation.execution.charts.chart_type_map import get_chart_types_by_shape
 from chartgen.output_generation.execution.charts.custom_charts import merge_custom_refs_for_shape
-# Re-exported for existing callers — the logic itself now lives in
-# chartgen.shared.infrastructure.period_ids, since shared-layer normalisation
-# code (cut_resolution.py) needs it too and can't import from
-# output_generation.definition (Architecture, Section 2).
+# Re-exported for existing callers. The logic lives in
+# shared.infrastructure.period_ids, because shared-layer code needs it and
+# cannot import from here.
 from chartgen.shared.infrastructure.period_ids import (  # noqa: F401
     parse_metric_periods_string, build_metric_periods_string,
 )
@@ -23,12 +22,13 @@ def get_valid_chart_refs_for_cache_file(cache_file: str, manifest: dict, convert
     """
     Return the list of base_chart_name values valid for the data shape of the
     given cache file, per the shape/chart-type pairing in chart_type_map.csv,
-    plus this workfile's own saved custom charts for that same shape
-    (custom_chart_rows — omit or pass None/[] to list built-ins only, e.g.
-    for the auto-default-on-fetch path in generation.py, which deliberately
-    never defaults to a custom chart). Falls back to every chart type
-    across all shapes if the cache file or its shape type is not found in
-    the manifest.
+    plus this workfile's own saved custom charts for that same shape. Omit
+    custom_chart_rows, or pass None, to list built-ins only; the
+    auto-default-on-fetch path in generation.py does this, so it never
+    defaults to a custom chart.
+
+    Falls back to every chart type across all shapes if the cache file or
+    its shape type is not in the manifest.
 
     converts_to_metrics: True when the row's metric_periods is set, meaning
     a TimeSeries cache_file is converted to a NumericSeries snapshot before

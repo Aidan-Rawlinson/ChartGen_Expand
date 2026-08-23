@@ -42,9 +42,8 @@ def filter_shape(shape, unit_ids: set):
 def apply_period_range(shape, start_period_id: str = "", end_period_id: str = ""):
     """
     Trim a shape to a period_id range, ahead of any population-layer
-    filtering — a normalisation step at the boundary, not a charting
-    concern (Primer, Section 4). No-op for any shape without a period axis;
-    only TimeSeries carries one.
+    filtering. No-op for any shape without a period axis; only TimeSeries
+    has one.
     """
     if isinstance(shape, TimeSeries):
         return filter_time_series_periods(shape, start_period_id, end_period_id)
@@ -80,14 +79,12 @@ def summary_stats_by_layer(population_layers: list) -> dict:
 
 def shape_units(shape) -> list:
     """
-    Return the list of Unit-like objects (unit_id/unit_code) making up a
-    shape's actual population — the same unit list ShapeStats' own counts
-    are already computed from. NumericSeries and PairedSurveyData each
-    carry a single shape-level units list; the other three shapes carry
-    one units list per metric-series, but every metric-series within one
-    shape instance shares the same population (the existing count_units
-    calculation already assumes this — see the filter_* functions), so
-    metrics[0].units stands in for the shape as a whole.
+    Return the Unit-like objects making up a shape's population.
+
+    NumericSeries and PairedSurveyData carry a single shape-level units
+    list. The other three carry one per metric-series, but every
+    metric-series in one shape instance shares the same population, so
+    metrics[0].units stands in for the whole shape.
     """
     if isinstance(shape, (NumericSeries, PairedSurveyData)):
         return shape.units

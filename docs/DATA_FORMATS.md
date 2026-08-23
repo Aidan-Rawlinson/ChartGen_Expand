@@ -130,7 +130,7 @@ table_name:id1^id2|table_name:id3
 | `row_id` | 1-based integer. Renumbers on insert, delete or reorder. Never a storage key |
 | `enabled` | 1 or 0. Disabled rows are skipped |
 | `scope` | `normal`, `batch_open` or `batch_close` |
-| `function` | One of the twelve function names |
+| `function` | One of the Running Order function names listed below |
 | `slide_index` | 0-based. Blank for structural functions |
 | `base_chart_name` | Base Chart function name. Chart rows only |
 | `cache_file` | Cache filename supplying this chart's data. Chart rows only |
@@ -153,7 +153,7 @@ table_name:id1^id2|table_name:id3
 
 A hyperlink icon is drawn only when both `hyperlink_left` and `hyperlink_top` are present. Blank in either means no icon. `0` is a present, valid value and is not the same as blank.
 
-The twelve functions: `create_ppt`, `set_default_populations`, `update_text`, `insert_chart`, `insert_table`, `insert_picture`, `insert_from_excel`, `open_excel`, `close_excel`, `empty_placeholder`, `save_ppt`, `save_pdf`.
+The functions: `create_ppt`, `set_default_populations`, `update_text`, `insert_chart`, `insert_table`, `insert_picture`, `insert_from_excel`, `open_excel`, `close_excel`, `empty_placeholder`, `save_ppt`, `save_pdf`.
 
 ---
 

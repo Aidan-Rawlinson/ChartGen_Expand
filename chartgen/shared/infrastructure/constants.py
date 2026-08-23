@@ -1,12 +1,8 @@
 """
 constants.py
 Generic record-shape constants and CSV/WorkfileState field-type coercion.
-Renamed from constants_temp.py — the "temp" marker no longer applies now
-this restructure has landed.
-
-Audited against Restructure_Plan.md Open Item 2: only coerce_row/FIELD_TYPES
-are genuinely generic (used by api_client, running_order, and workfile_file,
-with no domain knowledge of any one of them).
+Used by api_client, running_order and workfile_file alike, with no domain
+knowledge of any of them.
 """
 
 FIELD_TYPES = {
@@ -16,10 +12,10 @@ FIELD_TYPES = {
     "enabled":         "bool_int",
 }
 
-# Population-table shared spine, display/authoring order. Any column not in
-# this list (Name() peer-group columns) follows after, in the order it
-# appears on the row. Used by the UI (column display order) and the Excel
-# round-trip (export/import column order) — one definition, not two.
+# Population-table shared spine, in display/authoring order. Any column not
+# listed here (Name() peer-group columns) follows after, in the order it
+# appears on the row. Read by both the UI's column display order and the
+# Excel round-trip's export/import order.
 SPINE_COLUMN_ORDER = ["unit_id", "unit_code", "unit_name", "soft_parents"]
 
 

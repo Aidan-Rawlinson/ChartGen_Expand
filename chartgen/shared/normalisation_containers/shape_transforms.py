@@ -1,20 +1,15 @@
 """
 shape_transforms.py
-Cross-shape transforms — conversions between two different canonical data
-shapes, as opposed to the same-shape filtering/recalculation each shape
-module owns for itself (shapes/dispatch.py). Lives outside the shapes/
-package for the same reason url_triage.py and fetch_dispatch.py sit outside
-both toolkit packages (Architecture, Decision 10): something has to know
-about two shapes at once without either shape module depending on the
-other.
+Conversions between two different canonical data shapes, as opposed to the
+same-shape filtering each shape module owns. Sits outside shapes/ because
+converting needs to know about both shapes and neither shape module may
+depend on the other.
 
-time_series_to_numeric_series() converts one or more periods on a
-TimeSeries shape into a snapshot NumericSeries — one output Metric-Series
-per (source Metric-Series x selected period), so the result can be handed
-to any ordinary NumericSeries chart type. Applied ahead of
-build_population_layers, the same normalisation-at-the-boundary point as
-apply_period_range (shapes/dispatch.py) — the charting side never needs to
-know a TimeSeries was ever involved.
+time_series_to_numeric_series converts one or more periods on a TimeSeries
+into a snapshot NumericSeries, one output Metric-Series per source
+Metric-Series per selected period, so the result can go to any NumericSeries
+chart type. Applied ahead of build_population_layers, so the charting side
+never needs to know a TimeSeries was involved.
 """
 
 from chartgen.shared.normalisation_containers.shapes.common import ShapeStats
@@ -29,41 +24,23 @@ def time_series_to_numeric_series(shape: TimeSeries, period_ids: list) -> Numeri
     Convert a TimeSeries shape into a NumericSeries snapshot across one or
     more periods.
 
-    Output ordering: grouped by source Metric-Series first, then by period
-    within it (M1-P1, M1-P2, M2-P1, M2-P2...) — periods always in the
-    shape's own trusted-chronological order, regardless of the order
-    period_ids are given in. Output metric name: "{Metric-Series name}
-    ({period label})".
+    Output is grouped by source Metric-Series first, then by period within
+    it, with periods in the shape's own chronological order regardless of
+    the order period_ids are given. Output metric names are
+    "{Metric-Series name} ({period label})".
 
-    Unit population: built as the union of every source metric's units, in
-    first-seen order (metric order, then that metric's own unit order). In
-    practice every Metric-Series on one TimeSeries shares one fetch and one
-    population, so this is normally just the first metric's own unit list —
-    the union is a defensive measure, not an expected divergence. A unit
-    missing from a given source metric contributes None for that metric's
-    columns rather than being dropped from the output entirely.
+    The unit population is the union of every source metric's units, in
+    first-seen order. A unit missing from a source metric contributes None
+    for that metric's columns rather than being dropped.
 
-    Metadata: title, format_modifier, population_table, population_label,
-    metadata, and has_valid_unit_data carry across unchanged. year is left
-    None -- TimeSeries/Indicators data has no year of its own (Architecture,
-    Decision 10), so there's nothing meaningful to set it to.
+    title, format_modifier, population_table, population_label, metadata and
+    has_valid_unit_data carry across unchanged. year is left None, since
+    this data has no year of its own.
 
-    A period_id not present on the shape (a typo, or a period this
-    report's own data simply doesn't have -- see Decisions.md) is not
-    treated as an error. Rather than refuse to produce a shape at all, it
-    becomes its own output metric with every unit's value set to None --
-    the same "no data" state any other missing value already produces
-    everywhere downstream (every Base Chart already handles a metric with
-    no data for some or all units gracefully -- see the chart_inputs
-    contract). Whether and how to represent that visually is each Base
-    Chart's own concern, not something resolved here; ChartGen's job is
-    to hand over the data faithfully, including the fact that this
-    particular period doesn't exist for this report. A missing id keeps
-    its own given position among that metric's output columns (after
-    every id that *did* resolve, in their shape-chronological order) --
-    there's no chronological position to sort it into, since it isn't a
-    real period on this shape at all. Its label falls back to the bare
-    id itself, in parentheses, since there's no period_label to read.
+    A period_id absent from the shape is not an error. It becomes its own
+    output metric with every unit's value None, labelled with the bare id in
+    parentheses, and keeps its given position after every id that did
+    resolve. How to show that is each Base Chart's concern.
     """
     index_by_id = {p.period_id: i for i, p in enumerate(shape.periods)}
     found_ids = [pid for pid in period_ids if pid in index_by_id]

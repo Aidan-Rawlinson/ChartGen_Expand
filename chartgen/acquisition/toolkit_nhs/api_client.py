@@ -9,7 +9,8 @@ from chartgen.shared.infrastructure.constants import coerce_row
 from chartgen.acquisition.toolkit_nhs.submission_codes import normalise_submission_code
 
 BASE_URL = "https://membersapi.nhsbenchmarking.nhs.uk"
-ORGANISATION_ID = 232  # Default org used to retrieve full population data
+# Placeholder organisation, not a real one. Used to retrieve full population data.
+ORGANISATION_ID = 232
 
 
 def get_token(username: str, password: str) -> str:

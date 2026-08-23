@@ -2,9 +2,8 @@
 transformers.py
 One transformation function per stored procedure group; each converts raw API JSON into a canonical data shape.
 
-Metric-Series stats are not computed here — each shape module owns the single
-canonical stats computation for its shape (compute_*_stats), shared with
-population-filter recalculation.
+Metric-Series stats are not computed here. Each shape module owns the single
+canonical stats computation for its shape.
 """
 
 from dataclasses import replace

@@ -1,47 +1,29 @@
 """
 stat_tags.py
-Defines and resolves "stat tags" — short, permanent identifiers ("T" plus
-a base-36 counter, e.g. "T1", "Ta3") standing in for one summary-stats
-value from one chart's own data, for use by update_text (ordinary text
-frames and table cells) and previewed on the Text tab. The "T" prefix
-disambiguates a Stat Tag from a Chart Store id ("C" prefix) when both
-appear inside the same Output Table cell grammar (Decision 28).
+Defines and resolves Stat Tags: short, permanent ids ("T" plus a base-36
+counter) standing in for one summary-stats value from one chart's own data.
+Read by update_text, previewed on the Text tab. The "T" prefix
+disambiguates a Stat Tag from a Chart Store id when both appear in the same
+Output Table cell grammar.
 
-A stat tag's own row (workfile_config/text_stats.csv, WorkfileState.text_stats_rows)
-carries everything needed to reproduce the exact filtered data_shape a Base
-Chart would see for one population — hex_id (the manifest's stable
-identity; NOT chart_ref, which renumbers whenever the manifest table
-changes — Decisions.md), its own populations string, its own start_period/
-end_period/metric_periods (TimeSeries only) — plus which Reference id
-(shapes/reference_ids.py) to read off it. This mirrors insert_chart's own
-cut of a Running Order row's cache_file/populations (assembly_engine.py),
-just authored independently — a stat tag isn't tied to any specific
-insert_chart row.
+A tag's row carries everything needed to reproduce the exact filtered shape
+a Base Chart would see for one population: hex_id, its own populations
+string, its own period fields, and which reference id to read. Anchored on
+hex_id, never chart_ref, which renumbers whenever the manifest changes.
 
-A stat tag's populations string is deliberately restricted to a single
-token (the Text tab enforces this with a selectbox, not a multiselect) —
-a tag resolves to one value, so it only ever needs one population, not an
-ordered set of layers the way a chart's populations string does. This
-means build_population_layers always returns exactly one layer for a stat
-tag's populations string, so there is nothing to track beyond "the one
-layer produced" — no layer_index or equivalent identity is needed (an
-earlier version of this module did track one, when a tag's populations
-string could still hold more than one token; removed once that was
-restricted to a single token).
+A tag's populations string is restricted to a single token, enforced by a
+selectbox rather than a multiselect: a tag resolves to one value, so
+build_population_layers always returns exactly one layer and there is
+nothing to track beyond it.
 
-The cut pipeline itself (period trim, metric-periods conversion,
-population-table/target-rows/selected-ids resolution, then
-build_population_layers) is shared with insert_chart and the Charts sheet
-via chartgen.shared.normalisation_containers.cut_resolution — this module only
-adds the cache-loading step (hex_id -> cache_file -> load_shape) that's
-specific to how a stat tag identifies its chart, and the final lookup of
-one Reference id's value within the one resulting layer.
+The cut pipeline is shared with insert_chart and the Charts sheet via
+cut_resolution. This module adds only the cache-loading step specific to how
+a tag identifies its chart, and the final reference-id lookup within the one
+resulting layer.
 
-Tag ids are issued from a persisted, monotonically increasing counter
-(settings["next_stat_tag_id"]), never recomputed from the surviving rows —
-recomputing from what's left after a delete would let a freshly-issued tag
-reuse an id some other, still-untouched piece of template text already
-points at.
+Tag ids come from a persisted, monotonically increasing counter, never
+recomputed from surviving rows: recomputing after a delete would let a fresh
+tag reuse an id some untouched piece of template text still points at.
 """
 
 from chartgen.output_generation.execution.charts.cache_reader import load_shape
@@ -60,7 +42,7 @@ def next_stat_tag(settings: dict) -> str:
     chartgen.shared.infrastructure.id_generation — but its own counter key, so
     the id spaces never collide or interleave). The "T" prefix disambiguates
     a Stat Tag from a Chart Store id ("C" prefix) when both are used inside
-    the same Output Table cell grammar (Decision 28) — not needed for the
+    the same Output Table cell grammar — not needed for the
     counter itself, which already has its own key.
     """
     return "T" + next_id(settings, "next_stat_tag_id")
@@ -101,7 +83,7 @@ def resolve_stat_cut(hex_id: str, populations_str: str, start_period: str, end_p
 
     Returns (population_layers, effective_shape_type) — effective meaning
     "NumericSeries" rather than the cache's own "TimeSeries" once a
-    metric_periods conversion has actually been applied (Decision 12).
+    metric_periods conversion has actually been applied.
     population_layers holds at most one entry, since populations_str is a
     single token (see module docstring). An empty list / "" signals the
     cut couldn't be resolved at all (missing cache file, bad period range,
@@ -123,7 +105,7 @@ def resolve_stat_cut(hex_id: str, populations_str: str, start_period: str, end_p
             workfile_state.tables, workfile_state.table_order, full_unit_set,
         )
     except Exception:
-        # An unresolvable metric_periods id no longer raises here (see
+        # An unresolvable metric_periods id does not raise here (see
         # time_series_to_numeric_series' own docstring) — the resulting
         # Reference id simply carries no data, resolved further down as
         # "-" the same as any other missing value, rather than the whole

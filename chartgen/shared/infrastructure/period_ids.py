@@ -1,13 +1,10 @@
 """
 period_ids.py
-Tiny, generic '^'-delimited period-id list <-> string helpers — no
-Running-Order-specific knowledge, just a format. Lives in shared so
-data-shape-normalisation code (chartgen.shared.normalisation_containers,
-e.g. cut_resolution.py) can parse a metric_periods string without
-depending on output_generation.definition (Architecture, Section 2 —
-one-way dependencies: shared must not import from a higher layer).
-chartgen.output_generation.definition.running_order.dialog_support re-exports
-both for its existing callers.
+Generic '^'-delimited period-id list and string helpers. Format only, with
+no Running Order knowledge.
+
+running_order.dialog_support re-exports these, so a rename here has two
+call sites.
 """
 
 import re
@@ -29,21 +26,13 @@ def build_metric_periods_string(period_ids: list) -> str:
 
 def extract_period_id(value) -> str:
     """
-    Extract the bare period_id from a stored start_period/end_period
-    value. The canonical stored form is whatever the person actually
-    picked or typed — typically "period_label(period_id)" from a
-    dropdown (e.g. "July 2025(1338)"), but a bare id typed by hand works
-    identically. This extraction happens once, at the point a chart's cut
-    is actually resolved for rendering — never at file read/write time,
-    so the stored string itself is never rewritten or reconstructed (see
-    running_order.schema's own note on why).
+    Extract the bare period_id from a stored start_period or end_period
+    value. The stored form is whatever was picked or typed: typically
+    "period_label(period_id)", or a bare id. Blank returns ''.
 
-    Guards against one real environment fact, not a hypothetical: a bare
-    id typed directly into an Excel cell may come back as a genuine
-    numeric type rather than text (openpyxl reads it as a float), so a
-    whole-number float is converted to a plain integer string first
-    (str(1338.0) -> "1338", not "1338.0") before checking for a label.
-    A blank value returns ''.
+    A bare id typed into an Excel cell comes back from openpyxl as a float,
+    so a whole-number float is converted to a plain integer string
+    (1338.0 -> "1338", not "1338.0") before checking for a label.
     """
     if isinstance(value, float) and value.is_integer():
         value = str(int(value))

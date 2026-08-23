@@ -1,47 +1,29 @@
 """
 output_tables_tab.py
-Output Tables -- grid-based tables rendered as a single image (the table
-equivalent of a Base Chart), authored on their own tab rather than the
-Charts sheet (Decisions.md: an Output Table's grid/content model doesn't
-fit CHART_SANDBOX_FIELDS, and this is deliberately a separate authoring
-surface, not an extension of the Charts sheet).
+Output Tables: grid-based tables rendered as a single image, the table
+equivalent of a Base Chart. Authored here rather than on the Charts sheet,
+since an Output Table's content model does not fit CHART_SANDBOX_FIELDS.
 
-One selection, at the top, always: a "Select Table" box holding both entry
-points side by side -- a Running Order row (bound mode, pre-fills
-table_type_ref/size/tweaks) and an Output Table by name (free-play; "+ New
-Output Table" sits last in that list and, when chosen, reveals an inline
-Name/Create control in the same box). Everything below --
-the Edit Grid / Preview mode toggle and its content -- acts on that one
-selection and is shown only once an actual table is selected; there is no
-second, independent selector anywhere else on the tab.
+One selection, at the top: a "Select Table" box holding both entry points,
+a Running Order row (bound mode) and an Output Table by name (free-play).
+"+ New Output Table" sits last in that list and reveals an inline
+Name/Create control. Everything below acts on that one selection. There is
+no second selector anywhere on the tab.
 
-Edit Grid is content authoring: the raw c0..cN grid, resize, Update, Excel
-Export/Import (CG_Extracts). Preview is a sandbox mirroring the Charts sheet's own
-mechanics wherever the concepts match: table type (built-in + Custom
-Tables), tweaks, sizing (percent of the shorter page dimension, converting
-to EMU only at save time -- chartgen.shared.infrastructure.page_sizing),
-save-back (Overwrite / Insert above / Insert below, reusing row_ops.py as
--is -- it is already fully generic, no chart or table knowledge of its
-own), Custom Tables (download bundle, paste-back validate-and-preview,
-save as a new table_type_ref), and Reset (clears Preview's own
-configuration only -- table_type_ref, tweaks, sizing, save-back target,
-paste-back -- never the table selection itself, which lives in the shared
-box above).
+Edit Grid is content authoring: the raw c0..cN grid, resize, Update, and the
+Excel round-trip. Preview mirrors the Charts sheet's mechanics wherever the
+concepts match: table type, tweaks, sizing in percent, save-back via
+row_ops.py, Custom Tables, and Reset. Reset clears Preview's own
+configuration only, never the table selection, which lives in the shared box
+above.
 
-Chart-component cells ("{Cn}") reference a Chart Store entry (Decision
-28) -- rendered live in Preview (spliced into the table's own SVG as a
-nested <image>) and in the final report (a layered PowerPoint picture,
-insert_table.py); neither path composites the two SVG documents into one.
+A "{Cn}" chart-component cell references a Chart Store entry, rendered live
+in Preview as a nested <image> spliced into the table's own SVG, and in the
+final report as a layered PowerPoint picture. Neither path composites the
+two SVG documents into one.
 
-Every Output Table starts at the same fixed size
-(grid_store.DEFAULT_TABLE_ROWS x DEFAULT_TABLE_COLUMNS), whether created
-here or via a template's [Table] yellow box -- no user-configurable
-Rows/Columns at creation time either way (Decisions.md). Creating one here
-also appends an insert_table row to the Running Order automatically
-(immediately above save_ppt -- row_ops.append_content_row_above_footer),
-with no real slide/position yet; the user sorts that out afterwards via
-this tab's own Preview sandbox or the Running Order tab, the same as they
-would for any other row needing attention.
+Creating a table here also appends an insert_table row immediately above
+save_ppt, with no slide or position yet.
 """
 
 import base64
@@ -90,28 +72,24 @@ RO_PLACEHOLDER = "- Running order line -"
 TABLE_PLACEHOLDER = "- Saved Table -"
 TARGET_PLACEHOLDER = "- Select target row -"
 
-# Screen zoom for the Preview image -- display only, never saved (mirrors
-# charts_tab.py's own ZOOM_OPTIONS/ZOOM_MULTIPLIERS exactly). Without this,
-# st.image() shows the rendered PNG at its full native resolution (DPI 300,
-# ~1125px for a 50%-sized image) rather than a size that actually reflects
-# the configured width/height percentage -- this was the "tables look
-# massive next to charts" bug: the Charts sheet always computes an explicit
-# pixel width from width_emu; Preview previously didn't.
+# Screen zoom for the Preview image. Display only, never saved.
+#
+# An explicit pixel width is required: st.image() otherwise shows the render
+# at its full native resolution rather than a size reflecting the configured
+# width and height percentage.
 ZOOM_OPTIONS = ["0.75x", "Actual size (approximately)", "1.25x", "1.5x", "2x", "Fit to screen"]
 ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 1.25, "1.5x": 1.5, "2x": 2.0}
 DEFAULT_ZOOM = "Actual size (approximately)"
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
-# full reasoning. Must match every Base Table's own local TEXT_SCALE,
-# and insert_table.py's own CHART_RENDER_SCALE, exactly -- duplicated
-# locally here rather than imported, matching the convention charts_tab.py
-# already uses for this same constant. Applied to the table_func render
-# call below, and to _splice_chart_cells_into_svg's own width_emu/
-# height_emu (must be the same inflated value table_func was actually
-# called with, since chart_cells comes back in that same render-space --
-# see insert_table.py's own comment for the full reasoning). The CSS/px
-# display width stays at the real, unmultiplied size.
+# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# copies in assembly_engine.py, insert_table.py and charts_tab.py. Nothing
+# enforces this and a mismatch fails silently. Full mechanism in
+# output_generation/execution/tables/base_tables/CLAUDE.md.
+#
+# Applied to the table_func render call below and to
+# _splice_chart_cells_into_svg, which must receive the same inflated value
+# table_func was called with, since chart_cells comes back in that space.
+# The CSS display width stays at the real, unmultiplied size.
 CHART_RENDER_SCALE = 5
 
 # "ots_" is Preview's own configuration state (table type, tweaks, sizing,
@@ -127,8 +105,7 @@ def _svg_preview_html(svg_text, width_css):
     "480px" or "100%") via an inline style on the SVG's own root element,
     since st.markdown has no width parameter the way st.image does. Used
     instead of st.image because st.image goes through PIL, which can't
-    decode SVG -- every Base Table returns SVG bytes (Architecture, SVG
-    rendering methodology).
+    decode SVG, and every Base Table returns SVG bytes.
     """
     styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
     return f'<div style="width:{width_css}">{styled}</div>'
@@ -188,7 +165,7 @@ def _splice_chart_cells_into_svg(table_svg_text: str, chart_cells: dict, workfil
 
     Only for on-screen preview -- the final report instead layers a
     separate PowerPoint picture (insert_table.py), never merges SVG
-    documents (Decisions.md): an <image> reference is fully opaque to the
+    documents: an <image> reference is fully opaque to the
     browser, so there's no risk of the two SVGs' own internal ids/styles
     colliding the way directly inlining one SVG's markup into another's
     would be.
@@ -264,7 +241,7 @@ def _current_full_unit_set(workfile_state, the_settings):
 # ---------------------------------------------------------------------------
 # Sandbox state persistence (settings["output_tables_sheet_state"]),
 # mirroring charts_tab.py's capture_charts_sheet_state / _restore_charts_sheet_state
-# (Architecture Decision 21) field-for-field for the table domain.
+# field-for-field for the table domain.
 # ---------------------------------------------------------------------------
 
 def _restore_output_tables_sheet_state(workfile_state, the_settings, row_id_to_idx):
@@ -478,17 +455,14 @@ def render_output_tables_tab():
         horizontal=True, label_visibility="collapsed",
     )
 
-    # Re-assert width_pct/height_pct from the bound row's own stored EMU at
-    # the exact moment Preview is entered, not only when the row was
-    # originally selected. Edit Grid is this tab's default mode, so the
-    # original assignment (made when a Running Order row is picked) happens
-    # while the Sizing widget doesn't exist yet -- it only gets created once
-    # Preview is actually opened. Confirmed by testing: without this
-    # re-assertion immediately before that widget's first mount for a given
-    # viewing, the Sizing box would display its own min_value instead
-    # of the correct value, despite session_state holding the right number
-    # the whole time -- the widget's own first-mount behaviour wasn't
-    # picking up a value written while it didn't yet exist.
+    # Re-assert width_pct/height_pct from the bound row's stored EMU at the
+    # moment Preview is entered, not only when the row was selected.
+    #
+    # Edit Grid is the default mode, so the original assignment happens while
+    # the Sizing widget does not yet exist. Without this re-assertion
+    # immediately before that widget's first mount, the box displays its own
+    # min_value rather than the correct value, even though session_state
+    # holds the right number throughout. Verified by testing.
     previous_mode = st.session_state.get("ot_previous_mode")
     entering_preview = (mode == "Preview" and previous_mode != "Preview")
     st.session_state["ot_previous_mode"] = mode
@@ -530,7 +504,7 @@ def _render_new_table_form(workfile_state, name_to_id, the_settings):
                 "rows": str(DEFAULT_TABLE_ROWS), "columns": str(DEFAULT_TABLE_COLUMNS),
             })
 
-            # Automatic Running Order placement (Decisions.md) -- no real
+            # Automatic Running Order placement -- no real
             # slide/position yet (that's for the user to sort out via this
             # tab's own Preview sandbox or the Running Order tab), but the
             # row exists from the moment the table does, rather than
@@ -783,19 +757,15 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                     new_idx = insert_new_row(workfile_state.running_order_rows, target_idx, field_values, "below")
                     new_bound_row_id = workfile_state.running_order_rows[new_idx]["row_id"]
                 workfile_state.dirty = True
-                # Keep the row bound rather than clearing the selection --
-                # for an Insert, the newly created row (not the original
-                # target) is the one now holding what was just saved, so
-                # that's the row that becomes bound. "ot_ro_choice" is a
-                # widget-bound key that's already been instantiated earlier
-                # in this same run (the "Running Order row" selectbox in the
-                # shared "Select Table" box), so it can't be written to
-                # directly here -- Streamlit raises StreamlitAPIException
-                # for exactly that. Staged in a plain, non-widget "pending"
-                # key instead; applied at the very top of
-                # render_output_tables_tab, before that selectbox is created
-                # on the next run (the same pattern "ot_pending_table_choice"
-                # already uses for the same reason).
+                # Keep the row bound rather than clearing the selection. For
+                # an Insert, the newly created row is the one now holding what
+                # was saved, so that is the one that becomes bound.
+                #
+                # "ot_ro_choice" is widget-bound and already instantiated
+                # earlier this run, so writing to it directly raises
+                # StreamlitAPIException. Staged in a plain pending key
+                # instead, applied at the top of render_output_tables_tab
+                # before that selectbox is created on the next run.
                 st.session_state["ot_pending_ro_choice_after_save"] = new_bound_row_id
                 st.session_state.pop("ot_last_loaded_ro", None)
                 st.session_state.pop("ot_bound_row_idx", None)

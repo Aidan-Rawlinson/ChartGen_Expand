@@ -4,15 +4,12 @@ PairedSurveyData — per unit, a collection of individual patient records each
 carrying a start/end value pair (e.g. Sunderland/Modified Barthel scores) —
 with its stats recalculation and population-filtering.
 
-Always exactly one Metric-Series (confirmed at design time, not intended to
-extend) — follows NumericSeries' flat single-units-list structural pattern
-rather than the metrics-list pattern NumericCompositional/CategoricalCompositional
-use, since there is nothing to enumerate.
+Always exactly one Metric-Series, and not intended to extend, so this uses a
+flat shape-level units list with no metrics wrapper.
 
 Stats are pooled across every record across every unit, not averaged from
-pre-computed per-unit stats — recomputed from the raw pooled records after
-any population filter, same discipline as every other shape's filter_*
-function.
+per-unit stats, and are recomputed from the raw records after any
+population filter.
 """
 
 from dataclasses import dataclass, field, replace
@@ -54,8 +51,8 @@ class PairedSurveyData:
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
     population_table:   Optional[str]       = None  # name of the population table this data's units belong to
 
-    # Auxiliary metadata — NOT a conceptual part of the data shape itself.
-    # Same side-pocket convention as every other shape's metadata field.
+    # Travels with the shape without being part of it. Not in the
+    # chart_inputs contract. Carries through filtering and replace().
     metadata:           dict                = field(default_factory=lambda: {"source_url": None})
 
     # Data

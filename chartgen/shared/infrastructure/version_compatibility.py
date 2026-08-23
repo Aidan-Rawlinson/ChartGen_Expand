@@ -11,9 +11,9 @@ single source of truth for:
   - file_versions_readable - semicolon-delimited list of file version ids
                               this build can still open
 
-A workfile whose file_version_id is not in file_versions_readable is a
-hard refuse at Open (Decisions.md) - no partial read, no migration attempt.
-Expanding compatibility later just means adding an id to that list.
+A workfile whose file_version_id is not in file_versions_readable is
+refused at Open. No partial read, no migration attempt. Extending
+compatibility means adding an id to that list.
 """
 
 import csv

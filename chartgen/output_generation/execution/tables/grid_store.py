@@ -2,12 +2,10 @@
 grid_store.py
 Output Table grid storage shape and mechanics.
 
-An Output Table's grid is a single flat, spreadsheet-shaped artefact -- an
-(N+1) x (M+1) grid for an N-row x M-column Output Table, stored as
-workfile_config/output_tables/{table_id}.csv (WorkfileState.output_tables,
-keyed by table_id) -- mirroring the population tables' own "no fixed
-schema, each written from its own rows' keys" convention
-(chartgen.workfile.state.workfile_file).
+An Output Table's grid is one spreadsheet-shaped artefact: an (N+1) x (M+1)
+grid for an N by M table, stored at
+workfile_config/output_tables/{table_id}.csv. No fixed column schema; each
+grid is written from its own rows' keys.
 
 Layout (0-indexed internally; 1-indexed in user-facing language):
   - Row 0, col 0  ("corner")   -- the table's own table_id. Display only,
@@ -21,22 +19,19 @@ Layout (0-indexed internally; 1-indexed in user-facing language):
                                    chart-component marker ("{C3}") --
                                    recognised and acted on by the Base
                                    Table function itself, not resolved
-                                   here (Decision 28).
+                                   here.
 
-Columns are named c0..cM (generic, matching the no-fixed-schema convention
-population tables already use) rather than anything content-specific.
-col_key() is the single source of truth for that naming, reused by
-grid_xlsx.py's own Excel round-trip so the two never drift apart.
+Columns are named c0..cM generically. col_key() is the single source of
+truth for that naming, reused by grid_xlsx.py so the two cannot drift.
 """
 
 from chartgen.shared.infrastructure.id_generation import next_id
 
 OUTPUT_TABLE_COUNTER_KEY = "next_table_id"
 
-# Every Output Table starts at this size, whether created via a template's
-# [Table] yellow box or the Output Tables tab's own "+ New Output Table"
-# form -- no user-configurable Rows/Columns at creation time either way
-# (Decisions.md). Resize afterwards via the existing Resize control.
+# Every Output Table starts at this size, whatever created it. There is no
+# user-configurable size at creation. Resize afterwards via the Resize
+# control.
 DEFAULT_TABLE_ROWS = 7
 DEFAULT_TABLE_COLUMNS = 4
 
@@ -61,7 +56,7 @@ def new_grid(table_id: str, n_rows: int, n_cols: int) -> list:
     row 0 (cols 1..n_cols) defaults to equal column widths (100/n_cols,
     2dp), col 0 (rows 1..n_rows) defaults to equal row heights (100/n_rows,
     2dp), content cells blank. Rounding drift against an exact 100.00 total
-    is accepted, not corrected (Decisions.md).
+    is accepted, not corrected.
     """
     col_width = round(100.0 / n_cols, 2) if n_cols else 0.0
     row_height = round(100.0 / n_rows, 2) if n_rows else 0.0
@@ -150,7 +145,7 @@ def validate_grid(grid_rows: list) -> list:
     heights (col 0) sum to 100% +/- SIZE_SUM_TOLERANCE, independently.
     Returns a list of warning strings -- empty list means valid. Advisory
     only: out-of-tolerance values are flagged, never auto-corrected
-    (Decisions.md).
+   .
     """
     warnings = []
     widths = get_column_widths(grid_rows)

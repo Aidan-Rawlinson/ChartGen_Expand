@@ -44,13 +44,10 @@ EXCEL_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Output Table yellow box: the literal word "Table", nothing else --
-# capitalisation and surrounding whitespace are the only tolerance
-# (Decisions.md). No name, no Rows/Columns -- every Output Table starts at
-# the same fixed size (grid_store.DEFAULT_TABLE_ROWS/DEFAULT_TABLE_COLUMNS)
-# and is auto-named at creation time
-# (import_flow.merge_output_tables_from_template), since the box itself
-# carries no identity to key off.
+# Output Table yellow box: the literal word "Table" and nothing else.
+# Capitalisation and surrounding whitespace are the only tolerance. The box
+# carries no name and no size, so every table is auto-named and fixed-size
+# at creation by import_flow.merge_output_tables_from_template.
 TABLE_BOX_RE = re.compile(r"^\s*table\s*$", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
@@ -132,7 +129,7 @@ def _get_shape_fill_rgb(shape):
       3. If the shape defines no fill of its own at all: its style's fill
          reference (<p:style><a:fillRef><a:schemeClr>) — the "Shape Styles"
          gallery mechanism, where the shape stores no colour, only a pointer
-         to a theme colour slot. See Architecture, Decision 14.
+         to a theme colour slot.
       4. Fallback: python-pptx's native fill accessor, for anything the
          above didn't catch.
     """
@@ -370,9 +367,8 @@ def _classify_yellow_box(text: str) -> dict:
 # Geometry helpers
 # ---------------------------------------------------------------------------
 
-# 1mm of tolerance on the "fully contained" check, to absorb sub-visible EMU
-# rounding drift (e.g. PowerPoint copy/paste introducing a 1 EMU discrepancy
-# on a duplicated shape) without treating it as a genuine partial overlap.
+# 1mm of tolerance on the "fully contained" check, absorbing sub-visible EMU
+# rounding drift without treating it as a genuine partial overlap.
 # 914400 EMU = 1 inch = 25.4mm, so 36000 EMU = 1mm exactly.
 CONTAINMENT_TOLERANCE_EMU = 36000
 
@@ -445,10 +441,10 @@ def read_template(pptx_path: str) -> TemplateReadResult:
     """Read a .pptx template and return a TemplateReadResult.
 
     A yellow textbox is resolved against the slide's chart placeholders into
-    one of three outcomes (see Architecture, Decision 13):
+    one of three outcomes:
 
       1. Fully contained by a placeholder  — matched to it; the placeholder's
-         own position/size is used (the pre-existing behaviour).
+         own position/size is used.
       2. No overlap with any placeholder   — free-floating; the yellow box's
          own position/size is used directly, named after its own shape name.
       3. Partial overlap with a placeholder, short of full containment —
@@ -495,11 +491,9 @@ def read_template(pptx_path: str) -> TemplateReadResult:
             text = shape.text_frame.text
             classification = _classify_yellow_box(text)
             if not classification.get("content_type"):
-                # Unrecognised content — doesn't match any of the four
-                # supported types (NHS toolkit chart URL, Indicators toolkit
-                # chart URL, image path, Excel path+ranges). Stripped from
-                # the cleaned template as before (Functional Spec §6.3), but
-                # now flagged rather than silently dropped.
+                # Matches none of the four supported types. Still stripped
+                # from the cleaned template, but warned, never dropped
+                # silently.
                 preview = text.strip()
                 if len(preview) > 80:
                     preview = preview[:77] + "..."
@@ -603,11 +597,9 @@ def read_template(pptx_path: str) -> TemplateReadResult:
                 # set above; table_id is filled in downstream by
                 # import_flow.merge_output_tables_from_template.
 
-                # This placeholder is now fully captured (position/size in
-                # PlaceholderInfo, content assignment above) — content is
-                # inserted at generation time by coordinate, not via the
-                # placeholder shape itself (Functional Spec §6.2), so the
-                # placeholder shape is removed from the cleaned template
+                # Fully captured now. Content is inserted at generation
+                # time by coordinate, not through the placeholder shape, so
+                # the placeholder is removed from the cleaned template
                 # alongside its yellow box, rather than left behind empty.
                 ph_shape = ph_shapes.get(ph.name)
                 if ph_shape is not None:

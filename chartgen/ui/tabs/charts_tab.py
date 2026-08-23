@@ -10,38 +10,20 @@ other:
   - Data shape (free-play) — loads a cached dataset directly, with no row
     bound; save-back always requires picking a target row explicitly.
 
-The Charts sheet owns this flow entirely — it reads a Running Order row and
-writes back to it on explicit Save; the Running Order tab never pushes to,
-or flags anything for, the Charts sheet.
+The Charts sheet owns this flow. It reads a Running Order row and writes
+back on explicit Save; the Running Order tab never pushes to it.
 
-Round-trip fields are a single maintainable list (CHART_SANDBOX_FIELDS,
-running_order.schema) rather than hardcoded here, so extending the sync
-later (e.g. a future shape-specific analytical field) means editing that
-one list plus the small field_value_builders map below — not reworking this
-tab's load/save logic.
+Round-trip fields come from CHART_SANDBOX_FIELDS rather than being hardcoded
+here, so extending the sync means editing that list plus the
+field_value_builders map below, not reworking this tab's load and save.
 
-Sizing (width_emu/height_emu) is never edited as raw EMU. The user-facing
-unit is percent of the shorter dimension of the associated PowerPoint page
-(chartgen.shared.infrastructure.page_sizing) — this always applies, on both
-entry paths, and always converts to EMU only at the point of writing back
-to the Running Order.
+Sizing is never edited as raw EMU. The user-facing unit is percent of the
+shorter page dimension, on both entry paths, converting to EMU only at the
+point of writing back.
 
-Layout note: the left rail holds every control, grouped into expanders that
-start collapsed except where there's a live reason to show them open
-(Select Chart, and Select Visualisation while no chart type is chosen yet).
-Zoom is the one expander whose control saves nothing to the Running Order —
-it only changes how the already-correct preview looks on this screen — so
-it sits last among the expanders, after Save to Running Order, rather than
-grouped with the fields that do save. Reset sits at the very bottom of the
-rail, below every other control, and only appears once a chart has actually
-been selected (it lives after the early return on an unselected data shape,
-so it's structurally absent until then rather than merely hidden).
-
-Running Order rows are referenced here by row_id, not by list position or
-by a descriptive label — row_id is stable across an Overwrite, so a
-selection surviving a rerun always still means the same row. Only an Insert
-(which shifts row_ids after the insertion point) invalidates it, which is
-why sandbox state referencing rows is cleared after every save.
+Rows are referenced by row_id, never by list position. row_id survives an
+Overwrite but not an Insert, which is why sandbox state referencing rows is
+cleared after every save.
 """
 
 import json
@@ -96,15 +78,14 @@ ZOOM_MULTIPLIERS = {"0.75x": 0.75, "Actual size (approximately)": 1.0, "1.25x": 
 DEFAULT_ZOOM = "Actual size (approximately)"
 CS_KEY_PREFIX = "cs_"
 
-# PowerPoint SVG-text-compression workaround -- see line_ci_full's own
-# TEXT_SCALE comment (base_charts/timeseries/line_ci_full.py) for the
-# full reasoning. Must match every Base Chart's own local TEXT_SCALE,
-# and assembly_engine.py's/insert_table.py's own CHART_RENDER_SCALE,
-# exactly -- duplicated locally here rather than imported, matching the
-# same convention those two modules already use for this same constant.
-# Applied to every chart_func render call below (preview and Export
-# Picture); the CSS/px display width stays at the real, unmultiplied
-# size in both cases, same as PPTX placement.
+# MUST match TEXT_SCALE in every Base Chart and Base Table file, and the
+# copies in assembly_engine.py, insert_table.py and output_tables_tab.py.
+# Nothing enforces this and a mismatch fails silently. Full mechanism in
+# output_generation/execution/charts/base_charts/CLAUDE.md.
+#
+# Applied to every render call below, preview and Export Picture alike. The
+# CSS display width stays at the real, unmultiplied size, the same shrink
+# PowerPoint itself performs.
 CHART_RENDER_SCALE = 5
 
 # Placeholder option values, used as literal entries in each dropdown's own
@@ -144,11 +125,10 @@ def _svg_preview_html(svg_text, width_css):
     "480px" or "100%") via an inline style on the SVG's own root element,
     since st.markdown has no width parameter the way st.image does. Used
     instead of st.image because st.image goes through PIL, which can't
-    decode SVG -- every Base Chart returns SVG bytes (Architecture, SVG
-    rendering methodology). Field-for-field the same helper as
-    output_tables_tab.py's own copy -- not shared, matching this codebase's
-    "each domain is a standalone artefact" convention for the rendering
-    domains themselves (Architecture Decision 18).
+    decode SVG, and every Base Chart returns SVG bytes. Field-for-field the
+    same helper as output_tables_tab.py's own copy, deliberately not shared,
+    matching the standalone-artefact convention for the rendering
+    domains themselves.
     """
     styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
     return f'<div style="width:{width_css}">{styled}</div>'
@@ -184,15 +164,13 @@ def _clear_chart_store_referencing_state():
         st.session_state.pop(k, None)
 
 
-# Charts sheet fields persisted across Save/reopen, distinct from
-# CHART_SANDBOX_FIELDS (running_order.schema) — that list is what the
-# Charts sheet writes back to a Running Order row on explicit Save; this is
-# a separate snapshot of the sandbox's own current control values,
-# regardless of whether the user has saved them to the Running Order at
-# all yet. Zoom is deliberately excluded (screen-only, never saved — see
-# module docstring); an in-progress, unvalidated Custom Charts paste-back
-# is also excluded, since persisting unvalidated pasted code across a
-# reopen isn't something to do implicitly.
+# Charts sheet fields persisted across Save and reopen. Distinct from
+# CHART_SANDBOX_FIELDS: that is what gets written back to a Running Order
+# row on an explicit Save, this is a snapshot of the sandbox's own control
+# values whether or not they were ever saved to a row.
+#
+# Zoom is excluded, being screen-only. An in-progress Custom Charts
+# paste-back is excluded too: it is unvalidated code.
 
 
 def _restore_charts_sheet_state(the_settings, row_id_to_idx, the_manifest, label_by_cache_file, chart_store_by_id):
@@ -321,10 +299,8 @@ def capture_charts_sheet_state(workfile_state):
 def _render_chart_store_area(workfile_state, the_manifest, label_by_cache_file, the_settings):
     """
     The Chart Store table -- shown in the right-hand content area in place
-    of the chart preview (never alongside it, per Decisions.md) while
-    "Show Chart Store" is toggled on. Read-only list, delete/export/
-    import only (CG_Extracts) -- mirrors text_tab.py's own Stat Tags table
-    exactly, for the chart-def domain instead of the stat-tag domain.
+    of the chart preview, never alongside it, while "Show Chart Store" is
+    toggled on. Read-only list; delete, export and import only.
     """
     st.subheader("Chart Store")
     chart_store_rows = workfile_state.chart_store_rows
@@ -410,11 +386,9 @@ def render_charts_tab():
     workfile_state = ws()
     the_settings = settings()
 
-    # --- Full Unit Set for the current reporting unit — needed by
-    # prepare_chart_cut's own selected_ids resolution below, and
-    # independent of which chart is selected, so computed once here rather
-    # than deep inside the left rail (this used to be computed later,
-    # inside the Populations section, purely for this same purpose). ---
+    # --- Full Unit Set for the current reporting unit. Needed by
+    # prepare_chart_cut's selected_ids resolution below, and independent of
+    # which chart is selected, so computed once here. ---
     units_for_shape = master_table()
     rc = build_report_context(the_settings, units_for_shape)
     master_table_name = workfile_state.table_order[0] if workfile_state.table_order else ""
@@ -568,19 +542,17 @@ def render_charts_tab():
                     # rerun needed, unlike the reverse direction below.
                     _clear_chart_store_referencing_state()
 
-            # --- Chart Store line — a second entry point, alongside
-            # Running Order row, that also loads into the shared sandbox
-            # fields below. Placed here, above "Data shape", so its own
-            # pending values are staged before the shared
-            # "cs_pending_shape_choice -> cs_shape_choice" consumption step
-            # runs (immediately below) and before the Data shape selectbox
-            # itself is created — the same ordering Running Order row
-            # relies on, and the reason this can't sit after Data shape in
-            # the script without an explicit rerun (a widget already
-            # instantiated this pass can't be changed retroactively).
-            # Unlike a Running Order row, a Chart Store entry has no
-            # position/sequence — its own Save-back (below) only ever
-            # offers Add/Overwrite, never Insert above/below. ---
+            # --- Chart Store line: a second entry point into the same
+            # sandbox fields, alongside Running Order row.
+            #
+            # MUST stay above "Data shape". Its pending values have to be
+            # staged before the shared pending-value consumption step below
+            # and before the Data shape selectbox is created. A widget
+            # already instantiated this pass cannot be changed
+            # retroactively, so moving this later needs an explicit rerun.
+            #
+            # A Chart Store entry has no position, so its Save-back offers
+            # Add and Overwrite only, never Insert above or below. ---
             chart_store_choice = st.selectbox(
                 "Chart Store line", options=[CHART_STORE_PLACEHOLDER] + chart_store_ids,
                 format_func=format_chart_store_choice, key="cs_chart_store_choice",
@@ -695,35 +667,24 @@ def render_charts_tab():
                 f"('{bound_shape_type}' → '{shape_type}'). Chart type will need to be reselected."
             )
 
-        # --- Period range and metric-periods conversion (TimeSeries only) —
-        # both reshape `shape` ahead of the chart-type choice below, since
+        # --- Period range and metric-periods conversion (TimeSeries only).
+        # Both reshape `shape` ahead of the chart-type choice below, since
         # converting periods into metrics changes which chart types are
-        # valid (NumericSeries's, not TimeSeries's). Options are built from
-        # this shape's own period list so the user only ever picks a label,
-        # never types an id.
+        # valid. Options come from this shape's own period list, so a label
+        # is picked rather than an id typed.
         #
-        # Whatever is actually stored on a bound row (start_period,
-        # end_period, metric_periods) is used exactly as given, with no
-        # clamping against this shape's own period list — this preview
-        # must call prepare_chart_cut with the same values insert_chart
-        # would use for this same row, or it isn't actually previewing the
-        # output. A stored id that isn't among this shape's own periods is
-        # still added to each widget's own option list (so Streamlit has a
-        # legal value to display — it can't hold a value outside its own
-        # options) rather than dropped; the value itself is never altered.
-        # If that id doesn't resolve, prepare_chart_cut below raises the
-        # same error insert_chart would, surfaced via st.error rather than
-        # silently discarded. ---
-        # --- Original stored period fields for whichever entity is bound
-        # (Running Order row or Chart Store line) — the raw string exactly
-        # as last saved, e.g. "July 2025(1338)". Used below purely as a
-        # fallback so a composite string already stored isn't rebuilt
-        # without its label just because this render's live shape doesn't
-        # happen to resolve that id for a fresh lookup -- see the
-        # composite-string-building comments further down. Empty dict in
-        # free-play mode (nothing bound), which correctly gives "" for
-        # every fallback lookup -- free-play has no prior stored value to
-        # protect. ---
+        # A bound row's stored values are used exactly as given, never
+        # clamped against this shape's period list: the preview must call
+        # prepare_chart_cut with the same values insert_chart would, or it
+        # is not previewing the output. A stored id absent from this shape
+        # is still added to the widget's option list, because Streamlit
+        # cannot hold a value outside its own options; the value itself is
+        # never altered. ---
+        # --- The bound entity's stored period fields, raw, exactly as last
+        # saved. Used below only as a fallback, so a stored composite string
+        # is not rebuilt label-less just because this render's live shape
+        # cannot resolve that id. Empty dict in free-play mode, which
+        # correctly yields "" for every lookup. ---
         if bound_row_idx is not None:
             _orig_period_row = ro_rows[bound_row_idx]
         elif st.session_state.get("cs_bound_chart_store_id") in chart_store_by_id:
@@ -873,14 +834,10 @@ def render_charts_tab():
 
         metric_periods_str = build_metric_periods_string(metric_period_ids)
 
-        # --- Resolve this cut of the data shape — period-range trim,
-        # metric-periods conversion, and population-table/target-rows/
-        # selected-ids resolution, shared with insert_chart and stat tags
-        # (cut_resolution.prepare_chart_cut). An unresolvable
-        # metric_periods id no longer raises here (see
-        # time_series_to_numeric_series' own docstring) — it comes
-        # through as a real metric with no data, same as any other
-        # missing value, for the Base Chart itself to handle. ---
+        # --- Resolve this cut, via cut_resolution.prepare_chart_cut, the
+        # same path insert_chart and Stat Tags use. An unresolvable
+        # metric_periods id does not raise; it arrives as a metric with no
+        # data, for the Base Chart to handle. ---
         shape, effective_shape_type, target_rows, selected_ids = prepare_chart_cut(
             shape, shape_type, start_period, end_period, metric_periods_str,
             workfile_state.tables, workfile_state.table_order, full_unit_set,
@@ -899,13 +856,10 @@ def render_charts_tab():
             selected_file, the_manifest, converts_to_metrics=converts_to_metrics,
             custom_chart_rows=workfile_state.custom_chart_rows,
         )
-        # Dropdown shows base_chart_name itself, not the chart_type_map.csv
-        # description — the description previously shown here didn't match
-        # what's typed/seen anywhere else in the system (Running Order xlsx
-        # dropdown, code, file names all use base_chart_name), which was
-        # actively confusing rather than helpful. The description column
-        # itself is left in chart_type_map.csv/custom_chart_descriptions —
-        # just no longer surfaced in this UI.
+        # Shows base_chart_name, not the chart_type_map.csv description,
+        # because base_chart_name is what appears everywhere else: the
+        # Running Order dropdown, the code, the file names. The description
+        # column still exists in chart_type_map.csv but is unused.
 
         if "cs_pending_base_chart_name" in st.session_state:
             pending_ref = st.session_state.pop("cs_pending_base_chart_name")
@@ -958,7 +912,7 @@ def render_charts_tab():
                     break
 
         # --- Tweaks — a free-text string passed straight through to the
-        # Base Chart function's own `tweaks` parameter (Decisions.md),
+        # Base Chart function's own `tweaks` parameter,
         # uninterpreted by anything in the Charts sheet or Running Order
         # layer. Populates from the bound Running Order row's tweaks
         # column when loaded that way; otherwise typed here directly. ---
@@ -1245,11 +1199,8 @@ def render_charts_tab():
                     export_chart_func = compile_custom_chart(temp_code)
                 else:
                     export_chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
-                # Exported at CHART_RENDER_SCALE times the real size --
-                # the same, genuinely oversized artefact actually embedded
-                # in a PPTX, not shrunk back down for this standalone
-                # file (confirmed: exporting the oversized version is
-                # correct here).
+                # Deliberately exported oversized, matching exactly what a
+                # PPTX embeds. Not shrunk back for the standalone file.
                 export_image_bytes = export_chart_func(
                     pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
                     height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
@@ -1324,17 +1275,16 @@ def render_charts_tab():
         # section, one unit-list table per population layer (units belong
         # to the whole layer, not to an individual metric-series — every
         # metric-series in a shape instance shares the same population).
-        # Both read what each layer's own shape instance already
-        # computes/holds for itself (summary_stats_by_layer, units_by_layer
-        # — chartgen.shared.normalisation_containers.shapes), called directly
-        # against pop_layers above; nothing here is recalculated, and the
-        # chart function itself only ever produces the image. Ids are
-        # short, stable reference tags scoped to this shape type
-        # (Decisions.md), meant to eventually double as PowerPoint table
-        # replacement tags — not full Autotables, which will draw on this
-        # or on the shapes directly, but isn't built yet (Feature List).
-        # "Name" isn't on the shape's own unit records (unit_id/unit_code
-        # only) — resolved here from the population table already loaded
+        # Both read what each layer's own shape instance already holds,
+        # via summary_stats_by_layer and units_by_layer called directly
+        # against pop_layers. Nothing is recalculated here, and the chart
+        # function only ever produces the image.
+        #
+        # Reference ids are short and scoped to this shape type, so they can
+        # eventually double as PowerPoint table replacement tags.
+        #
+        # "Name" is not on the shape's own unit records, which carry id and
+        # code only. It is resolved from the population table already loaded
         # for this chart.
         # ---
         name_by_unit_id = {str(r.get("unit_id")): r.get("unit_name", "") for r in target_rows}

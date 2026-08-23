@@ -1,8 +1,7 @@
 """
 concurrency.py
-Lock-state resolution — mechanics only. Extracted from the Open Workfile
-dialog callback, where lock classification and the Open/Open Read-Only
-actions were previously fused with the dialog's own rendering.
+Lock-state resolution and the Open / Open Read-Only actions. Mechanics only;
+the dialog itself lives in ui/workfile/.
 """
 
 from chartgen.workfile.state.workfile_file import open_workfile, write_lock
@@ -11,7 +10,7 @@ from chartgen.workfile.state.workfile_file import open_workfile, write_lock
 def classify_lock_state(info: dict, current_user: str) -> str:
     """
     Classify a workfile's lock info relative to current_user.
-    Returns one of the three states named in Functional Spec Section 5:
+    Returns one of three states:
       'unlocked'         — not marked open by anyone
       'locked_by_self'   — marked open by the current user (stale session or
                             still open elsewhere under this account)

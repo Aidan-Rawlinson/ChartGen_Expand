@@ -1,15 +1,11 @@
 """
 url_triage.py
 Decides which toolkit database a chart URL belongs to ("nhs" or
-"indicators"), from the URL's own shape alone — before either toolkit
-package's own url_parser runs. Lives outside both toolkit_nhs/ and
-toolkit_indicators/ because it has to be callable from manifest-row
-creation (workfile_file.new_manifest_row's callers, import_flow.py and
-xlsx_reader.py) without either toolkit package depending on the other, and
-without workfile.state depending on acquisition (one-way dependency rule,
-Architecture Section 2).
+"indicators"), from the URL's path shape alone, before either toolkit's own
+url_parser runs. Called at manifest-row creation, from import_flow.py and
+manifest_table/xlsx_reader.py.
 
-Real examples seen so far:
+Examples:
   NHS:         https://members.nhsbenchmarking.nhs.uk/outputs/6?tier=12&group=1&option=3
   Indicators:  https://members.nhsbenchmarking.nhs.uk/project/42/toolkit?a=6657&b=6658&reportId=420995&date=1353
 

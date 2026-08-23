@@ -1,16 +1,13 @@
 """
 fetch_dispatch.py
 Combines every toolkit's own fetch_all into the single Fetch action the
-Imports tab calls. Lives outside both toolkit_nhs/ and toolkit_indicators/
-— same reason url_triage.py does: something has to know about both without
-either toolkit package depending on the other.
+Imports tab calls. Sits outside both toolkit packages so neither depends on
+the other.
 
-Each toolkit's fetch_all already filters to its own rows internally (by the
-manifest row's database column); this wraps on_progress with an offset per
-phase so the two runs report against one continuous total, rather than the
-progress bar restarting from 0 partway through — every URL is treated
-identically from the person's point of view, regardless of which database
-it belongs to.
+Each toolkit's fetch_all filters to its own rows internally, by the manifest
+row's database column. This wraps on_progress with a per-phase offset so the
+two runs report against one continuous total rather than restarting at 0
+partway through.
 """
 
 from chartgen.acquisition.toolkit_nhs.fetch import fetch_all as _fetch_all_nhs

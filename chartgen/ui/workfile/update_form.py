@@ -1,7 +1,7 @@
 """
 update_form.py
-"Check for Update" modal, triggered from the sidebar (available only with
-no workfile open - Decisions.md). Runs the version comparison, and on
+"Check for Update" modal, triggered from the sidebar. Available only with
+no workfile open. Runs the version comparison, and on
 confirmation, copies the release installer to a temp location, launches it,
 then exits ChartGen's own process so the installer can overwrite the
 install in place.

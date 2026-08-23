@@ -1,19 +1,13 @@
 """
 population_tables.py
 Building and maintaining population-level tables (nhs_organisations,
-submissions_{year}_{project_id}) from the NHS toolkit API. Lives in
-acquisition, not workfile.setup — this is "pull and normalise NHS toolkit
-data", the same kind of concern as api_client/transformers/cache_writer, not
-a workfile-creation concern. That's also what lets fetch.py (same package)
-call ensure_population_tables directly: acquisition code must never depend
-on workfile.setup (one-way dependency rule, Architecture §2), and this used
-to sit in workfile.setup, which is exactly why it had to move.
+submissions_{year}_{project_id}) from the NHS toolkit API. Lives here, not
+in workfile.setup, so fetch.py can call ensure_population_tables directly.
 
-Every population-level table shares the same spine — unit_id, unit_code,
-unit_name, soft_parents, plus any number of Name() peer-group columns — so
-that any table can be treated the same way regardless of what it holds.
-Table-specific detail (nhs_code, submission counts, project_id, etc.) is not
-carried onto these tables; only the shared spine survives for now.
+Every population-level table shares the same spine: unit_id, unit_code,
+unit_name, soft_parents, plus any number of Name() peer-group columns.
+Table-specific detail (nhs_code, submission counts, project_id) is not
+carried onto these tables.
 """
 
 from chartgen.acquisition.toolkit_nhs.api_client import get_submissions, get_organisations

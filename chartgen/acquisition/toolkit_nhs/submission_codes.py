@@ -1,12 +1,12 @@
 """
 submission_codes.py
-Normalisation for NHS submission codes. The API is meant to always return
-codes in LETTER-LETTER-NUMBER-NUMBER-NUMBER form (e.g. "PH050"), but is not
-consistent about how it pads the numeric part -- it sometimes right-pads
-with trailing spaces instead of left-padding with zeros (e.g. "PH50 " for
-what should be "PH050"). Centralised here so every place a raw
-submissionCode is turned into a ChartGen unit_code applies the same fix,
-rather than each caller re-deriving it.
+Normalisation for NHS submission codes.
+
+The API returns codes in LETTER-LETTER-NNN form but pads the numeric part
+inconsistently, sometimes right-padding with spaces instead of left-padding
+with zeros: "PH50 " where it means "PH050".
+
+Apply this anywhere a raw submissionCode becomes a ChartGen unit_code.
 """
 
 import re

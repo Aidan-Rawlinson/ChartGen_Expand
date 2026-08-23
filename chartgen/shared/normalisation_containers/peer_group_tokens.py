@@ -6,9 +6,8 @@ Running Order populations strings and unit table columns: a column name plus
 group) or hold a value (an explicit named group). A blank value or the literal
 "x" both mean "no group" and are treated identically.
 
-Used by peer_groups.py (menu-building — which tokens to offer) and
-population_layers.py (resolving — which units a given token actually matches),
-so both apply the same rule instead of each re-deriving it.
+Read by peer_groups.py, which decides which tokens to offer, and by
+population_layers.py, which resolves which units a token matches.
 """
 
 NO_GROUP_VALUES = {"", "x"}

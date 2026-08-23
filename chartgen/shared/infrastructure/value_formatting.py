@@ -1,11 +1,10 @@
 """
 value_formatting.py
-Numeric display formatting shared across the UI and generation-time text
-substitution (update_text / stat tags). Moved out of
-chartgen.ui.common.formatting so execution-layer code
-(chartgen.output_generation.execution.text) can use the same logic without
-importing from ui (Architecture, Section 2 — one-way dependencies).
-chartgen.ui.common.formatting re-exports format_number for its existing callers.
+Numeric display formatting, shared by the UI and by generation-time text
+substitution.
+
+ui.common.formatting re-exports format_number, so a rename here has two
+call sites.
 """
 
 
@@ -17,9 +16,8 @@ def format_number(value, format_modifier):
     ("£#,##0"). Values are not rescaled — this only controls display.
     Returns "" for None.
 
-    Base Chart functions carry their own independent copy of this logic,
-    since they are standalone artefacts with no import from ChartGen's own
-    code (chartgen/output_generation/execution/charts/base_charts/__init__.py).
+    Base Chart functions carry their own copy of this logic, since they
+    import nothing from ChartGen.
     """
     if value is None:
         return ""

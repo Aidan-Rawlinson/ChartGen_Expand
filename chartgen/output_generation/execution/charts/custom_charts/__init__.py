@@ -1,7 +1,7 @@
 """
 custom_charts/
 Custom Charts — user- or AI-authored Base Chart functions, stored in the
-.cgw alongside the built-in 20, treated identically once saved (Decisions.md).
+.cgw alongside the built-ins, treated identically once saved.
 
   - contract.py  — single source of truth: allowed imports, banned names,
                    and the shared explanatory text used by both the gate

@@ -1,24 +1,16 @@
 """
 timeseries.py
 TimeSeries — one or more independent numeric Metric-Series, one value per
-unit per metric PER PERIOD, across a shared period axis. The genuinely new
-dimension versus NumericSeries is the extra (period) index on every value;
-it is not a compositional structure and not a new kind of statistic.
+unit per metric per period, across a shared period axis.
 
-The period axis lives once on the shape, not per metric: a data shape
-represents a single dataset, and if two metrics didn't share a period axis
-they would not be one dataset — they would need two separate fetches/shapes.
+The period axis lives once on the shape, not per metric. Two metrics that
+did not share a period axis would not be one dataset, and would need two
+shapes.
 
 API-supplied period stats (dateAverages, dateMedians,
-calculatedNationalAverages in the source API) are deliberately not carried
-onto this shape at all. Stats are recomputed locally per period, from the
-raw per-unit values, the same way every other shape computes its own stats
-against whatever population layer gets resolved — just applied once per
-period instead of once for the whole shape. calculatedNationalAverages is
-dropped outright; it was never adopted for this shape.
-
-format_modifier is populated from the NHS API's formatModifier field for
-NumericSeries, NumericCompositional, and CategoricalCompositional alike.
+calculatedNationalAverages) are not carried onto this shape. Stats are
+recomputed locally per period from the raw per-unit values, against
+whatever population layer is resolved.
 """
 
 from dataclasses import dataclass, field, replace
@@ -70,12 +62,8 @@ class TimeSeries:
     population_label:   Optional[str]       = None  # resolved population-string token label, set by build_population_layers
     population_table:   Optional[str]       = None  # name of the population table this data's units belong to
 
-    # Auxiliary metadata — NOT a conceptual part of the data shape itself.
-    # A side pocket for information that travels with the shape without
-    # describing what the shape actually is. Not part of the chart_inputs
-    # contract, and not normally relied on downstream — an exception is for
-    # the specific circumstance that needs it, not the norm. Carries
-    # through filtering/replace() unchanged, same as every other field.
+    # Travels with the shape without being part of it. Not in the
+    # chart_inputs contract. Carries through filtering and replace().
     metadata:           dict                = field(default_factory=lambda: {"source_url": None})
 
     # Period axis — shared across every Metric-Series in this shape
@@ -90,7 +78,7 @@ class TimeSeries:
 
 
 def _percentile(sorted_values, pct):
-    """Linear-interpolated percentile of a pre-sorted, non-empty value list. Duplicated from numeric_series.py deliberately — each shape module owns its own stats computation, per convention."""
+    """Linear-interpolated percentile of a pre-sorted, non-empty value list. Each shape module owns its own copy of its stats computation."""
     n = len(sorted_values)
     if n == 1:
         return sorted_values[0]
@@ -165,27 +153,15 @@ def time_series_summary_stats(shape: "TimeSeries") -> dict:
 def filter_time_series_periods(shape: "TimeSeries", start_period_id: str = "",
                                 end_period_id: str = "") -> "TimeSeries":
     """
-    Return a new TimeSeries trimmed to the inclusive period_id range
-    [start_period_id, end_period_id]. A blank id at either end means "from
-    the first period" / "to the last period". No stats are recalculated —
-    each period's stats are already independent of every other (see module
-    docstring), so trimming is a pure slice of periods, each metric's
-    values, and period_stats down to the same index range.
+    Return a new TimeSeries trimmed to the inclusive period_id range. A blank
+    id at either end means from the first, or to the last, period.
 
-    An id given but not found among shape.periods, or a start that resolves
-    after the end, produces an empty range — the same "unresolvable ->
-    nothing" behaviour as an unresolvable population token
-    (Functional Spec §10.4), not a special case.
+    No stats are recalculated. Each period's stats are already independent of
+    every other, so this is a pure slice of periods, each metric's values,
+    and period_stats down to the same index range.
 
-    TEMPORARY HACK, not the agreed design (calendar-range padding is
-    still pending its own decision): if end_period_id resolves but
-    start_period_id does not, the shape's own period axis starts later
-    than the requested range asked for -- rather than wiping the shape
-    to nothing, return it completely untrimmed. This is a stopgap only;
-    it does not synthesize the missing months, so a Base Chart still
-    only sees whatever periods this shape actually has, not the full
-    requested range. Revisit once the real design (padding with
-    placeholder periods) is agreed.
+    An id given but not found, or a start resolving after the end, produces
+    an empty range.
     """
     ids_in_order = [p.period_id for p in shape.periods]
 

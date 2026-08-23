@@ -76,11 +76,11 @@ ChartGen_Expand/
     │       ├── assembly_engine.py, batch_process.py, results.py, svg_insert.py
     │       ├── charts/
     │       │   ├── cache_reader, chart_type_map, chart_store, chart_store_xlsx
-    │       │   ├── base_charts/    33 charts in 4 shape folders, registry.py
+    │       │   ├── base_charts/    one folder per shape, registry.py
     │       │   └── custom_charts/  contract, gate, resolve, bundle
     │       ├── tables/
     │       │   ├── grid_store, resolve, grid_xlsx, insert_table
-    │       │   ├── base_tables/    4 tables, registry.py
+    │       │   ├── base_tables/    registry.py
     │       │   └── custom_tables/  contract, gate, resolve, bundle
     │       ├── pictures/           insert_picture.py
     │       ├── excel/              insert_from_excel.py
@@ -88,7 +88,8 @@ ChartGen_Expand/
     │       └── text/               text_engine.py, stat_tags.py, stat_tags_xlsx.py
     ├── shared/
     │   ├── normalisation_containers/
-    │   │   ├── shapes/             5 shape modules, common, dispatch, reference_ids
+    │   │   ├── shapes/             one module per shape, common, dispatch,
+    │   │   │                       reference_ids
     │   │   └── population_layers, peer_group_tokens, shape_transforms, cut_resolution
     │   └── infrastructure/         constants, report_context, soft_parents, page_sizing,
     │                               cache_writer, cg_extracts, population_table_xlsx,
@@ -111,7 +112,7 @@ Layer order is `ui` above `output_generation` above `acquisition` above `shared`
 | `acquisition` | Two toolkit APIs, template reading, the manifest table |
 | `output_generation/definition` | The Running Order: schema, generation, row operations, xlsx round-trip |
 | `output_generation/execution` | Running a Running Order: dispatch, rendering, PowerPoint output |
-| `shared/normalisation_containers` | The five canonical data shapes and population resolution |
+| `shared/normalisation_containers` | The canonical data shapes and population resolution |
 | `shared/infrastructure` | Generic helpers that know nothing about charts, toolkits or the UI |
 | `ui` | Streamlit only. Business logic is delegated to the owning module |
 

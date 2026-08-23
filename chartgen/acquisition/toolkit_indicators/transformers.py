@@ -1,26 +1,16 @@
 """
 transformers.py
 Converts one Indicators toolkit report response into a TimeSeries data
-shape. Unlike the NHS side (transformers.py, dispatched by storedProcedure
-name across several report families), there is only one response shape
-here — one transform function, no dispatch table needed.
+shape. There is only one response shape here, so one transform function and
+no dispatch table.
 
-calculatedNationalAverages is dropped entirely, per decision — never stored,
-never computed. dateAverages/dateMedians are also dropped: stats are
-recomputed locally per period from the raw per-unit values instead, the
-same way every other shape computes stats against whatever population layer
-gets resolved, just applied once per period rather than once for the whole
-shape (see timeseries.py).
+calculatedNationalAverages, dateAverages and dateMedians are all dropped.
+Stats are recomputed locally per period from the raw per-unit values.
 
-Every date in availableDates is kept, in its own given order (trusted as
-chronological, not re-sorted). No outputAvailability/visibility filtering
-is applied — that rule (mirrored from the source VBA) turned out not to
-fit this system: it computed visibility against the fetch's own run date,
-so a period's presence on the cached shape depended on exactly when Fetch
-happened to be run, not on anything about the data itself. A period could
-be baked out of a shape at fetch time and never come back without a
-re-fetch, breaking any Running Order row whose metric_periods referenced
-it. Scrapped rather than reworked.
+Every date in availableDates is kept, in the API's own order, trusted as
+chronological and not re-sorted. No outputAvailability or visibility
+filtering is applied: it would make a period's presence on the cached shape
+depend on when Fetch happened to run.
 """
 
 from chartgen.shared.normalisation_containers.shapes.timeseries import (
