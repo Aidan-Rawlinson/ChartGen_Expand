@@ -277,9 +277,28 @@ Borderline items stripped, listed for a decision rather than silently kept:
 - `sparkline1`'s note that a Base Chart must return the requested size itself rather than relying on the inserter to stretch a cropped file back.
 
 Raised, not fixed:
-- `charts/base_charts/CLAUDE.md` says a file computing its sizes proportionally needs no `TEXT_SCALE` and that "the `line_ci_*` family works this way". Eight of the nine do. `line_ci_full` defines `TEXT_SCALE = 5` and multiplies by it throughout, so the claim is wrong for that one file. Correcting it is a Stage 3 document change.
-- 27 of the 37 chart and table files define `TEXT_SCALE`, not all of them. The `base_tables/CLAUDE.md` table says "every file here" without the qualifier the charts version carries. Correct today, since all four Base Tables define one, but it would become wrong the first time a proportionally-sized table is added.
 - The 44 rewritten files are LF in the working tree while `core.autocrlf` is `true`, so Git normalises them on commit and restores CRLF on the next checkout. The working tree was already mixed before this stage. No effect on committed content.
+
+### Stage 5 follow-up - the TEXT_SCALE claims, resolved
+
+Two `TEXT_SCALE` claims raised at the Stage 5 close-out are now corrected. Settling them turned up a design fact that was recorded nowhere.
+
+The old claim in `base_charts/CLAUDE.md` was that a file computing its sizes proportionally needs no `TEXT_SCALE`, and that the `line_ci_*` family works this way. The mechanism was right, the attribution wrong: `line_ci_full` is in that family and defines `TEXT_SCALE = 5`.
+
+**Why `line_ci_na` needs none.** Not because its "N/A" is large enough to tolerate the mis-spacing. Its font size is 8.73pt at real size and 43.63pt as the chart is actually called, so it is already drawn at 5x and gets the same protection as every other file. The route differs, not the outcome: the font size derives from the circle radius, the radius from the canvas, and the canvas arrives pre-multiplied.
+
+**The constraint.** Any expression that tracks the cell already carries the 5x, so `TEXT_SCALE` cannot also appear in it without double-applying. Cell-tracking text and visible-`TEXT_SCALE` text are mutually exclusive, not stylistic alternatives. This matters because `insert_table.py` calls a chart at its cell's own rectangle: hardcoding `line_ci_na`'s font size would leave it correct only at the default 2.99 by 0.75in, a speck in a 6-inch cell and an overflow in a 1.2-inch one. Measured font sizes across those three cells today: 23.3pt, 43.6pt, 116.6pt.
+
+So the rule is not "no text, no `TEXT_SCALE`", and no file is getting a pass. Every text-drawing chart draws at 5x by one of two routes. The nine single-indicator charts draw no text at all.
+
+Changed:
+- `charts/base_charts/CLAUDE.md`: the wrong paragraph replaced with the two routes and the constraint that keeps them apart.
+- `execution/CLAUDE.md`: "must match `TEXT_SCALE` in every Base Chart and Base Table file" corrected to "in every file that defines one". 10 of the 37 have none.
+- `timeseries/line_ci_na.py`: a two-line comment on the font-size line, saying it is already inflated and a `TEXT_SCALE` would double-apply. **A deliberate exception to the Stage 5 decision that these files carry no residual `TEXT_SCALE` pointer line.** It earns the exception because the absence of the constant is what invites someone to add one and break the render.
+
+Withdrawn: the `base_tables/CLAUDE.md` "every file here" flag. All four Base Tables define `TEXT_SCALE` and a Base Table without text is not a real prospect, so the row is correct and a hedge would be noise. The flag was a weak call.
+
+Verified: `line_ci_na` renders byte-for-byte identically to `42ef3b9` at all three cell sizes, and the font size still tracks the cell.
 
 ---
 

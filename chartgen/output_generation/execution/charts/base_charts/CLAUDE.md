@@ -46,7 +46,11 @@ A bigger canvas alone is only half the mechanism. Absolute point-based sizes do 
 
 **Never scale these.** Fractions of the axes or figure. Figure-fraction and data-space coordinates. Anything in 0 to 1. Anything already derived from `width_emu` or `height_emu`.
 
-A file that computes all its sizes proportionally from the figure's own dimensions needs no `TEXT_SCALE` at all. The `line_ci_*` family works this way.
+Every chart that draws text draws it at five times size, so PowerPoint's compression pass works on a large glyph and the error is invisible once the picture is shrunk back. There are two routes to that and no chart is exempt from it.
+
+Most files multiply a typed-in point size by `TEXT_SCALE`. `line_ci_na` instead derives its font size from its circle radius, which derives from the canvas, so it is already inflated and a `TEXT_SCALE` would double-apply. Any size that tracks the canvas this way already carries the factor, which is why the two cannot be combined in one expression.
+
+The single-indicator charts draw no text at all, and size their circle and mark from the canvas, so they need none.
 
 ### The value must match everywhere
 

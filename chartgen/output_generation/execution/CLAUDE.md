@@ -10,7 +10,7 @@ A report assembles as: `create_ppt` opens the template, content rows insert into
 
 ## Render scale
 
-Every Base Chart and Base Table call multiplies `width_emu` and `height_emu` by `CHART_RENDER_SCALE` before rendering, and places the result at the real size. The constant is duplicated at four call sites and must match `TEXT_SCALE` in every Base Chart and Base Table file. Full mechanism in `charts/base_charts/CLAUDE.md`.
+Every Base Chart and Base Table call multiplies `width_emu` and `height_emu` by `CHART_RENDER_SCALE` before rendering, and places the result at the real size. The constant is duplicated at four call sites and must match `TEXT_SCALE` in every file that defines one. Full mechanism in `charts/base_charts/CLAUDE.md`.
 
 ## I/O discipline
 

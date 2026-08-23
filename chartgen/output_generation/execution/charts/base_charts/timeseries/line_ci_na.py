@@ -46,6 +46,8 @@ def line_ci_na(population_layers: list, width_emu=2736215, height_emu=684054, tw
     circle = plt.Circle((cx, cy), r, facecolor=CIRCLE_FILL_NA, edgecolor="none", zorder=1)
     ax.add_patch(circle)
 
+    # Derived from the circle radius, so already inflated with the
+    # canvas. A TEXT_SCALE here would double-apply.
     fontsize = r * 72 * 0.45
     ax.text(cx, cy, "N/A", color=TEXT_COLOUR, fontsize=fontsize,
              fontweight="bold", ha="center", va="center", zorder=2)
