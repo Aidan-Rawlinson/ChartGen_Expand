@@ -34,17 +34,16 @@ from chartgen.output_generation.execution.charts.custom_charts import get_chart_
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from chartgen.shared.normalisation_containers.population_layers import build_population_layers
 
-# MUST match TEXT_SCALE in every file that defines one, and the
-# copies in assembly_engine.py, charts_tab.py and output_tables_tab.py.
-# Nothing enforces this and a mismatch fails silently. Full mechanism in
-# tables/base_tables/CLAUDE.md.
-#
 # A Base Table's returned chart_cells rectangle comes back in inflated
 # space, since the table derives it from the width_emu/height_emu it was
-# given. Divide by this factor before using it as a real slide placement
-# offset. Do NOT divide before the embedded chart's own render call: the
-# raw rectangle is already what a Base Chart expects.
-CHART_RENDER_SCALE = 5
+# given. Divide by CHART_RENDER_SCALE before using it as a real slide
+# placement offset. Do NOT divide before the embedded chart's own render
+# call: the raw rectangle is already what a Base Chart expects.
+#
+# The value must still match TEXT_SCALE in every base_tables/ and
+# base_charts/ file, which cannot import it. Full mechanism in
+# tables/base_tables/CLAUDE.md.
+from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 
 
 def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, workfile_state):

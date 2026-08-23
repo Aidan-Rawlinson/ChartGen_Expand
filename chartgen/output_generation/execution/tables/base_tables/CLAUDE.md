@@ -63,12 +63,11 @@ Current value: **5**.
 
 | Where | Constant |
 |---|---|
-| `output_generation/execution/assembly_engine.py` | `CHART_RENDER_SCALE` |
-| `output_generation/execution/tables/insert_table.py` | `CHART_RENDER_SCALE` |
-| `ui/tabs/charts_tab.py` | `CHART_RENDER_SCALE` |
-| `ui/tabs/output_tables_tab.py` | `CHART_RENDER_SCALE` |
+| `shared/infrastructure/render_scale.py` | `CHART_RENDER_SCALE` |
 | every file here | `TEXT_SCALE` |
 
-Nothing in the code enforces this. These files import nothing from ChartGen, by design, so there is no shared constant to import. A mismatch produces incorrectly proportioned text and lines in that one file only, with no error anywhere. Change the value in one place and it has to change in all of them.
+The ChartGen side has one definition, imported by every call site that inflates a render (`assembly_engine.py`, `tables/insert_table.py`, and both preview surfaces under `ui/tabs/`). Change it there and the whole ChartGen side moves together.
+
+That is only half the job. The files here import nothing from ChartGen, by design, so each carries its own `TEXT_SCALE` literal and nothing in the code enforces that it matches. A mismatch produces incorrectly proportioned text and lines in that one file only, with no error anywhere. Changing the value means changing it in `render_scale.py` and in every file here.
 
 `svg.fonttype` is `"none"` in every file here. No exceptions. Font is Calibri, set per file. `DPI = 300` is used only for matplotlib's own text-metric estimation during layout and has no bearing on the SVG's resolution.

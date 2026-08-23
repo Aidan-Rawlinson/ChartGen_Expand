@@ -21,6 +21,7 @@ from chartgen.output_generation.execution.charts.custom_charts import get_chart_
 from chartgen.output_generation.execution.text.text_engine import update_text
 from chartgen.output_generation.execution.tables.insert_table import insert_table
 from chartgen.output_generation.execution.svg_insert import add_svg_picture
+from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 from chartgen.shared.infrastructure.report_context import build_report_context
 from chartgen.shared.infrastructure.soft_parents import resolve_full_unit_set
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
@@ -36,12 +37,6 @@ from chartgen.workfile.state.workfile_file import master_table_rows
 # ---------------------------------------------------------------------------
 # Hyperlink icon — optional, insert_chart only
 # ---------------------------------------------------------------------------
-
-# MUST match TEXT_SCALE in every file that defines one, and the
-# copies in insert_table.py, charts_tab.py and output_tables_tab.py. Nothing
-# enforces this and a mismatch fails silently. Full mechanism in
-# charts/base_charts/CLAUDE.md.
-CHART_RENDER_SCALE = 5
 
 DEFAULT_HYPERLINK_COLOUR = "#0563C1"   # standard Office hyperlink blue
 DEFAULT_HYPERLINK_SIZE_EMU = 360000    # ~1cm (914400 EMU/inch ÷ 2.54)
