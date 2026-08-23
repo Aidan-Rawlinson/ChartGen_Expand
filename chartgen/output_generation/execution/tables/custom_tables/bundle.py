@@ -182,7 +182,7 @@ def build_bundle(table_type_ref: str, content: list, column_widths: list, row_he
     for every Chart Store entry referenced by a "{Cn}" marker anywhere in
     `content` -- requires workfile_state (for chart_store_rows/cache/
     custom_chart_code) and full_unit_set (for population resolution); the
-    caller (output_tables_tab.py) already computes both for its own
+    caller (output_tables_tab/preview.py) already computes both for its own
     Preview splice, so they're passed straight through, not recomputed
     here.
     """

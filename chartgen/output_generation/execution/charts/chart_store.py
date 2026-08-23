@@ -60,7 +60,7 @@ def next_chart_store_id(settings: dict, existing_ids=None) -> str:
 def chart_store_row_label(row: dict, label_by_cache_file: dict) -> str:
     """
     Human-readable label for one Chart Store row, for use in selectboxes --
-    mirrors charts_tab.py's own ro_row_label for a Running Order row,
+    mirrors charts_tab/sheet.py's own ro_row_label for a Running Order row,
     field for field, since a Chart Store entry carries the same
     base_chart_name/cache_file pair.
     """
@@ -76,7 +76,7 @@ def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state,
     Resolve a Chart Store entry's own population_layers against the
     current reporting context, independent of actually rendering it --
     shared by the Output Tables Preview splice
-    (output_tables_tab.py::_render_chart_store_chart_preview) and the
+    (output_tables_tab/chart_cells.py::_render_chart_store_chart_preview) and the
     Custom Tables bundle's own optional chart-detail export
     (custom_tables/bundle.py), so the same cache-load / cut /
     population-default-fallback / layer-build pipeline is written once,
@@ -85,7 +85,7 @@ def resolve_chart_store_population_layers(chart_store_row: dict, workfile_state,
     No AssemblyContext involved -- both callers run from a Streamlit tab,
     not a report assembly run, so a blank populations field is resolved
     against the workfile's own set_default_populations Running Order row
-    directly, the same fallback charts_tab.py's own Preview uses.
+    directly, the same fallback charts_tab/preview.py uses.
     Returns [] on any
     resolution failure (missing cache_file, a cache load error, an
     unresolvable cut) -- callers treat that the same way as "nothing to

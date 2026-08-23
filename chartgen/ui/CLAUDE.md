@@ -2,6 +2,14 @@
 
 Streamlit only. Business logic belongs to the module that owns it, not here. A tab renders, collects input, and calls out.
 
+## The two tab packages
+
+`charts_tab/` and `output_tables_tab/` are packages, not modules. Each has a `sheet.py` holding the tab entry point and one module per section below it. Every other tab is still a single file.
+
+Each package's `__init__.py` exports exactly two names, the render function and the pre-Save capture function, and those are the only two used from outside. Nothing outside a package imports one of its inner modules.
+
+`sheet.py` is the order of the sheet. The sequence of section calls in it is load-bearing: Streamlit cannot change a widget already instantiated this pass, so a value has to be staged into a pending key before the widget it targets is created. Do not reorder those calls to make the file read better.
+
 ## Session state
 
 Each tab prefixes its own session keys, and `session_state.clear_workfile_session_state` wipes them wholesale on every Open and Close so a freshly opened workfile never inherits another's in-progress state.
@@ -28,4 +36,4 @@ A stored value that will not parse as a number at all is reported with `st.error
 
 ## Render scale
 
-Both preview surfaces render at the inflated size and display at the real size via CSS, matching what the final report does. `CHART_RENDER_SCALE` is duplicated in `charts_tab.py` and `output_tables_tab.py` and must match every other copy. See `output_generation/execution/charts/base_charts/CLAUDE.md`.
+Both preview surfaces render at the inflated size and display at the real size via CSS, matching what the final report does. Both import `CHART_RENDER_SCALE` from `shared/infrastructure/render_scale.py` rather than defining their own. See `output_generation/execution/charts/base_charts/CLAUDE.md`.

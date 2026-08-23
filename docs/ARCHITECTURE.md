@@ -94,13 +94,14 @@ ChartGen_Expand/
     │   └── infrastructure/         constants, report_context, soft_parents, page_sizing,
     │                               cache_writer, cg_extracts, population_table_xlsx,
     │                               value_formatting, period_ids, id_generation,
-    │                               version_compatibility
+    │                               version_compatibility, render_scale
     └── ui/
         ├── common/                 formatting, pickers, guidance, layout_css, compact_layout
         ├── auth/                   login_form.py
         ├── workfile/               sidebar, dialogs, new/open/save-as/update forms
         └── tabs/                   imports, populations, select, text, running_order,
-                                    charts, output_tables, outputs
+                                    outputs; charts_tab/ and output_tables_tab/ are
+                                    packages, one module per section of the sheet
 ```
 
 Layer order is `ui` above `output_generation` above `acquisition` above `shared`. Imports go one way only.
