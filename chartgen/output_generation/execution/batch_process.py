@@ -7,6 +7,10 @@ assembly_engine.run_running_order against a shared AssemblyContext, then runs
 any batch_close rows once. assembly_engine remains the module that knows how
 to execute a single report's rows; this module is purely about iteration
 across units for Run Selected / Run Batch / Run All.
+
+A batch_open or batch_close row that fails is reported as its own run-log
+entry, in the same shape as a per-unit one, since it has no unit of its
+own to be attributed to.
 """
 
 import os
@@ -15,6 +19,45 @@ import time
 from chartgen.output_generation.execution.assembly_engine import (
     run_running_order, AssemblyContext, FUNCTION_MAP
 )
+
+
+def _run_batch_scope_row(row: dict, shared_ctx, base_settings: dict) -> dict:
+    """
+    Run one batch_open or batch_close row and report the outcome the same
+    way a per-unit report does, or None if it succeeded.
+
+    These rows (open_excel, close_excel) run once per batch rather than
+    once per unit, so they have no unit of their own to be logged against.
+    Their failures were previously discarded entirely, which left a failed
+    open_excel to surface only indirectly, as every later insert_from_excel
+    row reporting "workbook is not open" with the real cause thrown away,
+    and a failed close_excel to surface not at all, despite leaving an
+    Excel process behind. Same six keys as a per-unit entry, so the run
+    log and the error count both pick these up unchanged.
+    """
+    func = FUNCTION_MAP.get(str(row.get("function", "")).strip())
+    if not func:
+        return None
+
+    function_name = str(row.get("function", "")).strip()
+    try:
+        result = func(shared_ctx, row, base_settings)
+    except Exception as e:
+        message = f"{type(e).__name__}: {e}"
+    else:
+        # A row that cannot run returns an error result rather than raising.
+        if not isinstance(result, dict) or result.get("status") == "ok":
+            return None
+        message = result.get("message", "Unknown error")
+
+    return {
+        "idx":     "",
+        "code":    function_name,
+        "name":    f"Row {row.get('row_id', '?')}",
+        "ok":      False,
+        "elapsed": 0.0,
+        "error":   message,
+    }
 
 
 def run_batch(rows: list, units_to_run: list, all_units: list,
@@ -48,12 +91,11 @@ def run_batch(rows: list, units_to_run: list, all_units: list,
         os.makedirs(os.path.join(outputs_dir, "pdf"), exist_ok=True)
 
     for row in batch_open:
-        func = FUNCTION_MAP.get(str(row.get("function", "")).strip())
-        if func:
-            try:
-                func(shared_ctx, row, base_settings)
-            except Exception:
-                pass
+        failure = _run_batch_scope_row(row, shared_ctx, base_settings)
+        if failure:
+            log_rows.append(failure)
+            if on_unit_complete:
+                on_unit_complete(failure)
 
     for idx, unit in enumerate(units_to_run):
         pop_idx = next((i + 1 for i, s in enumerate(all_units)
@@ -87,12 +129,11 @@ def run_batch(rows: list, units_to_run: list, all_units: list,
             on_unit_complete(log_entry)
 
     for row in batch_close:
-        func = FUNCTION_MAP.get(str(row.get("function", "")).strip())
-        if func:
-            try:
-                func(shared_ctx, row, base_settings)
-            except Exception:
-                pass
+        failure = _run_batch_scope_row(row, shared_ctx, base_settings)
+        if failure:
+            log_rows.append(failure)
+            if on_unit_complete:
+                on_unit_complete(failure)
 
     elapsed_total = time.perf_counter() - t_overall
     ok_count  = sum(1 for r in log_rows if r["ok"])
