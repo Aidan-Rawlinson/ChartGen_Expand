@@ -20,7 +20,7 @@ Creates the venv from `requirements.txt` on first run, then `streamlit run app.p
 run_tests.bat
 ```
 
-Roughly 340 checks, a few seconds. Same venv, plus `requirements-dev.txt`, which is separate from `requirements.txt` on purpose: that one builds every colleague's application venv and ships in the installer.
+Roughly 380 checks, a few seconds. Same venv, plus `requirements-dev.txt`, which is separate from `requirements.txt` on purpose: that one builds every colleague's application venv and ships in the installer.
 
 The suite covers the pure logic and the round trips, not the interface. A green run means logic that used to be right still is. It says nothing about whether a chart looks right, and it never replaces running the application. Selection rule, coverage and the deliberate boundaries are in `tests/CLAUDE.md`.
 

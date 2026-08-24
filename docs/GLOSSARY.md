@@ -147,7 +147,7 @@ Not ChartGen-specific. Here so the same words mean the same thing in discussion.
 
 **Text Tag** - a placeholder string in template text, for example `[selected-reporting-unit-name]`, replaced with a per-unit value by `update_text`.
 
-**Stat Tag** - a short, permanent, system-issued `T`-prefixed base-36 id standing in for one summary-stats value from one chart's own cut of its cached data: one population token, an optional TimeSeries period range or metric-periods conversion, and a reference id. Defined on the Text tab, resolved by `update_text`, and tied to no Running Order row.
+**Stat Tag** - a short, permanent `T`-prefixed base-36 id, system-issued or set by hand through the Excel round trip, standing in for one summary-stats value from one chart's own cut of its cached data: one population token, an optional TimeSeries period range or metric-periods conversion, and a reference id. Defined on the Text tab, resolved by `update_text`, and tied to no Running Order row.
 
 A Text Tag needs nothing beyond its own literal string. A Stat Tag needs `hex_id` plus population plus reference id to mean anything, because a reference id is not globally unique.
 
@@ -185,7 +185,7 @@ A Text Tag needs nothing beyond its own literal string. A Stat Tag needs `hex_id
 
 ## Table construction
 
-**Output Table** - a grid of constant text and Stat Tag values, composited into a single image by a Base Table function. The table equivalent of a chart. Identified by a permanent base-36 `table_id`. Authored on its own tab, not the Charts sheet.
+**Output Table** - a grid of constant text and Stat Tag values, composited into a single image by a Base Table function. The table equivalent of a chart. Identified by a permanent base-36 `table_id`, system-issued or set by hand through the Excel round trip. Authored on its own tab, not the Charts sheet.
 
 **Base Table** - one of ChartGen's table-rendering functions. A standalone artefact, one per file, the table equivalent of a Base Chart. Not scoped to any data shape. Built in: `plain_grid`, `table_cardtile`, `ci_grid`, `ci_cardtile`.
 

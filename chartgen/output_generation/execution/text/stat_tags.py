@@ -27,14 +27,14 @@ tag reuse an id some untouched piece of template text still points at.
 """
 
 from chartgen.output_generation.execution.charts.cache_reader import load_shape
-from chartgen.shared.infrastructure.id_generation import next_id, from_base36
+from chartgen.shared.infrastructure.id_generation import next_unique_id
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from chartgen.shared.normalisation_containers.peer_group_tokens import parse_peer_token
 from chartgen.shared.normalisation_containers.population_layers import build_population_layers
 from chartgen.shared.normalisation_containers.shapes import summary_stats, reference_rows_for_shape_type
 
 
-def next_stat_tag(settings: dict, existing_ids=None) -> str:
+def next_stat_tag(settings: dict, tags_in_use) -> str:
     """
     Issue and persist the next stat tag id — "T" followed by a base-36
     counter (shared encoding with Output Tables' own table_id counter and
@@ -45,32 +45,15 @@ def next_stat_tag(settings: dict, existing_ids=None) -> str:
     the same Output Table cell grammar — not needed for the
     counter itself, which already has its own key.
 
-    existing_ids -- every tag currently on a row, if known to the caller.
-    The persisted counter cannot be assumed to be the true maximum, because
-    tags also arrive from outside it: a row imported via stat_tags_xlsx.py
-    with its own tag already filled in never advances the counter. So a new
-    tag is never issued from the stored counter alone -- the counter is
-    first resynced to the actual maximum among existing_ids, if that is
-    higher, and only then incremented. Without this a stale counter
-    silently reissues a tag already in use, and template text still
-    pointing at the original resolves to the new row's value.
+    tags_in_use -- every tag currently on a row. Required, because a tag
+    that duplicated an existing one would make template text resolve to
+    the wrong row's value, and the counter alone cannot rule that out: a
+    row imported via stat_tags_xlsx.py carries whatever tag the person
+    typed, and never advances the counter. next_unique_id checks the
+    candidate against these rather than trying to decode them, so a tag
+    typed as "AB1" or "AB-1" is honoured either way.
     """
-    if existing_ids:
-        current = int(settings.get("next_stat_tag_id", "0") or "0")
-        highest = current
-        for eid in existing_ids:
-            suffix = str(eid or "")
-            if suffix.startswith("T"):
-                suffix = suffix[1:]
-            if not suffix:
-                continue
-            try:
-                highest = max(highest, from_base36(suffix))
-            except ValueError:
-                continue  # not a base-36 id this counter ever issued -- ignore, don't let it break resync
-        if highest > current:
-            settings["next_stat_tag_id"] = str(highest)
-    return "T" + next_id(settings, "next_stat_tag_id")
+    return next_unique_id(settings, "next_stat_tag_id", "T", tags_in_use)
 
 
 def layer_display_label(populations_str: str, resolved_population_label: str) -> str:

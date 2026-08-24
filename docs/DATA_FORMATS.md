@@ -82,7 +82,7 @@ Two columns, `key` and `value`. An open key-value store, not a fixed schema.
 | `template_page_width_emu`, `template_page_height_emu` | Page size, captured once at template processing |
 | `selected_unit_id`, `reporting_unit_name` | Current reporting unit |
 | `batch_cursor` | Position within a batch run |
-| `next_stat_tag_id`, `next_table_id`, `next_chart_store_id` | Base-36 id counters |
+| `next_stat_tag_id`, `next_table_id`, `next_chart_store_id` | Base-36 id counters, one per id space. Only ever advance |
 | `charts_sheet_state`, `output_tables_sheet_state` | Sandbox control values as a JSON blob |
 
 `settings.csv` holds no project identity. No year, no `project_id`, no project name. A workfile can span several projects, so none of those are workfile-level facts. Project identity lives on the manifest row and in the population table names.
@@ -185,7 +185,7 @@ A deleted row stays in the table with its `hex_id` reserved and its cached data 
 
 | Column | Holds |
 |---|---|
-| `tag` | `T` plus a base-36 id, never reused. This is the literal `[tag]` text placed in a template |
+| `tag` | `T` plus a base-36 id, never reused. This is the literal `[tag]` text placed in a template. May be set by hand via the Excel round trip, in any form |
 | `hex_id` | The manifest row this tag's data comes from |
 | `populations` | A single population token, not a populations string |
 | `start_period`, `end_period`, `metric_periods` | TimeSeries only |
@@ -202,7 +202,7 @@ Mirrors `CHART_SANDBOX_FIELDS` exactly, plus its own id and description.
 
 | Column | Holds |
 |---|---|
-| `chart_store_id` | `C` plus a base-36 id, never reused |
+| `chart_store_id` | `C` plus a base-36 id, never reused. May be set by hand via the Excel round trip, in any form |
 | `base_chart_name`, `cache_file`, `populations` | As the Running Order's own columns |
 | `start_period`, `end_period`, `metric_periods` | TimeSeries only |
 | `width_emu`, `height_emu`, `tweaks` | As the Running Order's own columns |
@@ -220,7 +220,7 @@ A blank `populations` inherits the Running Order default.
 
 | Column | Holds |
 |---|---|
-| `table_id` | Base-36 id, never reused. Also written into the grid's corner cell, cosmetically |
+| `table_id` | Base-36 id, never reused. Also written into the grid's corner cell, cosmetically. May be set by hand via the Excel round trip, in any form |
 | `table_name` | User-typed for a manually created table, auto-generated `Table_1`, `Table_2` for a yellow-box one. Never used to match a re-uploaded template's box against an existing table |
 | `rows` | Content row count N, excluding the header row |
 | `columns` | Content column count M, excluding the header column |
@@ -414,6 +414,8 @@ One list per `insert_chart` call, built fresh by `build_population_layers`. Each
 ## Conventions
 
 **Base-36 ids** come from `shared/infrastructure/id_generation.py`, from a persisted counter per id space. Never recomputed from surviving rows, never reused.
+
+An id can also be typed by a person, in any form, through the Excel round trip each of these tables has. So a system-issued id is checked against the ids already in use rather than inferred from the counter: `next_unique_id` skips any candidate already taken, comparing case-insensitively and parsing nothing. Rules and rationale in `shared/infrastructure/CLAUDE.md`.
 
 | Prefix | Id space |
 |---|---|

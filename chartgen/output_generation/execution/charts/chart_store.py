@@ -13,13 +13,13 @@ Ids come from settings["next_chart_store_id"], its own counter key.
 
 from dataclasses import replace
 
-from chartgen.shared.infrastructure.id_generation import next_id, from_base36
+from chartgen.shared.infrastructure.id_generation import next_unique_id
 from chartgen.output_generation.execution.charts.cache_reader import load_shape
 from chartgen.shared.normalisation_containers.cut_resolution import prepare_chart_cut
 from chartgen.shared.normalisation_containers.population_layers import build_population_layers
 
 
-def next_chart_store_id(settings: dict, existing_ids=None) -> str:
+def next_chart_store_id(settings: dict, ids_in_use) -> str:
     """
     Issue and persist the next Chart Store id — "C" followed by a base-36
     counter (shared encoding with Stat Tags' and Output Tables' own
@@ -28,33 +28,15 @@ def next_chart_store_id(settings: dict, existing_ids=None) -> str:
     "C" prefix disambiguates a Chart Store id from a Stat Tag ("T" prefix)
     when both are used inside the same Output Table cell grammar.
 
-    existing_ids -- every chart_store_id currently on a row, if known to
-    the caller. This is a two-way flow: the system can't assume its own
-    persisted counter is still the true maximum, because ids can also
-    arrive from outside it (a row uploaded via chart_store_xlsx.py with
-    its own id already filled in never advances the counter). So a new id
-    is never issued from the stored counter alone -- the counter is first
-    resynced to whatever the actual current maximum among existing_ids
-    is, if that's higher, and only then incremented. Confirmed
-    duplicate-id behaviour otherwise: a stale counter can silently reissue
-    an id already in use on another row.
+    ids_in_use -- every chart_store_id currently on a row. Required: an id
+    reused from another row would make a "{Cn}" marker in an Output Table
+    cell ambiguous, and the counter alone cannot rule that out, since a row
+    uploaded via chart_store_xlsx.py carries whatever id the person typed
+    and never advances the counter. next_unique_id checks the candidate
+    against these rather than decoding them, so an id typed as "AB1" is
+    honoured as readily as "C1".
     """
-    if existing_ids:
-        current = int(settings.get("next_chart_store_id", "0") or "0")
-        highest = current
-        for eid in existing_ids:
-            suffix = str(eid or "")
-            if suffix.startswith("C"):
-                suffix = suffix[1:]
-            if not suffix:
-                continue
-            try:
-                highest = max(highest, from_base36(suffix))
-            except ValueError:
-                continue  # not a base-36 id this counter ever issued -- ignore, don't let it break resync
-        if highest > current:
-            settings["next_chart_store_id"] = str(highest)
-    return "C" + next_id(settings, "next_chart_store_id")
+    return next_unique_id(settings, "next_chart_store_id", "C", ids_in_use)
 
 
 def chart_store_row_label(row: dict, label_by_cache_file: dict) -> str:

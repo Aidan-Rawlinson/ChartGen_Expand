@@ -18,6 +18,8 @@ validate_grid is advisory by design: "out-of-tolerance values are flagged,
 never auto-corrected".
 """
 
+import pytest
+
 from chartgen.output_generation.execution.tables.grid_store import (
     DEFAULT_TABLE_COLUMNS,
     DEFAULT_TABLE_ROWS,
@@ -285,17 +287,79 @@ def test_content_outside_a_shrunk_grid_is_dropped():
 # ---------------------------------------------------------------------------
 
 def test_table_ids_carry_no_prefix():
-    """
-    Unlike a Stat Tag ("T3") or a Chart Store id ("C3"), so nothing is
-    stripped before decoding.
-    """
+    """Unlike a Stat Tag ("T3") or a Chart Store id ("C3")."""
     table_id = next_table_id({}, set())
     assert table_id.isalnum()
     assert not table_id.startswith(("T", "C"))
 
 
+def test_the_first_table_id_in_a_fresh_workfile_is_short():
+    assert next_table_id({}, set()) == "1"
+
+
+def test_an_id_already_in_use_is_never_reissued():
+    """
+    A reissued table_id would point two Running Order rows at one grid, and
+    an insert_table row at the wrong table.
+    """
+    ids_in_use = {"1", "2", "3"}
+    assert next_table_id({}, ids_in_use) not in ids_in_use
+
+
+def test_an_id_held_only_by_the_grid_store_still_blocks():
+    """
+    Callers must pass both the index rows and the grid store, because
+    either can hold an id the counter never issued. This is the half that
+    is easy to forget: a grid CSV inside the .cgw with no matching index
+    row.
+    """
+    assert next_table_id({}, {"1"}) != "1"
+
+
+def test_a_hand_typed_id_from_excel_is_respected():
+    """
+    "AB1" is not a value the counter would produce, and an implementation
+    that decoded ids to find the highest would ignore it entirely. It still
+    has to block that id.
+    """
+    ids_in_use = {"AB1", "AB2", "1"}
+    issued = next_table_id({}, ids_in_use)
+    assert issued.casefold() not in {i.casefold() for i in ids_in_use}
+
+
+def test_ids_stay_short_after_a_user_numbers_tables_their_own_way():
+    """
+    Aidan's case, on the id space it was raised about. Numbering tables
+    "AB1, AB2, AB3" then "AC1, AC2, AC3" is natural when building tabular
+    material. The old implementation decoded "AC3" to 13,395 and wrote it
+    into the counter, so every later table_id became a three-character
+    string derived from that scheme.
+    """
+    ids_in_use = {"AB1", "AB2", "AB3", "AC1", "AC2", "AC3"}
+    issued = next_table_id({}, ids_in_use)
+    assert issued == "1"
+    assert issued.casefold() not in {i.casefold() for i in ids_in_use}
+
+
 def test_successive_table_ids_differ():
     settings = {}
-    first = next_table_id(settings, set())
-    second = next_table_id(settings, set())
-    assert first != second
+    ids_in_use = set()
+    issued = []
+    for _ in range(3):
+        new = next_table_id(settings, ids_in_use)
+        ids_in_use.add(new)
+        issued.append(new)
+
+    assert issued == ["1", "2", "3"]
+
+
+def test_the_table_id_space_has_its_own_counter():
+    settings = {}
+    next_table_id(settings, set())
+    assert "next_table_id" in settings
+    assert "next_stat_tag_id" not in settings
+
+
+def test_the_ids_in_use_argument_is_required():
+    with pytest.raises(TypeError):
+        next_table_id({})

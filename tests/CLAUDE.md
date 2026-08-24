@@ -6,7 +6,7 @@ Run them:
 run_tests.bat
 ```
 
-Roughly 340 checks, a few seconds. `pytest`, from `requirements-dev.txt`, which is deliberately separate from `requirements.txt`: that one builds every colleague's application venv and ships in the installer, and pytest has no business in either.
+Roughly 380 checks, a few seconds. `pytest`, from `requirements-dev.txt`, which is deliberately separate from `requirements.txt`: that one builds every colleague's application venv and ships in the installer, and pytest has no business in either.
 
 ## The rule for what is tested
 
@@ -38,7 +38,8 @@ Each test's name states the behaviour in plain English, and its docstring says w
 
 | Area | What is pinned |
 |---|---|
-| `shared/infrastructure` | Period id extraction and rebuilding as exact inverses. Percent/EMU conversion, including the values the UI must not tidy up. Base-36 id issuing and the never-reissued rule. `soft_parents` parsing and one-hop resolution. The file-version gate. CSV type coercion |
+| `shared/infrastructure` | Period id extraction and rebuilding as exact inverses. Percent/EMU conversion, including the values the UI must not tidy up. `soft_parents` parsing and one-hop resolution. The file-version gate. CSV type coercion |
+| Id uniqueness | That a system-issued id never duplicates one already in use, across all three id spaces, including ids typed by hand through the Excel round trip in forms the counter would never produce, and ids differing only in case |
 | Running Order rows | `row_id` renumbering, insert placement, that Overwrite leaves other columns alone, where a new content row lands |
 | Output Table grids | Grid geometry and the size row/column offsets, `validate_grid` staying advisory, `resize_grid` preserving authored sizes |
 | The numeric core | The percentile convention written out longhand, that `None` is never averaged as zero, per-layer stats recalculation, `reference_ids`, the TimeSeries to NumericSeries conversion, `prepare_chart_cut` |
@@ -70,7 +71,7 @@ Where a test records behaviour rather than endorsing it, the docstring says so.
 
 A test that can never fail is worse than no test: it manufactures confidence. Passing is not evidence on its own.
 
-When this suite was built, four invariants were deliberately broken in the application code, one at a time, to confirm the tests caught each one and then reverted:
+Each of these was deliberately broken in the application code, one at a time, to confirm the tests caught it, and then reverted:
 
 | Break | Caught by |
 |---|---|
@@ -78,5 +79,6 @@ When this suite was built, four invariants were deliberately broken in the appli
 | Let `resize_grid` redistribute authored column widths | 1 test |
 | Swap linear interpolation for nearest-rank percentiles | 4 tests, reporting a median of 3.0 where 2.5 was expected |
 | Stop writing `chart_store.csv` on save | the whole-format `.cgw` round trip |
+| Make `next_unique_id` trust the counter and skip the uniqueness check | 14 tests, across all three id spaces |
 
 Worth repeating on anything substantial added here. It is the only way to know a new test has teeth.
