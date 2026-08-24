@@ -14,7 +14,15 @@ Creates the venv from `requirements.txt` on first run, then `streamlit run app.p
 
 `requirements.txt` is pinned to exact versions, so a rebuild reproduces what currently works rather than whatever is newest on PyPI that day. Upgrading is a deliberate act: change the pin, delete `venv/`, relaunch, and check the outputs. Matplotlib is the one to watch, since a new version can change default spacing or fonts and so alter every chart without any change to this codebase.
 
-There are no tests. Verification is by running the application.
+## Tests
+
+```
+run_tests.bat
+```
+
+Roughly 340 checks, a few seconds. Same venv, plus `requirements-dev.txt`, which is separate from `requirements.txt` on purpose: that one builds every colleague's application venv and ships in the installer.
+
+The suite covers the pure logic and the round trips, not the interface. A green run means logic that used to be right still is. It says nothing about whether a chart looks right, and it never replaces running the application. Selection rule, coverage and the deliberate boundaries are in `tests/CLAUDE.md`.
 
 ## Layout
 
@@ -46,7 +54,7 @@ Layer order is `ui` above `output_generation` above `acquisition` above `shared`
 
 Deliberate or accepted, not oversights to fix in passing. Raise before acting on any of them.
 
-**No test suite.** Nothing under `tests/`, anywhere. Never claim a change is verified by tests. A pure function can be exercised directly in a throwaway script, which is worth doing and is not the same thing as having tests.
+**Most of the application is not covered by tests, on purpose.** The Streamlit UI, the PowerPoint and Excel COM automation, chart appearance and the toolkit APIs are all excluded, with reasons, in `tests/CLAUDE.md`. That is a large share of the codebase, so never present a green test run as evidence that a change works. Anything visual, anything touching Office, and anything user-facing still has to be seen in the running application.
 
 **Two unused definitions, both left on purpose.** `has_valid_unit_data` on the data shapes, to be revisited when the tool is mature if still unused. `_apply_spine_style` in `base_charts/categorical_compositional/yn_bar.py`, left because these files are handed whole to an external AI and pasted back, so an edit there is lost the next time that happens.
 

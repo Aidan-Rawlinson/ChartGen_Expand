@@ -51,6 +51,7 @@ ChartGen_Expand/
 ├── .streamlit/
 ├── docs/
 ├── installer/
+├── tests/                          mirrors chartgen/, one test file per module
 ├── user_resources/
 └── chartgen/
     ├── session_shell/

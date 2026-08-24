@@ -1,0 +1,8 @@
+# Development-only dependencies. NOT installed by run_chartgen.bat and NOT
+# shipped in the installer -- requirements.txt is what builds every
+# colleague's application venv, and pytest has no business in it.
+#
+# Installed by run_tests.bat. Pinned exactly, same discipline as
+# requirements.txt: a rebuild reproduces what currently works rather than
+# whatever is newest on PyPI that day.
+pytest==9.1.1
