@@ -150,7 +150,8 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
     if not grid_rows:
         return err_result(row, f"insert_table: no Output Table found for table_id '{table_id}'.")
 
-    resolved = resolve_output_table(grid_rows, workfile_state, ctx.full_unit_set or {})
+    resolved = resolve_output_table(grid_rows, workfile_state, ctx.full_unit_set or {},
+                                    ctx.report_context)
 
     tweaks = str(row.get("tweaks", "") or "").strip()
     custom_table_code = workfile_state.custom_table_code if workfile_state else {}

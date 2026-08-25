@@ -123,7 +123,7 @@ After a crash the lock fields stay as last written. The next person to open sees
 | `insert_table` | Complete | Renders a Base Table from an Output Table's grid, the same way `insert_chart` renders a chart. Resolves built-in first, then Custom Tables |
 | `insert_picture` | Complete | `[code]` and `[id]` token substitution, aspect ratio preserved |
 | `insert_from_excel` | Complete | With `open_excel` and `close_excel`. Requires COM |
-| `update_text` | Complete | Ordinary text frames and PowerPoint table cells alike, both tag families |
+| `update_text` | Complete | Ordinary text frames and PowerPoint table cells alike, both tag families. Report level tags come from `REPORT_TEXT_TAGS`, the one list the Text tab's table also renders |
 | `empty_placeholder` | Complete | |
 | `save_ppt` | Complete | |
 | `save_pdf` | Complete | Disabled by default in generated Running Orders |
@@ -165,7 +165,7 @@ After a crash the lock fields stay as last written. The next person to open sees
 | Excel round-trip | Complete | Full-replace, mirroring the grid's own spreadsheet shape. Content cells offer a Stat Tag dropdown through a hidden list sheet, with free text still accepted. A percentage-formatted cell is read back through its number format, not its raw value |
 | Shared selection box | Complete | One selection shared by Edit Grid and Preview. "+ New Output Table" sits last, revealing inline creation controls |
 | Preview sandbox | Complete | Table type, tweaks, sizing, Save to Running Order, Custom Tables, Reset. State persists across Save and reopen |
-| Stat Tag resolution in cells | Complete | Reuses `update_text`'s own token building, not a duplicated path |
+| Tag resolution in cells | Complete | Report level tags and Stat Tags alike, through `update_text`'s own two token builders, not a duplicated path |
 | Chart-component cells | Complete | The Base Table function recognises the marker, skips drawing it as text, and reports the cell's rectangle. Rendered as a layered PowerPoint picture in the report, or a spliced SVG image in the Preview. Never merged into the table's own image. A blank `populations` correctly inherits the workfile default in both paths |
 | Running Order placement for a manually created table | Complete | Appends an `insert_table` row immediately above `save_ppt`, with no slide or position and default sizing. The user sets position afterwards. A yellow-box table gets its row at template processing with real position |
 | Chart Store | Complete | A third Charts sheet entry point alongside Running Order row and Data shape. Save-back offers Add and Overwrite only, no position concept. A toggle swaps the chart preview for a table of every entry, with delete, export and import |

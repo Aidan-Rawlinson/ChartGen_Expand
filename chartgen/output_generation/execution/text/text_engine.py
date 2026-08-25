@@ -1,13 +1,16 @@
 """
 text_engine.py
 Running Order function: update_text — replaces text tags in the presentation
-with values for the current reporting unit. Promoted out of assembly_engine
+with values for the current report. Promoted out of assembly_engine
 (where it was buried as a single function) to its own module, the same tier
 as charts/pictures/excel under execution.
 
 Two tag families, both resolved per report:
-  - Per-unit tags (e.g. [selected-reporting-unit-name]) — one value per
-    reporting unit, read straight off ReportContext.
+  - Report level tags (report_tags.py) — one value for the whole report,
+    whether that comes from the reporting unit (e.g.
+    [selected-reporting-unit-name], read off ReportContext) or from the run
+    itself (e.g. [date]). REPORT_TEXT_TAGS there is the definition of which
+    tags exist; nothing is named here.
   - Stat tags (workfile_config/text_stats.csv, stat_tags.py) — a short,
     permanent id (e.g. [T3], [Ta7]) standing in for one summary-stats value
     from one chart's own independently-authored cut of its cached data.
@@ -16,6 +19,7 @@ Covers ordinary text frames and PowerPoint table cells (shape.table) alike.
 """
 
 from chartgen.output_generation.execution.results import ok_result, err_result
+from chartgen.output_generation.execution.text.report_tags import build_report_tag_tokens
 from chartgen.output_generation.execution.text.stat_tags import resolve_stat_tag_value
 from chartgen.shared.infrastructure.value_formatting import format_reference_value
 
@@ -86,24 +90,18 @@ def _replace_tags_in_text_frame(text_frame, tokens: dict) -> int:
 def update_text(ctx, row: dict, settings: dict) -> dict:
     """
     Replace text tags in the presentation with values for the current
-    reporting unit — both the fixed per-unit tag and every defined stat
-    tag (workfile_config/text_stats.csv). Covers ordinary text frames and
-    table cells alike.
+    report — every report level tag (REPORT_TEXT_TAGS) and every defined
+    stat tag (workfile_config/text_stats.csv). Covers ordinary text frames
+    and table cells alike.
     """
     if ctx.prs is None:
         return err_result(row, "update_text: no open presentation (create_ppt not called?).")
 
-    rc = ctx.report_context
-    tokens = {}
-    if rc:
-        tokens["[selected-reporting-unit-name]"] = rc.unit_name or ""
+    tokens = build_report_tag_tokens(ctx.report_context)
 
     workfile_state = settings.get("workfile_state")
     if workfile_state is not None:
         tokens.update(build_stat_tag_tokens(workfile_state, ctx.full_unit_set or {}))
-
-    if not tokens:
-        return ok_result(row, "update_text: no tags to replace (no ReportContext, no stat tags).")
 
     replacements = 0
     for slide in ctx.prs.slides:

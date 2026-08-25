@@ -2,6 +2,16 @@
 
 `update_text` resolves every tag family from one combined token dict, in ordinary text frames and in PowerPoint table cells alike. A table cell exposes the same text-frame interface, so both go through the same paragraph walk.
 
+## Report level tags
+
+`REPORT_TEXT_TAGS` in `report_tags.py` is the definition of these tags, not a description of behaviour implemented elsewhere. One entry per tag, carrying its literal text, the description shown to the user, and how it resolves.
+
+Every surface reads that list: the Text tab's table renders it, `update_text` builds tokens from it, and Output Table cell resolution does too. Nothing else names a tag or a description. **Removing an entry therefore stops that replacement happening anywhere, with no other change, and adding one makes it appear on the Text tab and work in the same edit.** A tag that displays but does nothing, or works but is undiscoverable, is not reachable from here. That is the point of the list, and it is why the Text tab's table has no tag strings in it.
+
+`[code]` is deliberately the same literal `insert_picture` substitutes into an image path, from the same `ReportContext` field. Two separate mechanisms on two different things: `update_text` walks slide text and table cells, `insert_picture` rewrites a Running Order path. Removing the list entry here stops the text replacement and leaves the path token working.
+
+`resolve` returns `None` to mean the tag cannot be resolved for this report, and the token is then omitted so the literal text survives in the deck. Only the unit name does that, when no reporting unit is selected. Values are read at resolution time, so a date resolves per report rather than once per run.
+
 ## Stat Tags
 
 A Stat Tag is a short, permanent, system-issued id standing in for one summary-stats value from one chart's own cut of its cached data.

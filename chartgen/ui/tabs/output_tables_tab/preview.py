@@ -129,7 +129,8 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
         height_emu = percent_to_emu(height_pct, page_w, page_h)
 
         full_unit_set = _current_full_unit_set(workfile_state, the_settings)
-        resolved = resolve_output_table(grid_rows, workfile_state, full_unit_set)
+        rc = build_report_context(the_settings, master_table())
+        resolved = resolve_output_table(grid_rows, workfile_state, full_unit_set, rc)
 
         target_default = bound_ro_choice if bound_ro_choice in table_row_ids else TARGET_PLACEHOLDER
         current_target = st.session_state.get("ots_target_row_choice", target_default)

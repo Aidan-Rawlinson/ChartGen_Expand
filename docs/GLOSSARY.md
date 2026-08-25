@@ -145,7 +145,7 @@ Not ChartGen-specific. Here so the same words mean the same thing in discussion.
 
 **Position Finder** - a read-only support tool on the Running Order tab, not a Running Order function. Reads a selected shape's live position and size off an already-open PowerPoint, for copying into a row by hand.
 
-**Text Tag** - a placeholder string in template text, for example `[selected-reporting-unit-name]`, replaced with a per-unit value by `update_text`.
+**Text Tag** - a placeholder string in template text, for example `[selected-reporting-unit-name]`, `[code]` or `[date]`, replaced by `update_text` with a value for the current report: either a per-unit fact or a run-time one. `REPORT_TEXT_TAGS` in `execution/text/report_tags.py` is the definition of which exist.
 
 **Stat Tag** - a short, permanent `T`-prefixed base-36 id, system-issued or set by hand through the Excel round trip, standing in for one summary-stats value from one chart's own cut of its cached data: one population token, an optional TimeSeries period range or metric-periods conversion, and a reference id. Defined on the Text tab, resolved by `update_text`, and tied to no Running Order row.
 

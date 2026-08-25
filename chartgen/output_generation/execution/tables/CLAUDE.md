@@ -14,7 +14,9 @@ There is no fixed grid column schema. Each grid is written from its own rows' ke
 
 ## Resolution
 
-`resolve.py` is the single point where a grid becomes plain values for a renderer. It substitutes Stat Tags through `text_engine.build_stat_tag_tokens`, the same token map `update_text` builds, and converts `<br>`, `<br/>` and `<br />`, case-insensitive, into a real newline. Both the final report and the tab preview go through it.
+`resolve.py` is the single point where a grid becomes plain values for a renderer. It substitutes both tag families through the same two builders `update_text` uses, `report_tags.build_report_tag_tokens` and `text_engine.build_stat_tag_tokens`, and converts `<br>`, `<br/>` and `<br />`, case-insensitive, into a real newline. Both the final report and the tab preview go through it.
+
+A report level tag needs the `ReportContext`, so `resolve_output_table` takes it as a required argument. `insert_table` passes the one on the AssemblyContext; the tab preview builds its own from the current selection, as it already does for the Full Unit Set.
 
 ## Chart cells
 

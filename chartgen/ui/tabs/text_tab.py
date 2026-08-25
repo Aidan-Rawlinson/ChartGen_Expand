@@ -2,9 +2,14 @@
 text_tab.py
 Text tab — two independent tag tables:
 
-  - Text tags — per-unit facts (e.g. [selected-reporting-unit-name]),
-    resolved straight off ReportContext. One value per reporting unit,
-    globally unique, presentation-wide.
+  - Report level tags — one value for the whole report, whether that comes
+    from the reporting unit (e.g. [selected-reporting-unit-name]) or from the
+    run itself (e.g. [date]). Globally unique, presentation-wide.
+
+    Read-only here. REPORT_TEXT_TAGS in
+    output_generation/execution/text/report_tags.py is the definition of
+    which tags exist, what each is described as, and how each resolves;
+    the table below renders that list and names nothing itself.
 
   - Stat tags — short, permanent ids (e.g. [T3], [Ta7]) each standing in for
     one summary-stats value from one chart's own independently-authored
@@ -30,6 +35,7 @@ from chartgen.output_generation.definition.running_order import (
     build_populations_options, build_metric_periods_string,
 )
 from chartgen.output_generation.execution.charts.cache_reader import cache_files_sorted_by_chart_ref
+from chartgen.output_generation.execution.text.report_tags import REPORT_TEXT_TAGS
 from chartgen.output_generation.execution.text.stat_tags import next_stat_tag, resolve_stat_tag_value, layer_display_label
 from chartgen.output_generation.execution.text.stat_tags_xlsx import (
     write_stat_tags_xlsx, read_stat_tags_xlsx, assign_missing_tags,
@@ -116,7 +122,7 @@ def render_text_tab():
     units = master_table()
     rc = build_report_context(the_settings, units)
 
-    # --- Text tags (per-unit) ---
+    # --- Report level tags ---
     tight_caption(
         "These tables are used to support text replacements on the PowerPoint template "
         "and in tables that we wish to create for the report. Please include update_text "
@@ -125,12 +131,15 @@ def render_text_tab():
 
     tight_divider()
     tight_subheader("Report level text replacement tags")
-    preview_value = rc.unit_name if rc else "— no reporting unit selected —"
+    report_tag_values = [entry["resolve"](rc) for entry in REPORT_TEXT_TAGS]
     st.dataframe(
         {
-            "Text Tag": ["[selected-reporting-unit-name]"],
-            "Replaced with": ["Unit name"],
-            "Current value": [preview_value],
+            "Text Tag": [entry["tag"] for entry in REPORT_TEXT_TAGS],
+            "Replaced with": [entry["description"] for entry in REPORT_TEXT_TAGS],
+            "Current value": [
+                "— no reporting unit selected —" if v is None else v
+                for v in report_tag_values
+            ],
         },
         use_container_width=True, hide_index=True,
     )

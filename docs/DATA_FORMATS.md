@@ -140,7 +140,7 @@ table_name:id1^id2|table_name:id3
 | `start_period` | Inclusive range start. TimeSeries only. Blank means from the first period |
 | `end_period` | Inclusive range end. TimeSeries only. Blank means to the last period |
 | `metric_periods` | `^`-delimited period value or values. TimeSeries only. Converts the row to a NumericSeries snapshot. Blank means no conversion |
-| `image_path` | Source image for `insert_picture`. May contain `[code]` or `[id]` tokens |
+| `image_path` | Source image for `insert_picture`. May contain `[code]` or `[id]` tokens, substituted by that function itself, separately from the Text Tag of the same name |
 | `excel_path` | Workbook for `open_excel`, `insert_from_excel`, `close_excel` |
 | `export_range` | Named range captured as an image |
 | `driver_range` | Named range receiving the current `unit_id` |

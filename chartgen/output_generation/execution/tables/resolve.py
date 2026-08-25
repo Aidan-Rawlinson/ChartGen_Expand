@@ -1,9 +1,10 @@
 """
 resolve.py
 Resolves an Output Table's grid into plain values ready for a Base Table:
-parsed column widths and row heights, and a content grid with every Stat Tag
-resolved to its current value for the reporting unit. Uses the same token
-map update_text builds, not a duplicate. Literal text passes through.
+parsed column widths and row heights, and a content grid with every tag
+resolved to its current value for this report — report level tags and Stat
+Tags alike. Built from the same two token builders update_text uses, not a
+duplicate of either. Literal text passes through.
 
 The one shared place both the final report and the Preview resolve content
 through, so two conventions are handled here and nowhere else.
@@ -22,12 +23,14 @@ import re
 from chartgen.output_generation.execution.tables.grid_store import (
     get_column_widths, get_row_heights, get_content_grid,
 )
+from chartgen.output_generation.execution.text.report_tags import build_report_tag_tokens
 from chartgen.output_generation.execution.text.text_engine import build_stat_tag_tokens
 
 _BR_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 
 
-def resolve_output_table(grid_rows: list, workfile_state, full_unit_set: dict) -> dict:
+def resolve_output_table(grid_rows: list, workfile_state, full_unit_set: dict,
+                         report_context) -> dict:
     """
     Returns {"column_widths": [...], "row_heights": [...], "content": [[...]]}.
     content is a plain list[list[str]], every resolvable "[tag]" replaced
@@ -38,7 +41,9 @@ def resolve_output_table(grid_rows: list, workfile_state, full_unit_set: dict) -
     row_heights = get_row_heights(grid_rows)
     raw_content = get_content_grid(grid_rows)
 
-    tokens = build_stat_tag_tokens(workfile_state, full_unit_set) if workfile_state is not None else {}
+    tokens = build_report_tag_tokens(report_context)
+    if workfile_state is not None:
+        tokens.update(build_stat_tag_tokens(workfile_state, full_unit_set))
 
     resolved_content = []
     for row in raw_content:
