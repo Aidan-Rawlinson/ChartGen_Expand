@@ -4,6 +4,8 @@ Streamlit desktop application. Pulls benchmarking data from two NHS toolkit APIs
 
 One user, one machine, one workfile at a time. Workfiles are shared through SharePoint via OneDrive sync.
 
+In development, not deployed to users yet. There is no installed base to keep compatible, so a change that would break an earlier release is a decision on its merits rather than a blocker.
+
 ## Run
 
 ```
