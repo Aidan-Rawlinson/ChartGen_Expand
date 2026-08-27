@@ -1,6 +1,6 @@
 # base_tables
 
-The built-in Base Tables: `plain_grid`, `table_cardtile`, and their two-row-header CI-report variants `ci_grid` and `ci_cardtile`. Dispatch in `registry.py`.
+The built-in Base Tables: `plain_grid`, `table_cardtile`, and their two-row-header CI-report variants `ci_grid`, `ci_cardtile` and `ci_cardtile2`. Dispatch in `registry.py`.
 
 ## These files are outside the system boundary
 

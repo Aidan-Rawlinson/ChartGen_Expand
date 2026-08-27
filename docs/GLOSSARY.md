@@ -187,7 +187,7 @@ A Text Tag needs nothing beyond its own literal string. A Stat Tag needs `hex_id
 
 **Output Table** - a grid of constant text and Stat Tag values, composited into a single image by a Base Table function. The table equivalent of a chart. Identified by a permanent base-36 `table_id`, system-issued or set by hand through the Excel round trip. Authored on its own tab, not the Charts sheet.
 
-**Base Table** - one of ChartGen's table-rendering functions. A standalone artefact, one per file, the table equivalent of a Base Chart. Not scoped to any data shape. Built in: `plain_grid`, `table_cardtile`, `ci_grid`, `ci_cardtile`.
+**Base Table** - one of ChartGen's table-rendering functions. A standalone artefact, one per file, the table equivalent of a Base Chart. Not scoped to any data shape. Built in: `plain_grid`, `table_cardtile`, `ci_grid`, `ci_cardtile`, `ci_cardtile2`.
 
 **table_inputs** - the fixed call every Base Table receives: `content`, `column_widths`, `row_heights`, `width_emu`, `height_emu`, `tweaks`. Returns `(image_bytes, chart_cells)`.
 
