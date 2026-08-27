@@ -24,6 +24,7 @@ TimeSeries,period_line_chart,Line chart — Metric-Series across every period, w
 TimeSeries,median_comparison_linechart,Line chart — median per population layer across every period, Selected shows actual unit value(s)
 TimeSeries,full_lines_linechart,Line chart — every unit in the largest population as a light grey line, Selected/peer lines highlighted on top
 TimeSeries,sparkline1,Sparkline — population median and Selected unit value across every period, no axes
+TimeSeries,sparkline2,Sparkline — fixed 12-month window: months-with-data count, gap-filled median and Selected unit lines, finishing values, trend badges, no axes
 TimeSeries,line_has_data,Line chart - HasData — grey circle with white tick (data present) or cross (no data), for the Selected unit's submission
 TimeSeries,line_ci_at_least_median,Line Chart - CI At Least Median — blue tick/orange cross/grey dash: final period's submission vs population median (pass if submission >= median)
 TimeSeries,line_ci_at_most_median,Line Chart - CI At Most Median — blue tick/orange cross/grey dash: final period's submission vs population median (pass if submission <= median)
