@@ -178,13 +178,30 @@ image bytes are the same thing the built-in Base Table returns: a
 rendered as a vector image, not a raster one), with the buffer itself
 returned (not the figure object, and not a Matplotlib Axes/Figure).
 
-Font must be Calibri, and text must be kept as real text rather than
-converted to glyph outlines -- set both once, near the top of the file,
-right after the matplotlib imports:
+Text must be kept as real text rather than converted to glyph outlines --
+set this once, near the top of the file, right after the matplotlib
+imports:
 
     import matplotlib
-    matplotlib.rcParams["font.family"] = "Calibri"
     matplotlib.rcParams["svg.fonttype"] = "none"
+
+**Do not set a font.** No `font.family`, no `fontname=`, no
+`FontProperties(family=...)`, anywhere in the file. ChartGen sets the font
+around the render call, from the workfile's own Settings tab, so the table
+inherits whatever the person running the report chose. Setting one here
+overrides that and pins this table to a different typeface from every
+other table in the deck.
+
+That is also why previewing this file standalone, outside ChartGen, draws
+in matplotlib's default font rather than the one the report will use.
+Nothing is wrong; the font simply is not this file's decision. Do not
+"fix" it by adding one.
+
+A style that fits text to its cells by measuring rendered width should
+know that those measurements are taken against whatever font is in force
+at the time. Measure inside the render function, never at module level: at
+import time the font is not yet known, so a width computed there is
+measured against the wrong font and cannot be corrected later.
 
 Then define a local scale constant, and multiply every absolute
 point-based size in the file by it -- font sizes, line widths, border

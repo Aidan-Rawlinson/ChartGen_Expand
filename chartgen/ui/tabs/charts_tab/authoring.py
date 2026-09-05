@@ -11,6 +11,7 @@ the preview does, so what is exported always matches what is on screen.
 """
 
 import os
+from datetime import datetime, timezone
 
 import streamlit as st
 
@@ -20,7 +21,66 @@ from chartgen.output_generation.execution.charts.custom_charts import (
     get_chart_callable, build_bundle,
 )
 from chartgen.shared.infrastructure.cg_extracts import get_extracts_folder
+from chartgen.shared.infrastructure.render_font import render_font
 from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
+from chartgen.ui.common.flash import queue_flash
+
+
+def _save_custom_chart(workfile_state, name, effective_shape_type):
+    """
+    Write the staged, already-validated code under `name` and clear the
+    staging keys.
+
+    An existing bespoke chart of that name keeps its own row, so its
+    added_at and notes are left exactly as the person left them -- only the
+    stored code changes. Its shape_type is re-asserted from the cut being
+    previewed, since that is the shape the pasted code was written against.
+    """
+    for row in workfile_state.custom_chart_rows:
+        if row["base_chart_name"] == name:
+            row["shape_type"] = effective_shape_type
+            break
+    else:
+        workfile_state.custom_chart_rows.append({
+            "base_chart_name": name,
+            "shape_type": effective_shape_type,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+            "notes": "",
+        })
+    workfile_state.custom_chart_code[name] = st.session_state["cs_temp_custom_code"]
+    workfile_state.dirty = True
+    st.session_state.pop("cs_temp_custom_code", None)
+    st.session_state.pop("cs_temp_custom_for_chart", None)
+    st.session_state.pop("cs_custom_code_input", None)
+    queue_flash(f"Saved as '{name}' — now available in Select Visualisation.")
+
+
+@st.dialog("Overwrite this chart?")
+def _confirm_overwrite_custom_chart(workfile_state, name, effective_shape_type):
+    """
+    Confirm replacing an existing bespoke chart's code. Only reachable for
+    a name this workfile already owns; a built-in's name is refused before
+    this point.
+
+    st.dialog reruns only this function while the dialog is open, so the
+    preview behind it is untouched until a choice is made. Either button
+    calls st.rerun(), which is what closes the dialog.
+    """
+    st.write(f"A bespoke chart named **{name}** already exists in this workfile.")
+    st.write(
+        "Overwriting replaces its stored code with what you have just pasted. "
+        "Every Running Order row and Chart Store entry using this name will "
+        "render with the new code from now on."
+    )
+    st.caption("The change is held in the workfile and written to disk on your next Save.")
+    cancel_col, overwrite_col = st.columns(2)
+    with cancel_col:
+        if st.button("Cancel", use_container_width=True, key="cs_overwrite_cancel_btn"):
+            st.rerun()
+    with overwrite_col:
+        if st.button("Overwrite", type="primary", use_container_width=True, key="cs_overwrite_confirm_btn"):
+            _save_custom_chart(workfile_state, name, effective_shape_type)
+            st.rerun()
 
 
 def _render_custom_charts(workfile_state, base_chart_name, effective_shape_type,
@@ -43,13 +103,19 @@ def _render_custom_charts(workfile_state, base_chart_name, effective_shape_type,
             # for this chart, right now" section reports the true
             # figures an AI author needs to reason about, not the
             # row's own nominal target size.
-            bundle_text = build_bundle(
-                base_chart_name, effective_shape_type, pop_layers,
-                width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
-                tweaks_str, workfile_state.custom_chart_code,
-            )
+            #
+            # data is a callable, which st.download_button registers for
+            # deferred execution: the bundle is built when someone actually
+            # downloads it, not on every rerun. The closure is rebuilt each
+            # run and captures this run's values, so what downloads is what
+            # is on screen.
             st.download_button(
-                "⬇  Download bundle for this chart", data=bundle_text,
+                "⬇  Download bundle for this chart",
+                data=lambda: build_bundle(
+                    base_chart_name, effective_shape_type, pop_layers,
+                    width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
+                    tweaks_str, workfile_state.custom_chart_code,
+                ),
                 file_name=f"{base_chart_name}_custom_chart_bundle.md",
                 mime="text/markdown", use_container_width=True,
             )
@@ -86,22 +152,15 @@ def _render_custom_charts(workfile_state, base_chart_name, effective_shape_type,
                     st.error("Enter a name for the new chart.")
                 elif name == "temp":
                     st.error("'temp' is reserved and can't be used as a chart name.")
-                elif name in CHART_REGISTRY or name in existing_custom_refs:
-                    st.error(f"'{name}' is already in use by another chart. Choose a different name.")
+                elif name in CHART_REGISTRY:
+                    # A built-in belongs to the application, not to this
+                    # workfile, so its name is refused outright rather than
+                    # offered as something to overwrite.
+                    st.error(f"'{name}' is a built-in chart. Choose a different name.")
+                elif name in existing_custom_refs:
+                    _confirm_overwrite_custom_chart(workfile_state, name, effective_shape_type)
                 else:
-                    from datetime import datetime, timezone
-                    workfile_state.custom_chart_rows.append({
-                        "base_chart_name": name,
-                        "shape_type": effective_shape_type,
-                        "added_at": datetime.now(timezone.utc).isoformat(),
-                        "notes": "",
-                    })
-                    workfile_state.custom_chart_code[name] = st.session_state["cs_temp_custom_code"]
-                    workfile_state.dirty = True
-                    st.session_state.pop("cs_temp_custom_code", None)
-                    st.session_state.pop("cs_temp_custom_for_chart", None)
-                    st.session_state.pop("cs_custom_code_input", None)
-                    st.success(f"Saved as '{name}' — now available in Select Visualisation.")
+                    _save_custom_chart(workfile_state, name, effective_shape_type)
                     st.rerun()
 
 
@@ -131,10 +190,13 @@ def _render_export_picture(workfile_state, base_chart_name, pop_layers,
                 export_chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
             # Deliberately exported oversized, matching exactly what a
             # PPTX embeds. Not shrunk back for the standalone file.
-            export_image_bytes = export_chart_func(
-                pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
-                height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
-            )
+            # Rendered under the workfile's own font too, so the exported
+            # file matches the deck rather than the machine's defaults.
+            with render_font(workfile_state.settings.get("default_font", "")):
+                export_image_bytes = export_chart_func(
+                    pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
+                    height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
+                )
             svg_text = export_image_bytes.read().decode("utf-8")
         except Exception as e:
             st.error(f"Chart failed to render: {e}")

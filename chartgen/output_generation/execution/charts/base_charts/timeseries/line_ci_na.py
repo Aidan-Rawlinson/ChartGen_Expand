@@ -1,4 +1,4 @@
-"""Base Chart, TimeSeries, diagnostic. The N/A member of the line_ci_* family. Evaluates nothing and always draws a circle with the literal text N/A, sized as the rest of the family."""
+"""Base Chart, TimeSeries, diagnostic. The N/A member of the line_ci_* family. Evaluates nothing and always draws a blue circle with the literal text N/A, sized as the rest of the family."""
 
 import io
 import warnings
@@ -6,13 +6,12 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
-matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400
 
-CIRCLE_FILL_NA = "#C1C8CE"
+CIRCLE_FILL_NA = "#0070C0"
 TEXT_COLOUR = "white"
 
 CIRCLE_DIAMETER_FRACTION = 0.72

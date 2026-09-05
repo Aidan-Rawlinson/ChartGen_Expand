@@ -14,18 +14,22 @@ the image. Nothing is recalculated here.
 
 import streamlit as st
 
+from chartgen.output_generation.execution.charts.base_charts import CHART_REGISTRY
 from chartgen.output_generation.execution.charts.custom_charts import (
     compile_custom_chart, get_chart_callable,
 )
+from chartgen.shared.infrastructure.font_embed import font_face_css
+from chartgen.shared.infrastructure.render_font import render_font
 from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 from chartgen.shared.infrastructure.value_formatting import format_reference_value
 from chartgen.shared.normalisation_containers.shapes import (
     reference_rows_for_shape_type, summary_stats_by_layer, units_by_layer, unit_has_data,
 )
+from chartgen.ui.common.render_memo import render_signature, remember_render
 from chartgen.ui.tabs.charts_tab.constants import ZOOM_MULTIPLIERS
 
 
-def _svg_preview_html(svg_text, width_css):
+def _svg_preview_html(svg_text, width_css, family):
     """
     Forces an SVG's rendered size to width_css (a CSS width value, e.g.
     "480px" or "100%") via an inline style on the SVG's own root element,
@@ -36,9 +40,14 @@ def _svg_preview_html(svg_text, width_css):
     not shared,
     matching the standalone-artefact convention for the rendering
     domains themselves.
+
+    Carries family's own @font-face block alongside the SVG, so the
+    browser's SVG text engine -- a different renderer from matplotlib, with
+    its own font lookup -- can draw the SVG's <text> elements in the right
+    font without needing it installed on the machine. See font_embed.py.
     """
     styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
-    return f'<div style="width:{width_css}">{styled}</div>'
+    return f'{font_face_css(family)}<div style="width:{width_css}">{styled}</div>'
 
 
 
@@ -59,24 +68,44 @@ def _render_preview(workfile_state, base_chart_name, effective_shape_type, shape
     # than carrying a stale override across.
     temp_code = st.session_state.get("cs_temp_custom_code")
     temp_for_chart = st.session_state.get("cs_temp_custom_for_chart")
+    staged_code = temp_code if (temp_code and temp_for_chart == base_chart_name) else None
+    code_in_force = staged_code or workfile_state.custom_chart_code.get(base_chart_name)
 
-    with st.spinner("Rendering…"):
-        try:
-            if temp_code and temp_for_chart == base_chart_name:
-                chart_func = compile_custom_chart(temp_code)
+    # Everything the picture is made of, so a rerun that changes none of it
+    # reuses the last one instead of drawing it again -- see
+    # ui/common/render_memo.py. pop_layers is the resolved cut, so a change
+    # to the cache file, populations or period range reaches this through
+    # its own contents.
+    default_font = workfile_state.settings.get("default_font", "")
+    signature = render_signature(
+        base_chart_name, pop_layers,
+        width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
+        tweaks_str, code_in_force, default_font,
+    )
+    built_in = None if code_in_force else CHART_REGISTRY.get(base_chart_name)
+
+    def produce_svg():
+        with st.spinner("Rendering…"):
+            if staged_code:
+                chart_func = compile_custom_chart(staged_code)
             else:
                 chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
             # Called at CHART_RENDER_SCALE times the real target size
             # -- see that constant's own comment -- then displayed
             # below at the real, unmultiplied px width, so the browser
             # shrinks it back down exactly as PowerPoint does.
-            image_bytes = chart_func(
-                pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
-                height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
-            )
-        except Exception as e:
-            st.error(f"Chart failed to render: {e}")
-            return
+            with render_font(default_font):
+                image_bytes = chart_func(
+                    pop_layers, width_emu=width_emu * CHART_RENDER_SCALE,
+                    height_emu=height_emu * CHART_RENDER_SCALE, tweaks=tweaks_str,
+                )
+            return image_bytes.read().decode("utf-8")
+
+    try:
+        svg_text = remember_render("cs_render_memo", signature, produce_svg, identity=built_in)
+    except Exception as e:
+        st.error(f"Chart failed to render: {e}")
+        return
 
     # Stats and unit lists are a property of the data shape, read
     # straight off pop_layers here — not relayed back through the Base
@@ -85,12 +114,12 @@ def _render_preview(workfile_state, base_chart_name, effective_shape_type, shape
     layer_units = units_by_layer(pop_layers)
 
     if zoom_choice == "Fit to screen":
-        st.markdown(_svg_preview_html(image_bytes.read().decode("utf-8"), "100%"), unsafe_allow_html=True)
+        st.markdown(_svg_preview_html(svg_text, "100%", default_font), unsafe_allow_html=True)
     else:
         multiplier = ZOOM_MULTIPLIERS.get(zoom_choice, 1.0)
         px_width = max(50, int((width_emu / 914400) * 96 * multiplier))
         st.markdown(
-            _svg_preview_html(image_bytes.read().decode("utf-8"), f"{px_width}px"),
+            _svg_preview_html(svg_text, f"{px_width}px", default_font),
             unsafe_allow_html=True,
         )
 

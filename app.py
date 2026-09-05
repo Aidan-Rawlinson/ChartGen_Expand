@@ -21,14 +21,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 import streamlit as st
 
 from chartgen.ui.auth.login_form import render_login_gate
+from chartgen.ui.common.flash import render_flashes
 from chartgen.ui.common.layout_css import inject_layout_css
 from chartgen.ui.workfile.sidebar import render_sidebar
 from chartgen.ui.workfile.workfile_dialogs import render_workfile_dialogs
 from chartgen.workfile.state.session_state import ws, has_workfile
+from chartgen.session_shell.lifecycle.font_startup import apply_font_startup
 from chartgen.session_shell.lifecycle.startup_file import apply_startup_workfile
 from chartgen.ui.tabs import (
     imports_tab, populations_tab, select_tab,
     text_tab, running_order_tab, charts_tab, output_tables_tab, outputs_tab,
+    settings_tab, notes_tab,
 )
 
 
@@ -40,8 +43,24 @@ if not render_login_gate():
 
 apply_startup_workfile()
 
+# Bundled fonts: registered with matplotlib so charts draw in them, and
+# installed into Windows so PowerPoint can display them. Once per session,
+# and it writes nothing when everything is already in place.
+apply_font_startup()
+
 if st.session_state.get("startup_file_error"):
     st.error(st.session_state.pop("startup_file_error"))
+
+# A font that could not be installed still renders correctly in ChartGen's
+# own charts, so this is a warning rather than an error — but PowerPoint will
+# substitute, which is not something to discover in a finished report.
+for font_problem in st.session_state.pop("font_install_problems", []):
+    st.warning(font_problem)
+
+# Confirmations queued by a surface that had to st.rerun() straight after
+# acting — see ui/common/flash.py. Shown here, once per run, before
+# anything that might stop the script short of the tabs.
+render_flashes()
 
 render_sidebar()
 render_workfile_dialogs()
@@ -82,9 +101,10 @@ else:
 st.caption("Analysis and Reporting software")
 
 (tab_imports, tab_populations, tab_select,
- tab_text, tab_running_order, tab_charts, tab_output_tables, tab_outputs) = st.tabs([
+ tab_text, tab_running_order, tab_charts, tab_output_tables, tab_outputs,
+ tab_settings, tab_notes) = st.tabs([
     "Imports", "Populations", "Select",
-    "Text", "Running Order", "Charts", "Tables", "Outputs"
+    "Text", "Running Order", "Charts", "Tables", "Outputs", "Settings", "Notes"
 ])
 
 with tab_populations:
@@ -110,3 +130,9 @@ with tab_output_tables:
 
 with tab_outputs:
     outputs_tab.render_outputs_tab()
+
+with tab_settings:
+    settings_tab.render_settings_tab()
+
+with tab_notes:
+    notes_tab.render_notes_tab()

@@ -29,9 +29,12 @@ from chartgen.shared.infrastructure.page_sizing import (
     percent_to_emu, get_page_size_emu,
     has_known_template_page_size, STANDARD_PAGE_SIZES_EMU, DEFAULT_STANDARD_PAGE_SIZE,
 )
+from chartgen.shared.infrastructure.render_font import render_font
 from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 from chartgen.shared.infrastructure.report_context import build_report_context
 from chartgen.shared.infrastructure.soft_parents import resolve_full_unit_set
+from chartgen.ui.common.flash import queue_flash
+from chartgen.ui.common.render_memo import render_signature, remember_render
 from chartgen.ui.tabs.output_tables_tab.chart_cells import (
     _svg_preview_html, _splice_chart_cells_into_svg,
 )
@@ -53,6 +56,58 @@ def _current_full_unit_set(workfile_state, the_settings):
         resolve_full_unit_set(reporting_row, master_table_name, workfile_state.tables)
         if reporting_row is not None else {}
     )
+
+
+def _save_custom_table(workfile_state, name):
+    """
+    Write the staged, already-validated code under `name` and clear the
+    staging keys.
+
+    An existing bespoke table of that name keeps its own row, so its
+    added_at and notes are left exactly as the person left them -- only the
+    stored code changes. A new name gets a new row.
+    """
+    existing_custom_refs = {r["table_type_ref"] for r in workfile_state.custom_table_rows}
+    if name not in existing_custom_refs:
+        workfile_state.custom_table_rows.append({
+            "table_type_ref": name,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+            "notes": "",
+        })
+    workfile_state.custom_table_code[name] = st.session_state["ots_temp_custom_code"]
+    workfile_state.dirty = True
+    st.session_state.pop("ots_temp_custom_code", None)
+    st.session_state.pop("ots_temp_custom_for_table", None)
+    st.session_state.pop("ots_custom_code_input", None)
+    queue_flash(f"Saved as '{name}' — now available in Select Visualisation.")
+
+
+@st.dialog("Overwrite this table?")
+def _confirm_overwrite_custom_table(workfile_state, name):
+    """
+    Confirm replacing an existing bespoke table's code. Only reachable for
+    a name this workfile already owns; a built-in's name is refused before
+    this point.
+
+    st.dialog reruns only this function while the dialog is open, so the
+    preview behind it is untouched until a choice is made. Either button
+    calls st.rerun(), which is what closes the dialog.
+    """
+    st.write(f"A bespoke table named **{name}** already exists in this workfile.")
+    st.write(
+        "Overwriting replaces its stored code with what you have just pasted. "
+        "Every Running Order row and Output Table using this name will render "
+        "with the new code from now on."
+    )
+    st.caption("The change is held in the workfile and written to disk on your next Save.")
+    cancel_col, overwrite_col = st.columns(2)
+    with cancel_col:
+        if st.button("Cancel", use_container_width=True, key="ots_overwrite_cancel_btn"):
+            st.rerun()
+    with overwrite_col:
+        if st.button("Overwrite", type="primary", use_container_width=True, key="ots_overwrite_confirm_btn"):
+            _save_custom_table(workfile_state, name)
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +263,7 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                 st.session_state.pop("ot_last_loaded_ro", None)
                 st.session_state.pop("ot_bound_row_idx", None)
                 st.session_state["ots_pending_target_row_choice_after_save"] = new_bound_row_id
-                st.success("Saved to Running Order.")
+                queue_flash("Saved to Running Order.")
                 st.rerun()
 
         with st.expander("Custom Tables", expanded=False):
@@ -226,7 +281,7 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                      "off by default, since most table edits don't touch what's inside an "
                      "embedded chart, and resolving each one's live data has a real cost.",
             )
-            full_unit_set_for_bundle = _current_full_unit_set(workfile_state, the_settings) if include_charts else None
+            full_unit_set_for_bundle = full_unit_set if include_charts else None
 
             # width_emu/height_emu passed here at CHART_RENDER_SCALE times
             # the real target size -- the same inflated value this table
@@ -234,13 +289,22 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
             # comment), so the bundle's own "Live data for this table,
             # right now" section reports the true figures an AI author
             # needs to reason about.
-            bundle_text = build_bundle(
-                table_type_ref, resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE, tweaks_str, workfile_state.custom_table_code,
-                include_charts=include_charts, workfile_state=workfile_state, full_unit_set=full_unit_set_for_bundle,
-            )
+            #
+            # data is a callable, which st.download_button registers for
+            # deferred execution: the bundle is built when someone actually
+            # downloads it, not on every rerun. With include_charts on that
+            # matters a lot, since building it resolves live data for every
+            # embedded chart. The closure is rebuilt each run and captures
+            # this run's values, so what downloads is what is on screen.
             st.download_button(
-                "\u2b07  Download bundle for this table", data=bundle_text,
+                "\u2b07  Download bundle for this table",
+                data=lambda: build_bundle(
+                    table_type_ref, resolved["content"], resolved["column_widths"], resolved["row_heights"],
+                    width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE, tweaks_str,
+                    workfile_state.custom_table_code,
+                    include_charts=include_charts, workfile_state=workfile_state,
+                    full_unit_set=full_unit_set_for_bundle,
+                ),
                 file_name=f"{table_type_ref}_custom_table_bundle.md",
                 mime="text/markdown", use_container_width=True,
                 key=f"ots_download_bundle_{table_type_ref}",
@@ -280,20 +344,15 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                         st.error("Enter a name for the new table.")
                     elif name == "temp":
                         st.error("'temp' is reserved and can't be used as a table name.")
-                    elif name in TABLE_REGISTRY or name in existing_custom_refs:
-                        st.error(f"'{name}' is already in use by another table. Choose a different name.")
+                    elif name in TABLE_REGISTRY:
+                        # A built-in belongs to the application, not to this
+                        # workfile, so its name is refused outright rather
+                        # than offered as something to overwrite.
+                        st.error(f"'{name}' is a built-in table. Choose a different name.")
+                    elif name in existing_custom_refs:
+                        _confirm_overwrite_custom_table(workfile_state, name)
                     else:
-                        workfile_state.custom_table_rows.append({
-                            "table_type_ref": name,
-                            "added_at": datetime.now(timezone.utc).isoformat(),
-                            "notes": "",
-                        })
-                        workfile_state.custom_table_code[name] = st.session_state["ots_temp_custom_code"]
-                        workfile_state.dirty = True
-                        st.session_state.pop("ots_temp_custom_code", None)
-                        st.session_state.pop("ots_temp_custom_for_table", None)
-                        st.session_state.pop("ots_custom_code_input", None)
-                        st.success(f"Saved as '{name}' — now available in Select Visualisation.")
+                        _save_custom_table(workfile_state, name)
                         st.rerun()
 
         with st.expander("Zoom", expanded=False):
@@ -316,11 +375,31 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
 
         temp_code = st.session_state.get("ots_temp_custom_code")
         temp_for_table = st.session_state.get("ots_temp_custom_for_table")
+        staged_code = temp_code if (temp_code and temp_for_table == table_type_ref) else None
+        code_in_force = staged_code or workfile_state.custom_table_code.get(table_type_ref)
 
-        with st.spinner("Rendering…"):
-            try:
-                if temp_code and temp_for_table == table_type_ref:
-                    table_func = compile_custom_table(temp_code)
+        # Everything the finished picture is made of, so a rerun that
+        # changes none of it reuses the last one instead of drawing it
+        # again -- see ui/common/render_memo.py. chart_store_rows,
+        # custom_chart_code and full_unit_set cover the {Cn} chart cells
+        # spliced in below, whose own rendering depends on the Chart Store
+        # rather than on this table. default_font covers both the table and
+        # those cells, since all of them render under it.
+        default_font = workfile_state.settings.get("default_font", "")
+        signature = render_signature(
+            table_type_ref,
+            resolved["content"], resolved["column_widths"], resolved["row_heights"],
+            width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
+            tweaks_str, code_in_force,
+            workfile_state.chart_store_rows, workfile_state.custom_chart_code, full_unit_set,
+            default_font,
+        )
+        built_in = None if code_in_force else TABLE_REGISTRY.get(table_type_ref)
+
+        def produce_svg():
+            with st.spinner("Rendering…"):
+                if staged_code:
+                    table_func = compile_custom_table(staged_code)
                 else:
                     table_func = get_table_callable(table_type_ref, workfile_state.custom_table_code)
                 # Called at CHART_RENDER_SCALE times the real target size
@@ -330,29 +409,32 @@ def _render_preview_sandbox(workfile_state, the_settings, table_id, grid_rows,
                 # chart_cells (if any) comes back in that same inflated
                 # space, so the splice below must use the same inflated
                 # width_emu/height_emu, not the real display ones.
-                image_bytes, chart_cells = table_func(
-                    resolved["content"], resolved["column_widths"], resolved["row_heights"],
-                    width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
-                    tweaks=tweaks_str,
-                )
-            except Exception as e:
-                st.error(f"Table failed to render: {e}")
-                return
+                with render_font(default_font):
+                    image_bytes, chart_cells = table_func(
+                        resolved["content"], resolved["column_widths"], resolved["row_heights"],
+                        width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
+                        tweaks=tweaks_str,
+                    )
+                svg = image_bytes.read().decode("utf-8")
+                if chart_cells:
+                    svg = _splice_chart_cells_into_svg(
+                        svg, chart_cells, workfile_state, full_unit_set,
+                        width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
+                    )
+                return svg
 
-        svg_text = image_bytes.read().decode("utf-8")
-        if chart_cells:
-            full_unit_set = _current_full_unit_set(workfile_state, the_settings)
-            svg_text = _splice_chart_cells_into_svg(
-                svg_text, chart_cells, workfile_state, full_unit_set,
-                width_emu * CHART_RENDER_SCALE, height_emu * CHART_RENDER_SCALE,
-            )
+        try:
+            svg_text = remember_render("ots_render_memo", signature, produce_svg, identity=built_in)
+        except Exception as e:
+            st.error(f"Table failed to render: {e}")
+            return
 
         if zoom_choice == "Fit to screen":
-            st.markdown(_svg_preview_html(svg_text, "100%"), unsafe_allow_html=True)
+            st.markdown(_svg_preview_html(svg_text, "100%", default_font), unsafe_allow_html=True)
         else:
             multiplier = ZOOM_MULTIPLIERS.get(zoom_choice, 1.0)
             px_width = max(50, int((width_emu / 914400) * 96 * multiplier))
             st.markdown(
-                _svg_preview_html(svg_text, f"{px_width}px"),
+                _svg_preview_html(svg_text, f"{px_width}px", default_font),
                 unsafe_allow_html=True,
             )

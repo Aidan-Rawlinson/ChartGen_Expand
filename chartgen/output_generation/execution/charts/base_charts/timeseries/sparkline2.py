@@ -28,7 +28,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 
-matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -92,10 +91,26 @@ HASDATA_CIRCLE_RADIUS_IN = 1.4 * MM_IN_INCHES * TEXT_SCALE
 HASDATA_TEXT_GAP_IN = 1.0 * MM_IN_INCHES * TEXT_SCALE
 HASDATA_TEXT_FONTSIZE = 6.5 * TEXT_SCALE
 HASDATA_TEXT_SAMPLE_TEXT = "12/12"
-HASDATA_TEXT_WIDTH_IN = _text_width_inches(HASDATA_TEXT_SAMPLE_TEXT, HASDATA_TEXT_FONTSIZE)
-HASDATA_SECTION_WIDTH_IN = (
-    CIRCLE_EDGE_PAD_IN + 2 * HASDATA_CIRCLE_RADIUS_IN + HASDATA_TEXT_GAP_IN + HASDATA_TEXT_WIDTH_IN
-)
+
+
+def _hasdata_section_width_in():
+    """Width of the has-data section, measured rather than guessed.
+
+    A function, not a module constant, because _text_width_inches measures
+    against whatever font is currently in force, and the font is not known
+    at import time - ChartGen sets it around each render, from the open
+    workfile's own setting. Computed at import this would bake in whatever
+    font happened to be in force then, which is a different one, and the
+    reserved space would be wrong by however much the two fonts differ.
+    "Median: 100%" at these sizes spans about 2.9in in Calibri against
+    3.5in in matplotlib's default, so the error is not subtle: the label
+    either overruns into the next section or leaves dead space the
+    sparkline never gets back.
+    """
+    return (
+        CIRCLE_EDGE_PAD_IN + 2 * HASDATA_CIRCLE_RADIUS_IN + HASDATA_TEXT_GAP_IN
+        + _text_width_inches(HASDATA_TEXT_SAMPLE_TEXT, HASDATA_TEXT_FONTSIZE)
+    )
 
 # Finishing-value labels, drawn in their own reserved space right after
 # the sparkline so they're never at risk of being clipped off-canvas.
@@ -108,9 +123,18 @@ HASDATA_SECTION_WIDTH_IN = (
 RIGHT_LABEL_FONTSIZE = 7 * TEXT_SCALE
 RIGHT_LABEL_PAD_IN = 1.0 * MM_IN_INCHES * TEXT_SCALE
 RIGHT_LABEL_SAMPLE_TEXT = "Median: 100%"
-RIGHT_LABEL_WIDTH_IN = (
-    _text_width_inches(RIGHT_LABEL_SAMPLE_TEXT, RIGHT_LABEL_FONTSIZE) + RIGHT_LABEL_PAD_IN
-)
+
+
+def _right_label_width_in():
+    """Fixed width of the finishing-label section, measured per render.
+
+    A function rather than a module constant for the reason given on
+    _hasdata_section_width_in: the font is not known at import time. Fixed
+    still means fixed for a given render - it is sized from the sample text
+    above, never from this chart's actual values - which is what keeps a
+    column of these charts lining up.
+    """
+    return _text_width_inches(RIGHT_LABEL_SAMPLE_TEXT, RIGHT_LABEL_FONTSIZE) + RIGHT_LABEL_PAD_IN
 
 # Trend badges (submission, then median), drawn after the labels. Spaced
 # well apart both from the labels and from each other, with padding on
@@ -486,9 +510,9 @@ def sparkline2(population_layers: list, width_emu=2736215, height_emu=684054, tw
     median_last = medians_raw[-1] if median_known_mask[-1] else None
     submission_last = submission_full[-1]
 
-    hasdata_width_in = HASDATA_SECTION_WIDTH_IN
+    hasdata_width_in = _hasdata_section_width_in()
     trend_width_in = TREND_SECTION_WIDTH_IN
-    right_label_width_in = RIGHT_LABEL_WIDTH_IN
+    right_label_width_in = _right_label_width_in()
 
     # hasdata-spark uses the tight HASDATA_SPARK_GAP_IN; spark-labels uses
     # the normal SECTION_GAP_IN; labels-trend uses the wider

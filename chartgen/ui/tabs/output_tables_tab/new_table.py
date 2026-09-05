@@ -12,6 +12,7 @@ from chartgen.output_generation.execution.tables.grid_store import (
     next_table_id, new_grid, DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLUMNS,
 )
 from chartgen.shared.infrastructure.page_sizing import percent_to_emu, get_page_size_emu
+from chartgen.ui.common.flash import queue_flash
 
 
 def _render_new_table_form(workfile_state, name_to_id, the_settings):
@@ -61,5 +62,5 @@ def _render_new_table_form(workfile_state, name_to_id, the_settings):
             # render_output_tables_tab, before that selectbox is created on
             # the next run.
             st.session_state["ot_pending_table_choice"] = name
-            st.success(f"Created '{name}'.")
+            queue_flash(f"Created '{name}'.")
             st.rerun()

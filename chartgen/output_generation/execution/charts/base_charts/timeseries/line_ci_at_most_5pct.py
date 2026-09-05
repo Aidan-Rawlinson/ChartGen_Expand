@@ -1,4 +1,4 @@
-"""Base Chart, TimeSeries, diagnostic. Three-way circle indicator on the Selected unit's final-period value only: blue tick passes if the value is at most 5, orange cross fails, grey dash if there is no value."""
+"""Base Chart, TimeSeries, diagnostic. Three-way circle indicator on the Selected unit's final-period value only. The circle is always blue; the white mark inside carries the result: a tick if the value is at most 5, a cross if not, a dash if there is no value."""
 
 import io
 import warnings
@@ -6,15 +6,12 @@ warnings.filterwarnings("ignore")
 
 import matplotlib
 matplotlib.use("Agg")
-matplotlib.rcParams["font.family"] = "Calibri"
 matplotlib.rcParams["svg.fonttype"] = "none"
 import matplotlib.pyplot as plt
 
 EMU_PER_INCH = 914400
 
-CIRCLE_FILL_PASS = "#7CB9E8"
-CIRCLE_FILL_FAIL = "#E8AB7C"
-CIRCLE_FILL_NO_DATA = "#C1C8CE"
+CIRCLE_FILL = "#0070C0"
 MARK_COLOUR = "white"
 
 CIRCLE_DIAMETER_FRACTION = 0.72
@@ -89,9 +86,7 @@ def line_ci_at_most_5pct(population_layers: list, width_emu=2736215, height_emu=
     else:
         result = "fail"
 
-    circle_fill = {"pass": CIRCLE_FILL_PASS, "fail": CIRCLE_FILL_FAIL,
-                   "no_data": CIRCLE_FILL_NO_DATA}[result]
-    circle = plt.Circle((cx, cy), r, facecolor=circle_fill, edgecolor="none", zorder=1)
+    circle = plt.Circle((cx, cy), r, facecolor=CIRCLE_FILL, edgecolor="none", zorder=1)
     ax.add_patch(circle)
 
     _draw_mark(ax, cx, cy, r, result)

@@ -13,18 +13,30 @@ import base64
 
 from chartgen.output_generation.execution.charts.chart_store import resolve_chart_store_population_layers
 from chartgen.output_generation.execution.charts.custom_charts import get_chart_callable
+from chartgen.shared.infrastructure.font_embed import font_face_css
+from chartgen.shared.infrastructure.render_font import render_font
 
 
-def _svg_preview_html(svg_text, width_css):
+def _svg_preview_html(svg_text, width_css, family):
     """
     Forces an SVG's rendered size to width_css (a CSS width value, e.g.
     "480px" or "100%") via an inline style on the SVG's own root element,
     since st.markdown has no width parameter the way st.image does. Used
     instead of st.image because st.image goes through PIL, which can't
     decode SVG, and every Base Table returns SVG bytes.
+
+    Carries family's own @font-face block alongside the SVG, so the
+    browser's SVG text engine -- a different renderer from matplotlib, with
+    its own font lookup -- can draw the SVG's <text> elements in the right
+    font without needing it installed on the machine. See font_embed.py.
+
+    Does not reach any {Cn} chart cell spliced into this same SVG -- each
+    of those is a nested <image> data URI (see _splice_chart_cells_into_svg),
+    an isolated document a page-level <style> block cannot see into, so
+    each carries its own copy instead.
     """
     styled = svg_text.replace("<svg ", '<svg style="width:100%;height:auto;display:block" ', 1)
-    return f'<div style="width:{width_css}">{styled}</div>'
+    return f'{font_face_css(family)}<div style="width:{width_css}">{styled}</div>'
 
 
 def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
@@ -43,6 +55,11 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
     enclosing table_func call is. Used here exactly as given, with no
     further multiplication -- that's already the correctly-inflated size
     a Base Chart expects to be called with under this same mechanism.
+
+    The workfile's default font is applied here in its own right. A chart
+    cell renders after the enclosing table's own image is finished, outside
+    that render's font scope, so it needs its own wrap or it would draw in
+    whatever font happened to be in force.
     """
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
     if not base_chart_name:
@@ -55,14 +72,31 @@ def _render_chart_store_chart_preview(chart_store_row: dict, chart_rect: dict,
     tweaks = str(chart_store_row.get("tweaks", "") or "").strip()
     try:
         chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
-        return chart_func(
-            population_layers,
-            width_emu=int(round(chart_rect["width"])),
-            height_emu=int(round(chart_rect["height"])),
-            tweaks=tweaks,
-        )
+        with render_font(workfile_state.settings.get("default_font", "")):
+            return chart_func(
+                population_layers,
+                width_emu=int(round(chart_rect["width"])),
+                height_emu=int(round(chart_rect["height"])),
+                tweaks=tweaks,
+            )
     except Exception:
         return None
+
+
+def _embed_font_in_svg(svg_text: str, family: str) -> str:
+    """
+    Inserts family's own @font-face block as a child of svg_text's own
+    <svg> root, right after the opening tag closes.
+
+    A nested <image xlink:href="data:image/svg+xml;..."> is an isolated
+    document -- the browser renders it the same way it would a separate
+    .svg file, so a <style> block on the host page never reaches it. SVG
+    natively supports a <style> child, and that travels with the document
+    wherever it's loaded, so giving the chart's own SVG this before it is
+    embedded is what lets it resolve its own <text> elements' font-family.
+    """
+    insert_at = svg_text.index(">", svg_text.index("<svg ")) + 1
+    return svg_text[:insert_at] + font_face_css(family) + svg_text[insert_at:]
 
 
 def _splice_chart_cells_into_svg(table_svg_text: str, chart_cells: dict, workfile_state,
@@ -89,6 +123,7 @@ def _splice_chart_cells_into_svg(table_svg_text: str, chart_cells: dict, workfil
     if not chart_cells or not width_emu or not height_emu:
         return table_svg_text
 
+    default_font = workfile_state.settings.get("default_font", "")
     chart_store_by_id = {r.get("chart_store_id"): r for r in workfile_state.chart_store_rows}
     inserts = []
     for tag, rect in chart_cells.items():
@@ -100,7 +135,8 @@ def _splice_chart_cells_into_svg(table_svg_text: str, chart_cells: dict, workfil
         )
         if chart_image_bytes is None:
             continue
-        b64 = base64.b64encode(chart_image_bytes.read()).decode("ascii")
+        chart_svg_text = _embed_font_in_svg(chart_image_bytes.read().decode("utf-8"), default_font)
+        b64 = base64.b64encode(chart_svg_text.encode("utf-8")).decode("ascii")
         x_pct = (rect["x"] / width_emu) * 100
         y_pct = (rect["y"] / height_emu) * 100
         w_pct = (rect["width"] / width_emu) * 100

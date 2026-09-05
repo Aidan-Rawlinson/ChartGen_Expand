@@ -21,6 +21,7 @@ from chartgen.output_generation.execution.charts.custom_charts import get_chart_
 from chartgen.output_generation.execution.text.text_engine import update_text
 from chartgen.output_generation.execution.tables.insert_table import insert_table
 from chartgen.output_generation.execution.svg_insert import add_svg_picture
+from chartgen.shared.infrastructure.render_font import render_font
 from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 from chartgen.shared.infrastructure.report_context import build_report_context
 from chartgen.shared.infrastructure.soft_parents import resolve_full_unit_set
@@ -238,6 +239,7 @@ def insert_chart(ctx: AssemblyContext, row: dict, settings: dict) -> dict:
         image_bytes = _render_chart_image(
             base_chart_name, population_layers, width_emu, height_emu, tweaks,
             settings.get("workfile_state").custom_chart_code,
+            default_font=settings.get("default_font", ""),
         )
     except Exception as e:
         return err_result(row, f"insert_chart: render failed for '{base_chart_name}': {e}")
@@ -512,7 +514,7 @@ def _load_chart_data(cache_file: str, workfile_state=None):
 
 
 def _render_chart_image(base_chart_name: str, population_layers: list, width_emu: int, height_emu: int,
-                        tweaks="", custom_chart_code=None):
+                        tweaks="", custom_chart_code=None, *, default_font):
     """
     Render a Matplotlib chart to SVG bytes sized to the placeholder.
     Sub-step of insert_chart. Returns image_bytes only — a Base Chart's
@@ -533,14 +535,21 @@ def _render_chart_image(base_chart_name: str, population_layers: list, width_emu
     called with both multiplied by CHART_RENDER_SCALE, so image_bytes comes
     back at that inflated size, and insert_chart places it at the real
     size. Placement is unchanged by the mechanism.
+
+    default_font is the workfile's chosen font family, applied around the
+    call rather than passed into it — a Base Chart takes the four
+    chart_inputs parameters and nothing else. Keyword-only and with no
+    default, so a caller that forgets it fails here rather than rendering
+    in whatever font happened to be in force.
     """
     chart_func = get_chart_callable(base_chart_name, custom_chart_code)
-    return chart_func(
-        population_layers,
-        width_emu=width_emu * CHART_RENDER_SCALE,
-        height_emu=height_emu * CHART_RENDER_SCALE,
-        tweaks=tweaks,
-    )
+    with render_font(default_font):
+        return chart_func(
+            population_layers,
+            width_emu=width_emu * CHART_RENDER_SCALE,
+            height_emu=height_emu * CHART_RENDER_SCALE,
+            tweaks=tweaks,
+        )
 
 
 def _insert_image_at_position(prs: Presentation, slide_index: int,

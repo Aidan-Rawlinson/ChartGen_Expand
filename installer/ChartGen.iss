@@ -56,6 +56,14 @@ Source: "..\chartgen\*"; DestDir: "{app}\chartgen"; Flags: ignoreversion recurse
 Source: "..\user_resources\*"; DestDir: "{app}\user_resources"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\.streamlit\*"; DestDir: "{app}\.streamlit"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Bundled fonts - the .ttf files and the licence text that must ship with
+; them. Copied as ordinary application files, NOT with Inno's "font" flag:
+; ChartGen installs them into Windows itself at startup, checking first, so
+; that a font added to this folder after the installer was last built still
+; reaches the machine. A wildcard grab, so adding a family never needs an
+; edit here. See chartgen\session_shell\lifecycle\font_startup.py.
+Source: "..\fonts\*"; DestDir: "{app}\fonts"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 ; Icons - bundled into the install so shortcuts/associations keep working
 ; after the original installer .exe is gone.
 Source: "icons\ChartGen_app.ico"; DestDir: "{app}\icons"; Flags: ignoreversion

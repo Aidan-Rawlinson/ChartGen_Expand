@@ -70,4 +70,22 @@ The ChartGen side has one definition, imported by every call site that inflates 
 
 That is only half the job. The files here import nothing from ChartGen, by design, so each carries its own `TEXT_SCALE` literal and nothing in the code enforces that it matches. A mismatch produces incorrectly proportioned text and lines in that one file only, with no error anywhere. Changing the value means changing it in `render_scale.py` and in every file here.
 
-`svg.fonttype` is `"none"` in every file here. No exceptions. Font is Calibri, set per file. `DPI = 300` is used only for matplotlib's own text-metric estimation during layout and has no bearing on the SVG's resolution.
+`svg.fonttype` is `"none"` in every file here. No exceptions. `DPI = 300` is used only for matplotlib's own text-metric estimation during layout and has no bearing on the SVG's resolution.
+
+## The font is not set here
+
+**No file here sets `font.family`.** Not at module level, not in an `rc_context`, not as `fontname=` or `FontProperties(family=...)`. Nothing names a typeface anywhere in this folder.
+
+The font is a stored user choice, held in the open workfile's settings and set on the Settings tab. ChartGen applies it around every render call, through `shared/infrastructure/render_font.py`. These files inherit it.
+
+This matters more here than the equivalent rule in `base_charts/CLAUDE.md` might suggest, because `registry.py` imports all five of these modules and matplotlib's `rcParams` is a single process-wide object. A setting assigned at module level does not belong to the file that assigns it; it belongs to whichever file imported last. This folder used to carry five module-level assignments of `font.family`, four saying Calibri and one saying Poppins, and the Poppins one won for all five purely because it imported last. Nobody set out to build that.
+
+A file that reintroduces one does not merely differ, it overrides the user's choice for that one table and silently reverts a setting they made deliberately. These files arrive externally authored and an author testing one standalone will see matplotlib's default font, so the temptation to "fix" it by adding a family is real. The contract handed out with the download bundle says not to (`custom_tables/contract.py`). Check for it when a file comes back.
+
+### A fitted font size is fitted to a font
+
+`plain_grid`, `ci_grid`, `table_cardtile` and `ci_cardtile` all binary-search a font size by drawing text and measuring it back. Those measurements are taken against whatever font is in force, which is why they must stay inside the render — and why they adapt to a font change on their own, with no further work.
+
+`ci_cardtile2` is the exception and the one to watch. It draws to a fixed design with fixed point sizes and no fitting, so a wider font overflows its columns with nothing to catch it. Check it against any font newly added to `fonts/`.
+
+At module level none of this works: these modules are imported when the application starts, long before a workfile is open, so a width measured there is measured against matplotlib's default and no later render can correct it.

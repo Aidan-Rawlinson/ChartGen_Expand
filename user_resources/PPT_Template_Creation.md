@@ -260,6 +260,8 @@ ChartGen inserts charts and images by reading placeholder position and size. A t
 
 Default to safe-list fonts (Arial, Calibri, Cambria) unless the user specifies otherwise. Note: fonts outside the safe list may not render accurately in QA previews.
 
+Slide text keeps whatever font the template gives it. ChartGen never overrides it, including where it substitutes a text tag. Charts and tables are separate: those render in the default font set on ChartGen's Settings tab, chosen per workfile from the fonts ChartGen ships. So if the deck should read as one typeface throughout, the template's font needs to match the workfile's default font — ask which font the reports will use, rather than assuming.
+
 ---
 
 ## Technical Reference

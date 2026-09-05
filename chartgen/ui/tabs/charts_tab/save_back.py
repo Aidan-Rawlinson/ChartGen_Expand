@@ -16,6 +16,7 @@ from chartgen.output_generation.definition.running_order import (
     CHART_SANDBOX_FIELDS, overwrite_row_fields, insert_new_row,
 )
 from chartgen.output_generation.execution.charts.chart_store import next_chart_store_id
+from chartgen.ui.common.flash import queue_flash
 from chartgen.ui.tabs.charts_tab.constants import (
     CHART_STORE_TARGET_PLACEHOLDER, TARGET_PLACEHOLDER,
 )
@@ -88,7 +89,7 @@ def _render_save_back(workfile_state, ro_choice, chart_row_ids, chart_store_ids,
             # content just changed on Overwrite — clear rather than risk a
             # stale reference on the next rerun.
             _clear_row_referencing_state()
-            st.success("Saved to Running Order.")
+            queue_flash("Saved to Running Order.")
             st.rerun()
 
     # --- Save to Chart Store — a flat, unordered store, so unlike
@@ -157,5 +158,5 @@ def _render_save_back(workfile_state, ro_choice, chart_row_ids, chart_store_ids,
             st.session_state["cs_pending_chart_store_choice_after_save"] = saved_id
             st.session_state["cs_pending_chart_store_target_after_save"] = saved_id
             st.session_state.pop("cs_last_loaded_chart_store", None)
-            st.success("Saved to Chart Store.")
+            queue_flash("Saved to Chart Store.")
             st.rerun()

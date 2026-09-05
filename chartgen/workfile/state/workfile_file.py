@@ -99,6 +99,19 @@ CHART_STORE_FIELDNAMES = [
     "description",      # optional free text, user reference only
 ]
 
+# workfile_config/notes.csv: free-form team notes. Order is list order --
+# display and reorder order, following running_order_rows' convention
+# rather than chart_store's unordered one.
+NOTES_FIELDNAMES = [
+    "note_id",    # "N" + base-36 id, never reused
+    "heading",    # optional short heading, bold in the display
+    "text",       # the note body
+    "added_by",   # username (sign-in email) at creation
+    "added_at",   # ISO timestamp at creation
+    "edited_by",  # username of the last edit, blank if never edited
+    "edited_at",  # ISO timestamp of the last edit, blank if never edited
+]
+
 
 def generate_hex_id(existing_rows: list) -> str:
     """
@@ -188,6 +201,10 @@ class WorkfileState:
 
     # workfile_config/text_stats.csv — "stat tags", TEXT_STATS_FIELDNAMES rows
     text_stats_rows: list = field(default_factory=list)
+
+    # workfile_config/notes.csv — team notes, NOTES_FIELDNAMES rows. List
+    # order is display/reorder order, like running_order_rows.
+    notes_rows: list = field(default_factory=list)
 
     # workfile_config/chart_store.csv, CHART_STORE_FIELDNAMES rows. Flat
     # and unordered: no position concept, unlike running_order_rows.
@@ -306,6 +323,11 @@ def open_workfile(workfile_path: str) -> WorkfileState:
 
         # workfile_config/text_stats.csv — stat tags
         state.text_stats_rows = _csv_to_rows(_read("workfile_config/text_stats.csv"))
+
+        # workfile_config/notes.csv — team notes
+        state.notes_rows = _csv_to_rows(_read("workfile_config/notes.csv"))
+        for _row in state.notes_rows:
+            _row.setdefault("heading", "")
 
         # workfile_config/chart_store.csv -- Chart Store
         state.chart_store_rows = _csv_to_rows(_read("workfile_config/chart_store.csv"))
@@ -462,6 +484,10 @@ def save_workfile(state: WorkfileState, username: str, target_path: str = None):
         # workfile_config/text_stats.csv — stat tags
         _write("workfile_config/text_stats.csv",
                _rows_to_csv(state.text_stats_rows, TEXT_STATS_FIELDNAMES))
+
+        # workfile_config/notes.csv — team notes
+        _write("workfile_config/notes.csv",
+               _rows_to_csv(state.notes_rows, NOTES_FIELDNAMES))
 
         # workfile_config/chart_store.csv -- Chart Store
         _write("workfile_config/chart_store.csv",

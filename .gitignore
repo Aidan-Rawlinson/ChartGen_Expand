@@ -48,3 +48,6 @@ htmlcov/
 
 # Last-used username, rewritten on every sign-in -- machine-local, never versioned
 chartgen/session_shell/auth/credentials.csv
+
+# Claude Code local worktrees -- machine-local scratch checkouts, never versioned
+.claude/worktrees/

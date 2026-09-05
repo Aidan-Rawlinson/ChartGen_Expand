@@ -30,7 +30,7 @@ The suite covers the pure logic and the round trips, not the interface. A green 
 
 | Package | Owns |
 |---|---|
-| `chartgen/session_shell/` | Sign-in, the advisory workfile lock, startup file association, update check |
+| `chartgen/session_shell/` | Sign-in, the advisory workfile lock, startup file association, update check, bundled font install |
 | `chartgen/workfile/` | The `.cgw` format and the in-session `WorkfileState` |
 | `chartgen/acquisition/` | Two toolkit APIs, template reading, the manifest table |
 | `chartgen/output_generation/definition/` | The Running Order: schema, generation, row operations, xlsx round-trip |
@@ -39,6 +39,8 @@ The suite covers the pure logic and the round trips, not the interface. A green 
 | `chartgen/ui/` | Streamlit only |
 
 Layer order is `ui` above `output_generation` above `acquisition` above `shared`. Imports go one way only. `shared` imports from nothing above it.
+
+`fonts/` at the repo root is data, not code: one subfolder per font family, holding that family's font files and the licence text that came with them. Adding a family is dropping files in a folder, with no code change anywhere and no installer edit. Shipping the licence alongside the font is a real obligation under most font licences, including the SIL Open Font License that covers most Google Fonts.
 
 ## Standing rules
 
@@ -49,6 +51,8 @@ Layer order is `ui` above `output_generation` above `acquisition` above `shared`
 **Stored values are never rewritten.** A value the user picked or typed stays exactly as they left it. Nothing re-derives, reconstructs or normalises it on a later pass.
 
 **Base Charts and Base Tables are outside the system boundary.** Standalone rendering artefacts, one file each, no shared helpers, no imports from ChartGen. Do not refactor, deduplicate or extract common code from them, however much they repeat. See `output_generation/execution/charts/base_charts/CLAUDE.md`.
+
+**No renderer names a font.** The font is the open workfile's own setting, applied by ChartGen around every render call through `shared/infrastructure/render_font.py`. Nothing in `base_charts/` or `base_tables/` sets `font.family`, and a file that reintroduces one silently overrides a choice the user made deliberately.
 
 **Design before build.** Agree the approach before writing the code.
 

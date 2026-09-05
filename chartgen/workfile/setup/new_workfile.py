@@ -8,6 +8,7 @@ exist, and nothing there knows a workfile might be brand new. Keep it that
 way.
 """
 
+from chartgen.shared.infrastructure.bundled_fonts import NEW_WORKFILE_FONT
 from chartgen.workfile.state.workfile_file import new_workfile as _create_workfile_file, write_lock, save_workfile
 
 
@@ -22,6 +23,11 @@ def create_new_workfile(workfile_path: str, workfile_name: str, description: str
     description is for the person, not the system — shown in the app header
     for as long as this workfile is open (see app.py). It plays no part in
     naming the file, resolving tables, or anything else structural.
+
+    default_font starts at NEW_WORKFILE_FONT so a brand-new workfile can
+    render straight away. It is a starting value the user changes on the
+    Settings tab, not a fallback: nothing re-reads it if a workfile's own
+    value is later missing or names a font this machine does not have.
     """
     ws_new = _create_workfile_file(workfile_path, workfile_name)
     ws_new.settings = {
@@ -30,6 +36,7 @@ def create_new_workfile(workfile_path: str, workfile_name: str, description: str
         "ppt_template_path":       "",
         "selected_unit_id":        "",
         "batch_cursor":            "0",
+        "default_font":            NEW_WORKFILE_FONT,
     }
     ws_new.locked_by = username
 

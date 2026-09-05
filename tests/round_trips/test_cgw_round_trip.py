@@ -11,9 +11,9 @@ workfile/CLAUDE.md: "state/workfile_file.py owns the .cgw format and is the
 only module that reads or writes the ZIP. Nothing else opens it." So this one
 module is the whole surface, and a round trip through it is the whole test.
 
-The main test below fills every one of WorkfileState's twelve payload fields,
-saves, reopens and compares. That single test is what guards the format:
-adding a thirteenth field without adding it to both save_workfile and
+The main test below fills every one of WorkfileState's thirteen payload
+fields, saves, reopens and compares. That single test is what guards the
+format: adding a fourteenth field without adding it to both save_workfile and
 open_workfile is exactly the mistake that would lose data quietly, and it
 would fail here.
 
@@ -25,12 +25,15 @@ import zipfile
 import pytest
 
 from chartgen.output_generation.definition.running_order import COLUMNS
+from chartgen.shared.infrastructure.bundled_fonts import NEW_WORKFILE_FONT
 from chartgen.shared.infrastructure.version_compatibility import get_file_version_written
+from chartgen.workfile.setup.new_workfile import create_new_workfile
 from chartgen.workfile.state.workfile_file import (
     CHART_STORE_FIELDNAMES,
     CUSTOM_CHART_FIELDNAMES,
     CUSTOM_TABLE_FIELDNAMES,
     MANIFEST_FIELDNAMES,
+    NOTES_FIELDNAMES,
     OUTPUT_TABLE_FIELDNAMES,
     TEXT_STATS_FIELDNAMES,
     WorkfileState,
@@ -73,7 +76,8 @@ def populated_state(tmp_path):
         return complete
 
     state.settings = {"description": "Invented test workfile", "outputs_folder": "out",
-                      "next_stat_tag": "3", "next_table_id": "2"}
+                      "next_stat_tag": "3", "next_table_id": "2",
+                      "default_font": "Invented Font"}
     state.table_order = ["submissions_2026", "nhs_organisations"]
     state.tables = {
         "submissions_2026": [
@@ -104,6 +108,11 @@ def populated_state(tmp_path):
     state.text_stats_rows = [
         row(TEXT_STATS_FIELDNAMES, tag="T1", hex_id="aa", populations="All",
             reference_id="Mn", description="Mean for the selected unit"),
+    ]
+    state.notes_rows = [
+        row(NOTES_FIELDNAMES, note_id="N1", heading="Reminder",
+            text="Remember to check the peer group.",
+            added_by=USERNAME, added_at="2026-01-01T00:00:00+00:00"),
     ]
     state.chart_store_rows = [
         row(CHART_STORE_FIELDNAMES, chart_store_id="C1", cache_file="aa.json",
@@ -158,6 +167,7 @@ def test_a_fully_populated_workfile_survives_a_save_and_reopen(populated_state):
     assert reopened.manifest_rows == populated_state.manifest_rows
     assert reopened.cache == populated_state.cache
     assert reopened.text_stats_rows == populated_state.text_stats_rows
+    assert reopened.notes_rows == populated_state.notes_rows
     assert reopened.chart_store_rows == populated_state.chart_store_rows
     assert reopened.output_table_rows == populated_state.output_table_rows
     assert reopened.output_tables == populated_state.output_tables
@@ -172,6 +182,21 @@ def test_the_settings_a_user_set_survive_a_save_and_reopen(populated_state):
     reopened = save_and_reopen(populated_state)
     assert reopened.settings["description"] == "Invented test workfile"
     assert reopened.settings["outputs_folder"] == "out"
+
+
+def test_the_default_font_survives_a_save_and_reopen(populated_state):
+    """
+    The font every chart and table renders in. If it were lost, reopening a
+    workfile would stop every render with "no default font set" - and if it
+    were lost silently rather than blanked, worse: the report would come
+    back in whatever font the machine happened to offer.
+
+    Stored verbatim, like any value a user picked. An invented name here on
+    purpose: nothing on the save or open path validates it against what is
+    installed, and nothing should.
+    """
+    reopened = save_and_reopen(populated_state)
+    assert reopened.settings["default_font"] == "Invented Font"
 
 
 def test_the_id_counters_survive_so_ids_are_never_reissued(populated_state):
@@ -196,6 +221,7 @@ def test_saving_twice_in_a_row_changes_nothing(populated_state):
     assert second.running_order_rows == first.running_order_rows
     assert second.output_tables == first.output_tables
     assert second.chart_store_rows == first.chart_store_rows
+    assert second.notes_rows == first.notes_rows
     assert second.custom_chart_code == first.custom_chart_code
 
 
@@ -354,6 +380,22 @@ def test_a_brand_new_workfile_exists_on_disk_and_can_be_opened(tmp_path):
     reopened = open_workfile(path)
     assert reopened.tables == {}
     assert reopened.running_order_rows == []
+
+
+def test_a_brand_new_workfile_starts_with_a_font_to_render_in(tmp_path):
+    """
+    create_new_workfile scaffolds default_font, so a workfile can render as
+    soon as it is made rather than needing a trip to the Settings tab first.
+
+    Tested through create_new_workfile rather than new_workfile, because the
+    settings scaffold is that layer's job: new_workfile writes the file and
+    an empty settings.csv, and knows nothing about what belongs in it.
+    """
+    path = str(tmp_path / "scaffolded.cgw")
+    state = create_new_workfile(path, "scaffolded", "Invented description", USERNAME)
+
+    assert state.settings["default_font"] == NEW_WORKFILE_FONT
+    assert open_workfile(path).settings["default_font"] == NEW_WORKFILE_FONT
 
 
 def test_the_workfile_info_can_be_read_without_opening_the_whole_file(populated_state):

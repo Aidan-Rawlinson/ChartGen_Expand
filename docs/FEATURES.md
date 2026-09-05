@@ -23,6 +23,8 @@ Current scope and readiness. In pipeline order.
 | Check for Update | Complete | Available only with no workfile open. Reads the release installer's own version, and on confirmation launches it and exits ChartGen so the install can be overwritten in place |
 | Outputs folder structure | Complete | `outputs/pptx/` and `outputs/pdf/`, auto-created alongside the workfile on first run |
 | SharePoint and OneDrive compatibility | Complete | |
+| Bundled fonts | Complete | `fonts/` ships a subfolder per family, each with its font files and licence text. Registered with matplotlib and installed into Windows per user at startup, checked first so a write happens only when one is genuinely missing. No admin rights |
+| Default font per workfile | Complete | Set on the Settings tab, saved in the workfile, applied around every chart and table render. The picker offers bundled families only, so a colleague opening the workfile is guaranteed to have the font. An unavailable font stops the render rather than substituting |
 
 ### File operations
 
@@ -134,7 +136,7 @@ After a crash the lock fields stay as last written. The next person to open sees
 
 | Feature | Readiness | Notes |
 |---|---|---|
-| Base Chart library | Complete | Each a standalone artefact with no shared helpers. No chart renders a title. Takes EMU directly. Renders as SVG with Calibri and real `<text>` |
+| Base Chart library | Complete | Each a standalone artefact with no shared helpers. No chart renders a title. Takes EMU directly. Renders as SVG with real `<text>`, in the workfile's chosen default font |
 | Custom Charts | Complete | Download bundle, AI edit, paste-back validation, live preview, save. Validation is static only: imports and signature, not what the function returns. No runtime sandboxing. A saved one behaves identically to a built-in everywhere |
 | Period range trim, TimeSeries | Complete | `start_period` and `end_period` trim the shape before population filtering. Authored through the Charts sheet's Period Range box |
 | Convert periods to metrics | Complete | `metric_periods` converts a TimeSeries row into a NumericSeries snapshot before rendering, one metric per source Metric-Series per period. Feeds any NumericSeries chart type |
@@ -160,7 +162,7 @@ After a crash the lock fields stay as last written. The next person to open sees
 |---|---|---|
 | Grid create, edit, resize | Complete | An (N+1) by (M+1) grid: widths and heights as percentages each summing to about 100%, plus content cells. Validated on an explicit Update, tolerance plus or minus 0.5%, never auto-corrected. A typed `<br>` becomes a real line break at resolution |
 | Creation via a `Table` yellow box | Complete | Every occurrence always creates a brand-new table, auto-named, at a fixed 7 by 4 starting size. Never matched against an existing table by name, even on re-upload, so re-uploading the same template twice produces two independent sets |
-| Base Table library | Complete | `plain_grid`, `table_cardtile`, and their two-row-header CI-report variants `ci_grid`, `ci_cardtile` and `ci_cardtile2`. Each a standalone artefact with no shared helpers, returning image bytes plus any chart-cell rectangles. Renders as SVG with Calibri and real `<text>` |
+| Base Table library | Complete | `plain_grid`, `table_cardtile`, and their two-row-header CI-report variants `ci_grid`, `ci_cardtile` and `ci_cardtile2`. Each a standalone artefact with no shared helpers, returning image bytes plus any chart-cell rectangles. Renders as SVG with real `<text>`, in the workfile's chosen default font |
 | Custom Tables | Complete | Mirrors Custom Charts. No shape-type scoping, so a saved one is valid everywhere immediately. An optional toggle also bundles full detail for every embedded chart cell's Chart Store entry, so the table can be rebuilt in full from one document |
 | Excel round-trip | Complete | Full-replace, mirroring the grid's own spreadsheet shape. Content cells offer a Stat Tag dropdown through a hidden list sheet, with free text still accepted. A percentage-formatted cell is read back through its number format, not its raw value |
 | Shared selection box | Complete | One selection shared by Edit Grid and Preview. "+ New Output Table" sits last, revealing inline creation controls |

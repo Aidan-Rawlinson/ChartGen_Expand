@@ -43,6 +43,7 @@ from chartgen.output_generation.execution.charts.base_charts.timeseries.median_c
 from chartgen.output_generation.execution.charts.base_charts.timeseries.full_lines_linechart import full_lines_linechart
 from chartgen.output_generation.execution.charts.base_charts.timeseries.sparkline1 import sparkline1
 from chartgen.output_generation.execution.charts.base_charts.timeseries.sparkline2 import sparkline2
+from chartgen.output_generation.execution.charts.base_charts.timeseries.sparkline3 import sparkline3
 from chartgen.output_generation.execution.charts.base_charts.timeseries.celltest import celltest
 from chartgen.output_generation.execution.charts.base_charts.timeseries.line_has_data import line_has_data
 from chartgen.output_generation.execution.charts.base_charts.timeseries.line_ci_at_least_median import line_ci_at_least_median
@@ -79,6 +80,7 @@ CHART_REGISTRY = {
     "full_lines_linechart": full_lines_linechart,
     "sparkline1":           sparkline1,
     "sparkline2":           sparkline2,
+    "sparkline3":           sparkline3,
     "celltest":             celltest,
     "line_has_data":        line_has_data,
     "line_ci_at_least_median": line_ci_at_least_median,

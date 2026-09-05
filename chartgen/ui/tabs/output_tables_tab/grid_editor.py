@@ -14,6 +14,7 @@ from chartgen.output_generation.execution.tables.grid_xlsx import (
     write_output_table_xlsx, read_output_table_xlsx,
 )
 from chartgen.shared.infrastructure.cg_extracts import get_extracts_folder
+from chartgen.ui.common.flash import queue_flash
 from chartgen.ui.common.pickers import pick_xlsx_file
 
 
@@ -43,7 +44,7 @@ def _render_grid_editor(workfile_state, table_id, grid_rows):
                     idx_row["columns"] = str(int(new_n_cols))
                     break
             workfile_state.dirty = True
-            st.success("Grid resized.")
+            queue_flash("Grid resized.")
             st.rerun()
 
     df = pd.DataFrame(grid_rows)

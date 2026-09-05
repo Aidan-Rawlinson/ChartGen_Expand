@@ -39,6 +39,10 @@ def master_table() -> list:
     return master_table_rows(ws())
 
 
+def notes() -> list:
+    return ws().notes_rows
+
+
 def manifest() -> dict:
     return load_manifest(ws())
 
@@ -62,9 +66,15 @@ def clear_workfile_session_state():
     #   ot_   Output Tables selection, shared by Edit Grid and Preview
     #   ots_  Output Tables preview configuration, kept separate from ot_ so
     #         Reset never disturbs which table is selected
+    #   set_  Settings tab
+    #   nt_   Notes tab
     for k in [k for k in st.session_state if k.startswith("cs_")]:
         del st.session_state[k]
     for k in [k for k in st.session_state if k.startswith("ot_")]:
         del st.session_state[k]
     for k in [k for k in st.session_state if k.startswith("ots_")]:
+        del st.session_state[k]
+    for k in [k for k in st.session_state if k.startswith("set_")]:
+        del st.session_state[k]
+    for k in [k for k in st.session_state if k.startswith("nt_")]:
         del st.session_state[k]

@@ -43,10 +43,12 @@ from chartgen.shared.normalisation_containers.population_layers import build_pop
 # The value must still match TEXT_SCALE in every base_tables/ and
 # base_charts/ file, which cannot import it. Full mechanism in
 # tables/base_tables/CLAUDE.md.
+from chartgen.shared.infrastructure.render_font import render_font
 from chartgen.shared.infrastructure.render_scale import CHART_RENDER_SCALE
 
 
-def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, workfile_state):
+def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, workfile_state,
+                              *, default_font):
     """
     Render one Chart Store entry's own saved chart-def, sized to
     chart_rect, the Base Table's own reserved rectangle for this cell. A
@@ -66,6 +68,16 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
     (insert_table) is responsible for dividing this same rectangle back
     down by CHART_RENDER_SCALE when it comes to placing the *result* on
     the slide.
+
+    default_font is the workfile's chosen font family, applied around the
+    render the same way insert_chart applies it. A chart cell renders in a
+    separate pass after the enclosing table's own image is produced, so it
+    needs its own wrap; the table's does not reach it.
+
+    Note the interaction with returning None on failure: an unavailable font
+    would be swallowed here like any other failure and show as a skipped
+    cell. In practice it never gets that far, because the enclosing table
+    renders first under the same font and reports the failure properly.
     """
     cache_file = str(chart_store_row.get("cache_file", "") or "").strip()
     base_chart_name = str(chart_store_row.get("base_chart_name", "") or "").strip()
@@ -112,12 +124,13 @@ def _render_chart_store_chart(ctx, chart_store_row: dict, chart_rect: dict, work
     tweaks = str(chart_store_row.get("tweaks", "") or "").strip()
     try:
         chart_func = get_chart_callable(base_chart_name, workfile_state.custom_chart_code)
-        return chart_func(
-            population_layers,
-            width_emu=int(round(chart_rect["width"])),
-            height_emu=int(round(chart_rect["height"])),
-            tweaks=tweaks,
-        )
+        with render_font(default_font):
+            return chart_func(
+                population_layers,
+                width_emu=int(round(chart_rect["width"])),
+                height_emu=int(round(chart_rect["height"])),
+                tweaks=tweaks,
+            )
     except Exception:
         return None
 
@@ -155,6 +168,7 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
 
     tweaks = str(row.get("tweaks", "") or "").strip()
     custom_table_code = workfile_state.custom_table_code if workfile_state else {}
+    default_font = settings.get("default_font", "")
     try:
         table_func = get_table_callable(table_type_ref, custom_table_code)
         # Called at CHART_RENDER_SCALE times the row's real target size
@@ -162,11 +176,12 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
         # drawn at that inflated size; chart_cells comes back in that
         # same inflated space too, since a Base Table derives it
         # proportionally from whatever width_emu/height_emu it's given.
-        image_bytes, chart_cells = table_func(
-            resolved["content"], resolved["column_widths"], resolved["row_heights"],
-            width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
-            tweaks=tweaks,
-        )
+        with render_font(default_font):
+            image_bytes, chart_cells = table_func(
+                resolved["content"], resolved["column_widths"], resolved["row_heights"],
+                width_emu=width_emu * CHART_RENDER_SCALE, height_emu=height_emu * CHART_RENDER_SCALE,
+                tweaks=tweaks,
+            )
     except Exception as e:
         return err_result(row, f"insert_table: render failed for '{table_type_ref}': {e}")
 
@@ -200,7 +215,8 @@ def insert_table(ctx, row: dict, settings: dict) -> dict:
         # divided back down by CHART_RENDER_SCALE here, for placement
         # only, to convert it into a real slide-EMU offset/size relative
         # to the table's own real (left_emu, top_emu) position.
-        chart_image_bytes = _render_chart_store_chart(ctx, chart_store_row, rect, workfile_state)
+        chart_image_bytes = _render_chart_store_chart(ctx, chart_store_row, rect, workfile_state,
+                                                      default_font=default_font)
         if chart_image_bytes is None:
             skipped += 1
             continue

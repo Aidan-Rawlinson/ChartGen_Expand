@@ -22,7 +22,12 @@ receives it.
 # "matplotlib" appearing here once. Extend this list, not the gate's logic,
 # if a future chart genuinely needs another library — this is the one
 # place that decision lives.
-ALLOWED_IMPORTS = ["matplotlib", "numpy", "io", "warnings", "math"]
+#
+# colorsys earns its place the same way: sparkline1 and sparkline2 derive
+# their line shades from one base colour through it. It converts colour
+# values between RGB and HLS and does nothing else, so it adds no reach
+# beyond arithmetic.
+ALLOWED_IMPORTS = ["matplotlib", "numpy", "io", "warnings", "math", "colorsys"]
 
 # Bare builtin names a custom chart may never call. Import restriction
 # above already keeps os/sys/subprocess etc. unreachable via attribute
@@ -116,13 +121,32 @@ Base Chart returns: a `matplotlib` figure saved to an in-memory buffer via
 rendered as a vector image, not a raster one), with the buffer returned
 (not the figure object itself, and not a Matplotlib Axes/Figure).
 
-Font must be Calibri, and text must be kept as real text rather than
-converted to glyph outlines — set both once, near the top of the file,
-right after the matplotlib imports:
+Text must be kept as real text rather than converted to glyph outlines —
+set this once, near the top of the file, right after the matplotlib
+imports:
 
     import matplotlib
-    matplotlib.rcParams["font.family"] = "Calibri"
     matplotlib.rcParams["svg.fonttype"] = "none"
+
+**Do not set a font.** No `font.family`, no `fontname=`, no
+`FontProperties(family=...)`, anywhere in the file. ChartGen sets the font
+around the render call, from the workfile's own Settings tab, so the chart
+inherits whatever the person running the report chose. Setting one here
+overrides that and pins this chart to a different typeface from every
+other chart in the deck.
+
+That is also why previewing this file standalone, outside ChartGen, draws
+in matplotlib's default font rather than the one the report will use.
+Nothing is wrong; the font simply is not this file's decision. Do not
+"fix" it by adding one.
+
+A chart that reserves space by measuring rendered text — drawing a string
+and reading its width back — should know that the measurement is taken
+against whatever font is in force at the time. Measure inside the chart
+function, never at module level: at import time the font is not yet
+known, so a width computed there is measured against the wrong font and
+cannot be corrected later. `sparkline2` and `sparkline3` do this in
+`_right_label_width_in`, for exactly this reason.
 
 Then define a local scale constant, and multiply every absolute
 point-based size in the file by it — font sizes, line widths, marker

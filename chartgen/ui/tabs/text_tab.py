@@ -50,6 +50,7 @@ from chartgen.shared.normalisation_containers.shapes import (
     apply_period_range, summary_stats, reference_rows_for_shape_type,
 )
 from chartgen.ui.common.compact_layout import tight_divider, tight_subheader, tight_caption
+from chartgen.ui.common.flash import queue_flash
 from chartgen.ui.common.guidance import render_tab_header
 from chartgen.ui.common.pickers import pick_xlsx_file
 from chartgen.workfile.state.session_state import (
@@ -330,7 +331,7 @@ def render_text_tab():
                                 })
                             workfile_state.dirty = True
                             st.session_state["ts_clear_description"] = True
-                            st.success(f"Added {len(selected_tags)} tag(s).")
+                            queue_flash(f"Added {len(selected_tags)} tag(s).")
                             st.rerun()
 
     # --- Existing stat tags — read-only list, live-valued, delete only ---
